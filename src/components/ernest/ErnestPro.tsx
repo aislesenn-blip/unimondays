@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { Send, FileText, Scan, Sparkles, Loader2, GraduationCap, Edit, FileType, Upload, X, File } from 'lucide-react';
+import { Send, FileText, Scan, Sparkles, Loader2, GraduationCap, Upload, X, File } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ErnestMessage } from '../../types';
 import { cn } from '../../lib/utils';

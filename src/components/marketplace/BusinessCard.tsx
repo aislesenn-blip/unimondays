@@ -2,7 +2,7 @@ import type { Business } from '../../types';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { Printer, Pizza, Bus, Smartphone, Scissors, Book, MessageCircle, Star, Wifi, Zap, Truck, Handshake, Briefcase } from 'lucide-react';
+import { Printer, Pizza, Bus, Smartphone, Scissors, Star, Wifi, Zap, Truck, Briefcase } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,11 +34,6 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
 
   const handleCardClick = () => {
     navigate(`/merchant/${business.id}`);
-  };
-
-  const handleWhatsAppClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.open(`https://wa.me/${business.whatsapp}`, '_blank');
   };
 
   return (
