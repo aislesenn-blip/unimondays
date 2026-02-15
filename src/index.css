@@ -1,8 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 :root {
@@ -12,22 +12,18 @@
   --primary: var(--color-indigo-600);
   --primary-foreground: var(--color-white);
 
-  --accent: var(--color-lime-400);
-  --accent-foreground: var(--color-slate-900);
+  --muted: var(--color-slate-500);
+  --border: var(--color-slate-200);
 }
 
 body {
   font-family: var(--font-sans);
-  @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-300;
+  background-color: var(--background);
+  color: var(--foreground);
+  @apply antialiased tracking-tight;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    @apply bg-slate-900 text-slate-50;
-  }
-
-  :root {
-    --primary: var(--color-violet-500);
-    --accent: var(--color-violet-500);
-  }
+/* Force Light Mode - Override any system preference or previous dark classes */
+.dark {
+  color-scheme: light;
 }

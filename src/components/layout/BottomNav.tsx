@@ -20,7 +20,7 @@ export const BottomNav = () => {
   }
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 pb-safe">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-slate-200 pb-safe shadow-lg">
       <div className="flex justify-around items-center h-16">
         {navItems.map(({ icon: Icon, label, path }) => (
           <NavLink
@@ -29,8 +29,8 @@ export const BottomNav = () => {
             className={({ isActive }) => cn(
               "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
               isActive
-                ? "text-indigo-600 dark:text-indigo-400"
-                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                ? "text-indigo-600"
+                : "text-slate-400 hover:text-slate-600"
             )}
           >
             <Icon className="w-6 h-6" />

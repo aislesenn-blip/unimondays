@@ -18,11 +18,11 @@ export const Sidebar = () => {
   }
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 z-40 flex flex-col justify-between hidden md:flex">
+    <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-slate-200 p-6 z-40 flex flex-col justify-between hidden md:flex">
       <div>
         <div className="mb-8 pl-2">
-          <h1 className="text-2xl font-bold tracking-tighter text-indigo-600 dark:text-indigo-400 font-sans">
-            U<span className="text-xl uppercase">ɴ</span>iMonday
+          <h1 className="text-2xl font-extrabold tracking-tight text-indigo-600 font-sans">
+            UɴiMonday
           </h1>
         </div>
 
@@ -34,13 +34,13 @@ export const Sidebar = () => {
               className={({ isActive }) => cn(
                 "flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group",
                 isActive
-                  ? "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-medium shadow-sm"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  ? "bg-indigo-50 text-indigo-600 font-semibold shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               )}
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={cn("w-5 h-5", isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 group-hover:text-slate-700")} />
+                  <Icon className={cn("w-5 h-5", isActive ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600")} />
                   <span>{label}</span>
                 </>
               )}
@@ -51,7 +51,7 @@ export const Sidebar = () => {
 
       <button
         onClick={logout}
-        className="flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600 dark:hover:text-red-400 transition-colors w-full text-left group"
+        className="flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors w-full text-left group"
       >
         <LogOut className="w-5 h-5 group-hover:text-red-600" />
         <span>Sign Out</span>
