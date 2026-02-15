@@ -8,8 +8,9 @@ import { Link } from 'react-router-dom';
 export const Home = () => {
   const { user } = useAuth();
 
-  // Filter for "Trending" or just first 4
-  const trendingBusinesses = mockBusinesses.slice(0, 4);
+  // Filter by University, then take first 4 for Trending
+  const filteredBusinesses = mockBusinesses.filter(b => b.university === (user?.university || 'UDSM'));
+  const trendingBusinesses = filteredBusinesses.slice(0, 4);
 
   return (
     <div className="space-y-8 pb-20">
@@ -27,9 +28,17 @@ export const Home = () => {
             <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
               Hello, <span className="text-lime-400">{user?.name?.split(' ')[0] || 'Scholar'}</span>.
             </h1>
-            <p className="text-indigo-100 text-lg mb-8 max-w-md font-medium">
-              Your campus. Connected.
-            </p>
+
+            <div className="flex flex-col gap-1 mb-8">
+               <div className="flex items-center gap-2">
+                 <span className="px-2 py-0.5 bg-white/20 rounded-md text-[10px] uppercase font-bold tracking-wider backdrop-blur-sm border border-white/10 text-white/90">
+                    {user?.university || 'Select Campus'}
+                 </span>
+               </div>
+               <p className="text-indigo-100 text-lg max-w-md font-medium">
+                 It's UniMonday.
+               </p>
+            </div>
 
             <div className="relative max-w-md group">
                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
