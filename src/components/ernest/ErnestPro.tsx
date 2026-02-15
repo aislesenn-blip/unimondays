@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { Send, FileText, Scan, Sparkles, Loader2, GraduationCap, Edit, FileType } from 'lucide-react';
+import { Send, FileText, Scan, Sparkles, Loader2, GraduationCap, Edit, FileType, Upload, X, File } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ErnestMessage } from '../../types';
 import { cn } from '../../lib/utils';
@@ -10,13 +10,15 @@ export const ErnestPro = () => {
     {
       id: 'welcome',
       role: 'assistant',
-      content: "Ready to study? I'm in Pro Mode with full access to my tools.",
+      content: "Ready to study? I'm in Pro Mode. Upload a document or ask me anything in English or Swahili.",
       timestamp: new Date(),
     }
   ]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -24,22 +26,27 @@ export const ErnestPro = () => {
 
   const handleSend = async (textOverride?: string) => {
     const text = textOverride || input;
-    if (!text.trim()) return;
+    if (!text.trim() && !uploadedFile) return;
+
+    const content = uploadedFile
+      ? `[Attached: ${uploadedFile}] ${text}`
+      : text;
 
     const userMsg: ErnestMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: text,
+      content: content,
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
+    setUploadedFile(null); // Clear file after send
     setIsProcessing(true);
 
     // Bilingual & Persona Logic
     const lowerInput = text.toLowerCase();
-    const isSwahili = lowerInput.includes('mambo') || lowerInput.includes('habari') || lowerInput.includes('nondo') || lowerInput.includes('vipi') || lowerInput.includes('swali');
+    const isSwahili = lowerInput.includes('mambo') || lowerInput.includes('habari') || lowerInput.includes('nondo') || lowerInput.includes('vipi') || lowerInput.includes('swali') || lowerInput.includes('asante');
 
     setTimeout(() => {
       let responseContent = "";
@@ -49,10 +56,10 @@ export const ErnestPro = () => {
          responseContent = isSwahili
             ? "Sawa, twende kazi. Swali la haraka: Nini maana ya 'Opportunity Cost' katika uchumi?"
             : "Let's do this. Quick question: What defines 'Opportunity Cost' in economics?";
-      } else if (lowerInput.includes('scan') || lowerInput.includes('pdf')) {
+      } else if (lowerInput.includes('scan') || lowerInput.includes('pdf') || content.includes('[Attached:')) {
          responseContent = isSwahili
-            ? "Nimeanza kuchakata hiyo document. Subiri kidogo..."
-            : "Scanning document now. Processing text extraction...";
+            ? "Nimeupata mwongozo. Ninaichakata hiyo document sasa hivi. Subiri kidogo..."
+            : "Document received. I'm analyzing the content now...";
          actionType = 'ocr_scan';
       } else if (lowerInput.includes('grammar') || lowerInput.includes('fix')) {
          responseContent = isSwahili
@@ -70,14 +77,16 @@ export const ErnestPro = () => {
              const responses = [
                  "Nipo hapa kwa ajili yako. Tuendelee kusoma?",
                  "Umeelewa concept? Au nirejee tena?",
-                 "Hiyo ni nondo! Una swali lingine?"
+                 "Hiyo ni nondo! Una swali lingine?",
+                 "Karibu sana. Nini kingine nikusaidie?"
              ];
              responseContent = responses[Math.floor(Math.random() * responses.length)];
          } else {
              const responses = [
                  "I'm here. Ready to tackle the next topic?",
                  "Did that concept make sense?",
-                 "Great point. Anything else you need help with?"
+                 "Great point. Anything else you need help with?",
+                 "Anytime. What's next on the agenda?"
              ];
              responseContent = responses[Math.floor(Math.random() * responses.length)];
          }
@@ -91,7 +100,7 @@ export const ErnestPro = () => {
         action: actionType ? {
           type: actionType,
           status: 'completed',
-          result: actionType === 'ocr_scan' ? "Scanned Text Content..." : "Processed Output..."
+          result: actionType === 'ocr_scan' ? "Extracted Text / Analysis Result..." : "Processed Output..."
         } : undefined
       };
       setMessages(prev => [...prev, responseMsg]);
@@ -99,28 +108,44 @@ export const ErnestPro = () => {
     }, 1500);
   };
 
-  const tools = [
-    { icon: Scan, label: "Scan Doc", action: "Scan this document" },
-    { icon: FileType, label: "To PDF", action: "Convert this to PDF" },
-    { icon: Edit, label: "Fix Grammar", action: "Fix grammar in this text" },
-    { icon: FileText, label: "Summarize", action: "Summarize this notes" },
-  ];
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFile(file.name);
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-100px)] max-w-2xl mx-auto w-full bg-white dark:bg-slate-900/50 rounded-2xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800">
 
-      {/* Productivity Tools Grid (Top) */}
-      <div className="p-4 grid grid-cols-4 gap-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur">
-         {tools.map((tool, idx) => (
-           <button
-             key={idx}
-             onClick={() => handleSend(tool.action)}
-             className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition-all text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-           >
-             <tool.icon className="w-6 h-6 mb-1.5 opacity-80" />
-             <span className="text-[10px] font-medium">{tool.label}</span>
-           </button>
-         ))}
+      {/* Upload & Tools Header */}
+      <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur flex justify-between items-center gap-4">
+         <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={triggerFileUpload} className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+               <Upload className="w-4 h-4" />
+               Upload PDF/Img
+            </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".pdf,.jpg,.png,.jpeg,.docx"
+              onChange={handleFileUpload}
+            />
+         </div>
+
+         <div className="flex gap-1">
+             <Button variant="ghost" size="icon" title="Scan" onClick={() => handleSend("Scan this document")}>
+                <Scan className="w-4 h-4 text-slate-500" />
+             </Button>
+             <Button variant="ghost" size="icon" title="Summarize" onClick={() => handleSend("Summarize this")}>
+                <FileText className="w-4 h-4 text-slate-500" />
+             </Button>
+         </div>
       </div>
 
       {/* Messages */}
@@ -185,6 +210,18 @@ export const ErnestPro = () => {
 
       {/* Input Area */}
       <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 relative z-10">
+
+        {uploadedFile && (
+           <motion.div
+             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+             className="absolute bottom-full left-4 mb-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 border border-indigo-100 dark:border-indigo-800 shadow-sm"
+           >
+              <File className="w-3 h-3" />
+              {uploadedFile}
+              <button onClick={() => setUploadedFile(null)} className="hover:text-red-500 ml-1"><X className="w-3 h-3" /></button>
+           </motion.div>
+        )}
+
         <div className="flex gap-2 items-end">
            <Button
              variant="outline"
@@ -208,8 +245,8 @@ export const ErnestPro = () => {
 
            <Button
              onClick={() => handleSend()}
-             disabled={!input.trim() || isProcessing}
-             className={cn("rounded-full h-12 w-12 shrink-0 transition-all", input.trim() ? "bg-indigo-600 hover:bg-indigo-700" : "bg-slate-300 dark:bg-slate-700")}
+             disabled={(!input.trim() && !uploadedFile) || isProcessing}
+             className={cn("rounded-full h-12 w-12 shrink-0 transition-all", (input.trim() || uploadedFile) ? "bg-indigo-600 hover:bg-indigo-700" : "bg-slate-300 dark:bg-slate-700")}
            >
              <Send className="w-5 h-5 text-white" />
            </Button>

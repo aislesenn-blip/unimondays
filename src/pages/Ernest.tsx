@@ -5,8 +5,9 @@ import { ModelLoader } from '../components/ernest/ModelLoader';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const Ernest = () => {
-  const [isModelReady, setIsModelReady] = useState(false);
-  const [mode, setMode] = useState<'lite' | 'pro'>('lite');
+  // Default to true/pro for "Live Product" feel in this demo
+  const [isModelReady, setIsModelReady] = useState(true);
+  const [mode, setMode] = useState<'lite' | 'pro'>('pro');
 
   const handleModelReady = () => {
     setIsModelReady(true);

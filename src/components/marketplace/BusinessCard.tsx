@@ -2,8 +2,9 @@ import type { Business } from '../../types';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { Printer, Pizza, Bus, Smartphone, Scissors, Book, MessageCircle, Star, Wifi, Zap, Truck, Handshake } from 'lucide-react';
+import { Printer, Pizza, Bus, Smartphone, Scissors, Book, MessageCircle, Star, Wifi, Zap, Truck, Handshake, Briefcase } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 interface BusinessCardProps {
   business: Business;
@@ -16,18 +17,29 @@ const amenityIcons: Record<string, any> = {
   color_print: Printer,
 };
 
-const fallbackIcons: Record<string, any> = {
-  printer: Printer,
-  food: Pizza,
-  bus: Bus,
-  tech: Smartphone,
-  scissors: Scissors,
-  book: Book,
-  default: Star,
+const categoryIcons: Record<string, any> = {
+  Stationary: Printer,
+  Food: Pizza,
+  Travel: Bus,
+  Tech: Smartphone,
+  Grooming: Scissors,
+  Opportunities: Briefcase,
+  Other: Star,
 };
 
 export const BusinessCard = ({ business }: BusinessCardProps) => {
-  const FallbackIcon = business.iconFallback ? fallbackIcons[business.iconFallback] : fallbackIcons.default;
+  const navigate = useNavigate();
+  // Determine icon based on category or fallback
+  const IconComponent = categoryIcons[business.category] || Star;
+
+  const handleCardClick = () => {
+    navigate(`/merchant/${business.id}`);
+  };
+
+  const handleWhatsAppClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(`https://wa.me/${business.whatsapp}`, '_blank');
+  };
 
   return (
     <motion.div
@@ -35,55 +47,37 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       whileHover={{ y: -5 }}
+      onClick={handleCardClick}
+      className="cursor-pointer"
     >
-      <Card className="h-full flex flex-col hover:shadow-lg transition-all duration-300 border-slate-200/60 dark:border-slate-700/60 backdrop-blur-sm group overflow-hidden">
-        <div className="relative h-48 w-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-          {business.imageUrl ? (
-            <img
-              src={business.imageUrl}
-              alt={business.name}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-900 w-full h-full relative overflow-hidden">
-              <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-800/50 [mask-image:linear-gradient(0deg,white,transparent)]" />
-              <FallbackIcon className="w-16 h-16 mb-8 text-indigo-200 dark:text-indigo-900 relative z-10" strokeWidth={1.5} />
+      <Card className="h-full flex flex-col hover:shadow-xl transition-all duration-300 border-slate-200/60 dark:border-slate-700/60 backdrop-blur-sm group overflow-hidden bg-white dark:bg-slate-800">
 
-              {/* Visual Amenity Selector for No-Photo Profiles */}
-              <div className="absolute bottom-4 flex gap-3 z-20 justify-center w-full">
-                 {business.amenities.map((amenity) => {
-                   const Icon = amenityIcons[amenity];
-                   return (
-                     <div key={amenity} className="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 rounded-full shadow-sm border border-slate-100 dark:border-slate-700 backdrop-blur-sm" title={amenity}>
-                        <Icon className="w-4 h-4" />
-                     </div>
-                   );
-                 })}
-              </div>
-            </div>
-          )}
+        {/* Icon-based Header (No Photos) */}
+        <div className="relative h-40 w-full bg-indigo-50 dark:bg-slate-900/50 flex items-center justify-center overflow-hidden transition-colors group-hover:bg-indigo-100 dark:group-hover:bg-slate-900">
+          <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-800/50 [mask-image:linear-gradient(0deg,white,transparent)]" />
+
+          <div className="relative z-10 p-4 bg-white dark:bg-slate-800 rounded-full shadow-sm ring-1 ring-slate-100 dark:ring-slate-700 group-hover:scale-110 transition-transform duration-500">
+            <IconComponent className="w-10 h-10 text-indigo-600 dark:text-indigo-400" strokeWidth={1.5} />
+          </div>
 
           <div className="absolute top-2 right-2 flex gap-1 z-20">
-             {business.amenities.map((amenity) => {
-               const Icon = amenityIcons[amenity];
+             {business.amenities.slice(0, 2).map((amenity) => {
+               const AmIcon = amenityIcons[amenity];
                return (
                  <div key={amenity} className="bg-white/90 dark:bg-slate-900/90 p-1.5 rounded-full shadow-sm backdrop-blur-md" title={amenity}>
-                   <Icon className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                   <AmIcon className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                  </div>
                );
              })}
           </div>
 
           <div className="absolute bottom-2 left-2 flex gap-1 z-20">
-            <Badge variant="accent" className="shadow-sm backdrop-blur-md bg-lime-400/90 text-slate-900 border-0 h-6">
+            <Badge variant="accent" className="shadow-sm backdrop-blur-md bg-lime-400/90 text-slate-900 border-0 h-6 px-2">
               <Star className="w-3 h-3 mr-1 fill-current" />
               {business.rating}
             </Badge>
-            {business.isNegotiable && (
-               <Badge variant="secondary" className="shadow-sm backdrop-blur-md bg-blue-50/90 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 border-0 h-6">
-                 <Handshake className="w-3 h-3 mr-1" />
-                 Deal
-               </Badge>
+            {!business.isOpen && (
+               <Badge variant="destructive" className="shadow-sm backdrop-blur-md h-6 px-2 border-0">Closed</Badge>
             )}
           </div>
         </div>
@@ -91,37 +85,35 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
         <CardContent className="flex-1 flex flex-col gap-3 pt-4">
           <div>
             <div className="flex justify-between items-start mb-1 gap-2">
-               <h3 className="font-bold text-lg leading-tight line-clamp-1 text-slate-900 dark:text-slate-100">{business.name}</h3>
-               {!business.isOpen && (
-                 <Badge variant="destructive" className="text-[10px] px-1.5 h-5 shrink-0">Closed</Badge>
-               )}
+               <h3 className="font-bold text-lg leading-tight line-clamp-1 text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 transition-colors">
+                 {business.name}
+               </h3>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 min-h-[2.5em]">{business.description}</p>
 
-            <div className="mt-3 flex items-baseline gap-1">
+            <div className="mt-3 flex items-center justify-between">
                {business.price ? (
-                 <>
+                 <div className="flex items-baseline gap-1">
                    <span className="text-lg font-bold text-slate-900 dark:text-slate-100">
                      {new Intl.NumberFormat('sw-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(business.price)}
                    </span>
-                   <span className="text-xs text-slate-400">
-                      {business.category === 'Stationary' ? '/ page' : ''}
-                      {business.category === 'Travel' ? '/ trip' : ''}
-                   </span>
-                 </>
+                 </div>
                ) : (
                   <span className="text-sm font-medium text-slate-400 italic">Ask for price</span>
                )}
+
+               <div className="text-xs text-slate-400 font-medium bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md">
+                 {business.university}
+               </div>
             </div>
           </div>
 
           <div className="mt-auto pt-2">
             <Button
-              className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white shadow-md shadow-green-500/20 border-0 transition-all active:scale-95"
-              onClick={() => window.open(`https://wa.me/${business.whatsapp}`, '_blank')}
+              className="w-full bg-slate-900 dark:bg-slate-700 hover:bg-indigo-600 text-white shadow-none border-0 transition-all h-10 text-sm font-medium group-hover:shadow-lg pointer-events-none"
+              tabIndex={-1}
             >
-              <MessageCircle className="w-4 h-4 mr-2" />
-              Chat to Order
+              View Profile
             </Button>
           </div>
         </CardContent>

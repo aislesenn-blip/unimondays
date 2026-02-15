@@ -5,6 +5,8 @@ export interface User {
   name: string;
   role: UserRole;
   phone?: string;
+  university?: string;
+  category?: Category;
 }
 
 export type Category = 'Stationary' | 'Food' | 'Travel' | 'Opportunities' | 'Tech' | 'Grooming' | 'Other';
@@ -23,6 +25,10 @@ export interface Business {
   tags?: string[];
   isNegotiable?: boolean;
   price?: number; // Base price for sorting (e.g., avg meal cost or printing per page)
+  university: string;
+  openingHours?: string;
+  closingHours?: string;
+  seoKeywords?: string[];
 }
 
 export interface ErnestMessage {
