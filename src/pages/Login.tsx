@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, GraduationCap, Store, ShieldCheck, MapPin, Clock, Search, Briefcase } from 'lucide-react';
+import { ChevronRight, GraduationCap, Store, ShieldCheck, Clock, Search, Briefcase } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
 import type { UserRole, Category } from '../types';
