@@ -1,30 +1,19 @@
 import React, { createContext, useContext, useState, type ReactNode } from 'react';
-import type { User, UserRole, Category } from '../types';
+import type { User, UserRole } from '../types';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, passwordOrOtp: string, role?: UserRole, university?: string, category?: Category) => Promise<boolean>;
+  login: (username: string, passwordOrOtp: string, role?: UserRole) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
-  updateUserUniversity: (university: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize from localStorage if available
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('unimonday_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
 
-  const login = async (
-    username: string,
-    passwordOrOtp: string,
-    role: UserRole = 'student',
-    university: string = 'UDSM',
-    category?: Category
-  ): Promise<boolean> => {
+  const login = async (username: string, passwordOrOtp: string, role: UserRole = 'student'): Promise<boolean> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         // Secret Admin Backdoor (Simulates User/Pass: 123/123)
@@ -41,16 +30,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Standard Simulation
         if (username && passwordOrOtp) {
-          const newUser = {
+          setUser({
             id: 'user-' + Math.random().toString(36).substr(2, 9),
             name: role === 'merchant' ? 'Merchant User' : 'Student User',
             role: role,
-            phone: username,
-            university: university,
-            category: category
-          };
-          setUser(newUser);
-          localStorage.setItem('unimonday_user', JSON.stringify(newUser));
+            phone: username
+          });
           resolve(true);
         } else {
             resolve(false);
@@ -61,19 +46,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('unimonday_user');
-  };
-
-  const updateUserUniversity = (university: string) => {
-    if (user) {
-      const updatedUser = { ...user, university };
-      setUser(updatedUser);
-      localStorage.setItem('unimonday_user', JSON.stringify(updatedUser));
-    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, updateUserUniversity }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

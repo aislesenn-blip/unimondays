@@ -3,14 +3,17 @@
 
 @theme {
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --color-primary: #10B981; /* Emerald-500 equivalent */
+  --color-primary-foreground: #ffffff;
+  --color-accent: #34D399; /* Emerald-400 */
 }
 
 :root {
   --background: var(--color-slate-50);
   --foreground: var(--color-slate-900);
 
-  --primary: var(--color-indigo-600);
-  --primary-foreground: var(--color-white);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-primary-foreground);
 
   --muted: var(--color-slate-500);
   --border: var(--color-slate-200);
@@ -20,10 +23,21 @@ body {
   font-family: var(--font-sans);
   background-color: var(--background);
   color: var(--foreground);
-  @apply antialiased tracking-tight;
+  @apply antialiased tracking-tight bg-slate-50 text-slate-900;
 }
 
 /* Force Light Mode - Override any system preference or previous dark classes */
 .dark {
   color-scheme: light;
+}
+
+/* Utility classes for the new brand green */
+.text-brand-green {
+  @apply text-emerald-500;
+}
+.bg-brand-green {
+  @apply bg-emerald-500;
+}
+.border-brand-green {
+  @apply border-emerald-500;
 }

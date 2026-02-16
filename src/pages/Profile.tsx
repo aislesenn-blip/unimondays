@@ -1,77 +1,103 @@
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
-import { Settings, CreditCard, Bell, LogOut, MapPin, ChevronRight } from 'lucide-react';
+import { User, MapPin, School, LogOut, Settings as SettingsIcon, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 
 const universities = ["UDSM", "IFM", "CBE", "DIT", "UDOM", "ARU", "MUHAS", "SUA"];
 
 export const Profile = () => {
   const { user, logout, updateUserUniversity } = useAuth();
+  const [isEditingUni, setIsEditingUni] = useState(false);
+  const [selectedUni, setSelectedUni] = useState(user?.university || 'UDSM');
+
+  const handleUniChange = () => {
+    updateUserUniversity(selectedUni);
+    setIsEditingUni(false);
+  };
 
   return (
-    <div className="space-y-6 pb-20">
-      <h1 className="text-2xl font-bold px-2 text-slate-900 dark:text-slate-100">Profile</h1>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-2xl">
+          {user?.name?.charAt(0) || 'U'}
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{user?.name}</h1>
+          <p className="text-slate-500 capitalize">{user?.role} Account</p>
+        </div>
+      </div>
 
-      <Card>
-        <CardContent className="flex items-center space-x-4">
-          <div className="w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-2xl">
-            {user?.name?.[0] || 'U'}
-          </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{user?.name}</h2>
-            <p className="text-slate-500 dark:text-slate-400 capitalize">{user?.role}</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-1">{user?.id}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4">
+        <Card className="bg-white border-slate-200">
+          <CardContent className="p-0 divide-y divide-slate-100">
 
-      <div className="space-y-6">
-        {/* University Switcher Section */}
-        <div className="px-2">
-           <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1">My Campus</label>
-           <div className="relative">
-              <MapPin className="absolute left-3 top-3.5 h-5 w-5 text-indigo-500" />
-              <select
-                data-testid="uni-selector"
-                value={user?.university || ''}
-                onChange={(e) => updateUserUniversity(e.target.value)}
-                className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none text-slate-900 dark:text-slate-100 font-medium shadow-sm transition-shadow"
-              >
-                 {universities.map(u => (
-                   <option key={u} value={u}>{u}</option>
-                 ))}
-              </select>
-              <div className="absolute right-3 top-3.5 pointer-events-none">
-                 <ChevronRight className="h-5 w-5 text-slate-400 rotate-90" />
+            {/* Phone */}
+            <div className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-slate-50 rounded-lg text-slate-500">
+                   <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Phone Number</p>
+                  <p className="text-xs text-slate-500">{user?.phone || 'Not set'}</p>
+                </div>
               </div>
-           </div>
-           <p className="text-xs text-slate-400 mt-2 ml-1">
-             Switching campus will update your feed instantly.
-           </p>
-        </div>
+            </div>
 
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-3 px-2">Account Settings</label>
-          <Button variant="ghost" className="w-full justify-start text-base h-12 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-none first:rounded-t-xl last:rounded-b-xl border-b border-slate-100 dark:border-slate-800 last:border-0">
-             <Settings className="mr-4 w-5 h-5 text-slate-500" />
-             General Settings
-          </Button>
-          <Button variant="ghost" className="w-full justify-start text-base h-12 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-none border-b border-slate-100 dark:border-slate-800">
-             <CreditCard className="mr-4 w-5 h-5 text-slate-500" />
-             Payment Methods
-          </Button>
-          <Button variant="ghost" className="w-full justify-start text-base h-12 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-none last:rounded-b-xl">
-             <Bell className="mr-4 w-5 h-5 text-slate-500" />
-             Notifications
-          </Button>
-        </div>
+            {/* University Switcher */}
+            <div className="p-4">
+               <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-50 rounded-lg text-slate-500">
+                       <School className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">University</p>
+                      {!isEditingUni && <p className="text-xs text-slate-500">{user?.university}</p>}
+                    </div>
+                  </div>
 
-        <div className="pt-4 px-2">
-           <Button variant="destructive" className="w-full justify-start text-base h-12 px-4 bg-red-50 text-red-600 hover:bg-red-100 shadow-none dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 border border-red-100 dark:border-red-900/30" onClick={logout}>
-             <LogOut className="mr-4 w-5 h-5" />
-             Log Out
-           </Button>
-        </div>
+                  {!isEditingUni ? (
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditingUni(true)} className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                      Change
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                       <Button size="sm" variant="ghost" onClick={() => setIsEditingUni(false)}>Cancel</Button>
+                       <Button size="sm" onClick={handleUniChange} className="bg-emerald-600 hover:bg-emerald-700 text-white">Save</Button>
+                    </div>
+                  )}
+               </div>
+
+               {isEditingUni && (
+                 <div className="mt-3 pl-12">
+                    <select
+                      value={selectedUni}
+                      onChange={(e) => setSelectedUni(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      {universities.map(u => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+                 </div>
+               )}
+            </div>
+
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white border-slate-200 mt-4">
+           <CardContent className="p-0">
+             <button onClick={logout} className="w-full flex items-center gap-3 p-4 text-red-600 hover:bg-red-50 transition-colors text-left">
+               <div className="p-2 bg-red-50 rounded-lg">
+                  <LogOut className="w-5 h-5" />
+               </div>
+               <span className="font-medium">Sign Out</span>
+             </button>
+           </CardContent>
+        </Card>
       </div>
     </div>
   );
