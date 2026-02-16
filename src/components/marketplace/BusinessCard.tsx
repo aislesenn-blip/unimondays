@@ -43,31 +43,31 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
       transition={{ duration: 0.3 }}
       whileHover={{ y: -5 }}
       onClick={handleCardClick}
-      className="cursor-pointer"
+      className="cursor-pointer group"
     >
-      <Card className="h-full flex flex-col hover:shadow-xl transition-all duration-300 border-slate-200/60 dark:border-slate-700/60 backdrop-blur-sm group overflow-hidden bg-white dark:bg-slate-800">
+      <Card className="h-full flex flex-col hover:shadow-xl transition-all duration-300 border-slate-100 group overflow-hidden bg-white">
 
         {/* Icon-based Header (No Photos) */}
-        <div className="relative h-40 w-full bg-indigo-50 dark:bg-slate-900/50 flex items-center justify-center overflow-hidden transition-colors group-hover:bg-indigo-100 dark:group-hover:bg-slate-900">
-          <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-800/50 [mask-image:linear-gradient(0deg,white,transparent)]" />
+        <div className="relative h-40 w-full bg-slate-50 flex items-center justify-center overflow-hidden transition-colors group-hover:bg-indigo-50/50">
+          <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(0deg,white,transparent)]" />
 
-          <div className="relative z-10 p-4 bg-white dark:bg-slate-800 rounded-full shadow-sm ring-1 ring-slate-100 dark:ring-slate-700 group-hover:scale-110 transition-transform duration-500">
-            <IconComponent className="w-10 h-10 text-indigo-600 dark:text-indigo-400" strokeWidth={1.5} />
+          <div className="relative z-10 p-4 bg-white rounded-full shadow-sm ring-1 ring-slate-100 group-hover:scale-110 transition-transform duration-500">
+            <IconComponent className="w-10 h-10 text-indigo-600" strokeWidth={1.5} />
           </div>
 
           <div className="absolute top-2 right-2 flex gap-1 z-20">
              {business.amenities.slice(0, 2).map((amenity) => {
                const AmIcon = amenityIcons[amenity];
                return (
-                 <div key={amenity} className="bg-white/90 dark:bg-slate-900/90 p-1.5 rounded-full shadow-sm backdrop-blur-md" title={amenity}>
-                   <AmIcon className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                 <div key={amenity} className="bg-white/90 p-1.5 rounded-full shadow-sm backdrop-blur-md border border-slate-100" title={amenity}>
+                   <AmIcon className="w-3 h-3 text-indigo-600" />
                  </div>
                );
              })}
           </div>
 
           <div className="absolute bottom-2 left-2 flex gap-1 z-20">
-            <Badge variant="accent" className="shadow-sm backdrop-blur-md bg-lime-400/90 text-slate-900 border-0 h-6 px-2">
+            <Badge variant="accent" className="shadow-sm backdrop-blur-md bg-lime-400 text-slate-900 border-0 h-6 px-2 font-bold">
               <Star className="w-3 h-3 mr-1 fill-current" />
               {business.rating}
             </Badge>
@@ -77,19 +77,19 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
           </div>
         </div>
 
-        <CardContent className="flex-1 flex flex-col gap-3 pt-4">
+        <CardContent className="flex-1 flex flex-col gap-3 pt-5 pb-5">
           <div>
             <div className="flex justify-between items-start mb-1 gap-2">
-               <h3 className="font-bold text-lg leading-tight line-clamp-1 text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 transition-colors">
+               <h3 className="font-bold text-lg leading-tight line-clamp-1 text-slate-900 group-hover:text-indigo-600 transition-colors">
                  {business.name}
                </h3>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 min-h-[2.5em]">{business.description}</p>
+            <p className="text-sm text-slate-500 line-clamp-2 min-h-[2.5em] font-medium leading-relaxed">{business.description}</p>
 
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-4 flex items-center justify-between">
                {business.price ? (
                  <div className="flex items-baseline gap-1">
-                   <span className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                   <span className="text-lg font-bold text-slate-900">
                      {new Intl.NumberFormat('sw-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(business.price)}
                    </span>
                  </div>
@@ -97,7 +97,7 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
                   <span className="text-sm font-medium text-slate-400 italic">Ask for price</span>
                )}
 
-               <div className="text-xs text-slate-400 font-medium bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md">
+               <div className="text-xs text-slate-500 font-semibold bg-slate-100 px-2.5 py-1 rounded-md">
                  {business.university}
                </div>
             </div>
@@ -105,7 +105,7 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
 
           <div className="mt-auto pt-2">
             <Button
-              className="w-full bg-slate-900 dark:bg-slate-700 hover:bg-indigo-600 text-white shadow-none border-0 transition-all h-10 text-sm font-medium group-hover:shadow-lg pointer-events-none"
+              className="w-full bg-slate-900 hover:bg-indigo-600 text-white shadow-none border-0 transition-all h-10 text-sm font-semibold tracking-wide pointer-events-none"
               tabIndex={-1}
             >
               View Profile

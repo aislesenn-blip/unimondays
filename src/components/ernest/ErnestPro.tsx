@@ -127,7 +127,7 @@ export const ErnestPro = () => {
          <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={triggerFileUpload} className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
                <Upload className="w-4 h-4" />
-               Upload PDF/Img
+               Upload Img
             </Button>
             <input
               type="file"
@@ -144,6 +144,9 @@ export const ErnestPro = () => {
              </Button>
              <Button variant="ghost" size="icon" title="Summarize" onClick={() => handleSend("Summarize this")}>
                 <FileText className="w-4 h-4 text-slate-500" />
+             </Button>
+             <Button variant="ghost" size="icon" title="Grammar Fix" onClick={() => handleSend("Fix grammar in this text")}>
+                <Sparkles className="w-4 h-4 text-slate-500" />
              </Button>
          </div>
       </div>

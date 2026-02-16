@@ -353,12 +353,12 @@ export const Login = () => {
         </div>
 
         {/* Login Form Section */}
-        <div className="p-8 md:p-12 flex flex-col justify-center bg-white dark:bg-slate-800">
+        <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
           <div className="mb-8 text-center md:text-left">
-            <h1 className="text-3xl font-bold tracking-tighter text-indigo-600 dark:text-indigo-400 mb-2">
-              U<span className="text-2xl uppercase">ɴ</span>iMonday
+            <h1 className="text-3xl font-extrabold tracking-tight text-indigo-600 mb-2">
+              UɴiMonday
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">Step {wizardStep} of 4</p>
+            <p className="text-slate-500 text-sm">Step {wizardStep} of 4</p>
             {/* Progress Bar */}
             <div className="w-full bg-slate-100 rounded-full h-1 mt-2">
                <div className="bg-indigo-600 h-1 rounded-full transition-all duration-300" style={{ width: `${(wizardStep / 4) * 100}%` }}></div>
@@ -370,7 +370,7 @@ export const Login = () => {
           </AnimatePresence>
 
           <div className="mt-auto text-center pt-6">
-            <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center justify-center gap-1">
+            <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
               <ShieldCheck className="w-3 h-3" />
               Secure Encrypted Connection
             </p>
