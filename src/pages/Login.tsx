@@ -56,8 +56,8 @@ export const Login = () => {
       } else if (user.role === 'merchant') {
         navigate('/merchant-dashboard');
       } else {
-        console.log("Login: Navigating to / (Home)");
-        navigate('/');
+        console.log("Login: Navigating to /home (Home)");
+        navigate('/home');
       }
     }
   }, [user, navigate]);
@@ -67,6 +67,7 @@ export const Login = () => {
     console.log("Login: handleLogin triggered with role:", role);
     setIsLoading(true);
 
+    // Mock Login - always true for verification if inputs filled
     const success = await login(
       identifier,
       password || 'simulated-otp',
@@ -76,6 +77,20 @@ export const Login = () => {
 
     console.log("Login: result success:", success);
     setIsLoading(false);
+
+    // Explicit navigation if successful, just in case useEffect misses or has race condition
+    if (success) {
+      if (role === 'student') {
+        console.log("Login: Manual nav to /home");
+        navigate('/home');
+      } else if (role === 'merchant') {
+        console.log("Login: Manual nav to /merchant-dashboard");
+        navigate('/merchant-dashboard');
+      } else if (role === 'admin') {
+         navigate('/admin');
+      }
+    }
+
     if (!success) {
       alert('Login failed. Please enter a valid phone number.');
     }
@@ -133,7 +148,7 @@ export const Login = () => {
                   <Store className="w-6 h-6" />
                 </div>
                 <div className="text-left">
-                  <span className="block font-bold text-slate-900">Merchant</span>
+                  <span className="block font-bold text-slate-900">Partner with Us</span>
                   <span className="text-xs text-slate-500">I want to sell products or services.</span>
                 </div>
               </button>

@@ -6,12 +6,18 @@ import type { ErnestMessage } from '../../types';
 import { cn } from '../../lib/utils';
 import { performOCR, generatePDF } from '../../utils/ai-helpers';
 
-export const ErnestPro = () => {
+interface ErnestProProps {
+  mode: 'lite' | 'pro';
+}
+
+export const ErnestPro = ({ mode }: ErnestProProps) => {
   const [messages, setMessages] = useState<ErnestMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: "Hello! I am Ernest, your personal Document Wizard. I can format citations, generate Tables of Contents, and help you study. Upload a handout or paste your text to get started.",
+      content: mode === 'pro'
+        ? "Hello! I am Ernest Pro. I am a fully offline Document Wizard stored on your device. I can help you format documents, scan handouts, and study without internet."
+        : "Hello! I am Ernest Lite. I am a fast, online study assistant. How can I help you today?",
       timestamp: new Date(),
     }
   ]);
@@ -29,35 +35,39 @@ export const ErnestPro = () => {
   // Initialize Worker
   useEffect(() => {
     if (!workerRef.current) {
-        // Vite worker import
-        workerRef.current = new Worker(new URL('../../workers/ai.worker.ts', import.meta.url), { type: 'module' });
+        // Only load the worker if mode is PRO.
+        // For LITE, we will use a mocked or separate API call (simulated here for now)
+        if (mode === 'pro') {
+          // Vite worker import
+          workerRef.current = new Worker(new URL('../../workers/ai.worker.ts', import.meta.url), { type: 'module' });
 
-        workerRef.current.onmessage = (e) => {
-            const { status, message, result, progress } = e.data;
+          workerRef.current.onmessage = (e) => {
+              const { status, message, result, progress } = e.data;
 
-            if (status === 'loading') {
-                setLoadingStatus(message);
-                if (progress) setLoadingProgress(progress);
-            } else if (status === 'ready') {
-                setLoadingStatus(null);
-                setLoadingProgress(0);
-            } else if (status === 'complete') {
-                setIsProcessing(false);
-                addMessage('assistant', result);
-            } else if (status === 'error') {
-                setIsProcessing(false);
-                addMessage('assistant', `Error: ${message}`);
-            }
-        };
+              if (status === 'loading') {
+                  setLoadingStatus(message);
+                  if (progress) setLoadingProgress(progress);
+              } else if (status === 'ready') {
+                  setLoadingStatus(null);
+                  setLoadingProgress(0);
+              } else if (status === 'complete') {
+                  setIsProcessing(false);
+                  addMessage('assistant', result);
+              } else if (status === 'error') {
+                  setIsProcessing(false);
+                  addMessage('assistant', `Error: ${message}`);
+              }
+          };
 
-        // Trigger Init
-        workerRef.current.postMessage({ type: 'init' });
+          // Trigger Init (which downloads the model)
+          workerRef.current.postMessage({ type: 'init' });
+        }
     }
 
     return () => {
         // workerRef.current?.terminate(); // Keep alive for caching
     };
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,14 +121,20 @@ export const ErnestPro = () => {
     }
 
     // Standard Text Chat
-    addMessage('user', textToProcess); // Show the full prompt or just user text? detailed prompt might be noisy.
-    // Let's show the user text but send the prompt.
-    // Actually, for "Auto Format", showing the user text "Format this..." is fine.
+    addMessage('user', textToProcess);
 
     setInput('');
     setIsProcessing(true);
 
-    workerRef.current?.postMessage({ type: task, payload: textToProcess });
+    if (mode === 'pro') {
+       workerRef.current?.postMessage({ type: task, payload: textToProcess });
+    } else {
+       // Mock Lite Response
+       setTimeout(() => {
+          setIsProcessing(false);
+          addMessage('assistant', `[Ernest Lite]: This is a simulated response. In a real app, I would fetch this from the cloud API.\n\nYou said: "${text}"`);
+       }, 1000);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

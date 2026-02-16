@@ -172,15 +172,53 @@ export const MerchantProfile = () => {
                     )}
 
                     <Button
-                      className="w-full bg-[#25D366] hover:bg-[#128C7E] hover:scale-[1.02] text-white shadow-lg shadow-green-500/20 border-0 h-12 text-base font-semibold transition-all"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.02] text-white shadow-lg shadow-emerald-500/20 border-0 h-12 text-base font-semibold transition-all"
                       onClick={() => window.open(`https://wa.me/${business.whatsapp}`, '_blank')}
                     >
                       <MessageCircle className="w-5 h-5 mr-2" />
-                      Chat on WhatsApp
+                      Partner with Us
                     </Button>
                     <p className="text-[10px] text-center text-slate-400 mt-3 flex items-center justify-center gap-1">
                        <ShieldCheck className="w-3 h-3" /> 100% Secure & Verified
                     </p>
+                 </div>
+              </Card>
+
+              {/* Product Catalogue */}
+              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl">
+                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Catalogue</h3>
+                 <div className="space-y-4">
+                    {[
+                      { name: "Full Binding", price: 2500, desc: "Spiral or Hardcover" },
+                      { name: "Color Print (A4)", price: 500, desc: "High quality paper" },
+                      { name: "Scanning", price: 200, desc: "Per page" }
+                    ].map((item, i) => (
+                      <div key={i} className="flex justify-between items-start border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                         <div>
+                            <p className="font-bold text-slate-800 text-sm">{item.name}</p>
+                            <p className="text-xs text-slate-500">{item.desc}</p>
+                         </div>
+                         <span className="font-bold text-emerald-600 text-sm">
+                            {item.price.toLocaleString()} TZS
+                         </span>
+                      </div>
+                    ))}
+                 </div>
+              </Card>
+
+              {/* Gallery Grid */}
+              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl">
+                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Gallery</h3>
+                 <div className="grid grid-cols-2 gap-2">
+                    {[1, 2, 3, 4].map((i) => (
+                       <div key={i} className="aspect-square rounded-lg bg-slate-100 overflow-hidden">
+                          <img
+                            src={`https://source.unsplash.com/random/200x200?sig=${i}&office`}
+                            alt="Gallery"
+                            className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity"
+                          />
+                       </div>
+                    ))}
                  </div>
               </Card>
 
