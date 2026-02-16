@@ -132,7 +132,7 @@ export const ErnestPro = ({ mode }: ErnestProProps) => {
        // Mock Lite Response
        setTimeout(() => {
           setIsProcessing(false);
-          addMessage('assistant', `[Ernest Lite]: This is a simulated response. In a real app, I would fetch this from the cloud API.\n\nYou said: "${text}"`);
+          addMessage('assistant', `[Ernest Lite]: This is a simulated response. In a real app, I would fetch this from the cloud API.\n\nYou said: "${textToProcess}"`);
        }, 1000);
     }
   };

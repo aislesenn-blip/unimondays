@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { motion } from 'framer-motion';
-import { GraduationCap, Store, Zap, Users } from 'lucide-react';
+import { Store, Zap, Users } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 
 export const Landing = () => {
