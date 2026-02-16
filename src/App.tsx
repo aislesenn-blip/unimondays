@@ -8,6 +8,7 @@ import { Ernest } from './pages/Ernest';
 import { Marketplace } from './pages/Marketplace';
 import { Profile } from './pages/Profile';
 import { MerchantProfile } from './pages/MerchantProfile';
+import { MerchantDashboard } from './pages/MerchantDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/ernest" element={<Ernest />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/merchant-dashboard" element={<MerchantDashboard />} />
             <Route path="/merchant/:id" element={<MerchantProfile />} />
           </Route>
         </Route>
