@@ -28,20 +28,25 @@ export const Home = () => {
               Hello, <span className="text-emerald-500">{user?.name?.split(' ')[0] || 'Scholar'}</span>.
             </h1>
 
-            <p className="text-slate-500 text-lg md:text-xl font-medium">
-              It's UɴiMonday at <span className="font-semibold text-slate-700">{user?.university || 'Campus'}</span>.
-            </p>
+            <div className="flex items-center gap-3 text-lg md:text-xl font-medium text-slate-800">
+              It's UɴiMonday
+              <span className="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full font-bold tracking-wide uppercase shadow-sm">
+                {user?.university || 'Campus'}
+              </span>
+            </div>
 
-            {/* Huge Floating Search Bar */}
-            <div className="relative w-full max-w-2xl group mt-10">
-               <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-                 <Search className="h-7 w-7 text-emerald-500 group-focus-within:text-emerald-600 transition-colors" />
-               </div>
-               <input
-                 type="text"
-                 placeholder="Search notes, food, or travel..."
-                 className="w-full pl-16 pr-8 h-16 text-xl bg-white border border-slate-100 rounded-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-200 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-0.5"
-               />
+            {/* Huge Floating Search Bar Card */}
+            <div className="w-full max-w-2xl mt-10 bg-white p-4 rounded-xl shadow-md border border-slate-100">
+              <div className="relative group">
+                 <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                   <Search className="h-6 w-6 text-emerald-500 group-focus-within:text-emerald-600 transition-colors" />
+                 </div>
+                 <input
+                   type="text"
+                   placeholder="Search notes, food, or travel..."
+                   className="w-full pl-12 pr-4 h-12 text-lg bg-slate-50 border-0 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                 />
+              </div>
             </div>
           </motion.div>
         </div>
@@ -52,22 +57,22 @@ export const Home = () => {
         <div className="flex justify-between items-center mb-8 px-2">
            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Essentials</h2>
         </div>
-        <div className="grid grid-cols-4 gap-4 md:gap-8 px-2">
+        <div className="grid grid-cols-4 gap-8 px-2">
            {[
              { icon: Zap, label: "Ernest AI", color: "bg-emerald-50 text-emerald-600 border-emerald-100", path: "/ernest" },
              { icon: Coffee, label: "Dining", color: "bg-orange-50 text-orange-600 border-orange-100", path: "/marketplace" },
              { icon: Printer, label: "Print", color: "bg-blue-50 text-blue-600 border-blue-100", path: "/marketplace" },
              { icon: MapPin, label: "Travel", color: "bg-violet-50 text-violet-600 border-violet-100", path: "/marketplace" },
            ].map((action, idx) => (
-             <Link key={idx} to={action.path} className="flex flex-col items-center gap-4 group">
+             <Link key={idx} to={action.path} className="flex flex-col items-center gap-2 group">
                <motion.div
                  whileHover={{ scale: 1.05 }}
                  whileTap={{ scale: 0.95 }}
-                 className={`w-20 h-20 md:w-24 md:h-24 rounded-3xl flex items-center justify-center shadow-sm border ${action.color} transition-all`}
+                 className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border ${action.color} transition-all`}
                >
-                 <action.icon className="w-8 h-8 md:w-10 md:h-10" />
+                 <action.icon className="w-6 h-6" />
                </motion.div>
-               <span className="text-sm md:text-base font-semibold text-slate-600 group-hover:text-slate-900 transition-colors">
+               <span className="text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
                  {action.label}
                </span>
              </Link>
