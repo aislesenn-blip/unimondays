@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { Send, FileText, Scan, Sparkles, Loader2, GraduationCap, Upload, X, File, Download, Camera } from 'lucide-react';
+import { Send, FileText, Loader2, X, File, Camera, FileType, ListOrdered, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ErnestMessage } from '../../types';
 import { cn } from '../../lib/utils';
@@ -11,7 +11,7 @@ export const ErnestPro = () => {
     {
       id: 'welcome',
       role: 'assistant',
-      content: "Ready to study? I'm your AI partner. Upload a handout to scan, or ask me anything.",
+      content: "Hello! I am Ernest, your personal Document Wizard. I can format citations, generate Tables of Contents, and help you study. Upload a handout or paste your text to get started.",
       timestamp: new Date(),
     }
   ]);
@@ -20,6 +20,7 @@ export const ErnestPro = () => {
   const [loadingStatus, setLoadingStatus] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [showTools, setShowTools] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,15 +72,16 @@ export const ErnestPro = () => {
     }]);
   };
 
-  const handleSend = async (textOverride?: string, task: 'chat' | 'fix' | 'summarize' = 'chat') => {
-    const text = textOverride || input;
-    if (!text.trim() && !uploadedFile) return;
+  const handleSend = async (textOverride?: string, task: 'chat' | 'fix' | 'summarize' = 'chat', promptPrefix?: string) => {
+    const rawText = textOverride || input;
+    if (!rawText.trim() && !uploadedFile) return;
+
+    // Construct the actual prompt if a prefix is provided
+    const textToProcess = promptPrefix ? `${promptPrefix}\n\n${rawText}` : rawText;
 
     // Handle File Upload (OCR) logic first if present
-    let processedText = text;
-
     if (uploadedFile) {
-       addMessage('user', `[Uploaded: ${uploadedFile.name}] ${text}`);
+       addMessage('user', `[Uploaded: ${uploadedFile.name}] ${promptPrefix ? `Request: ${promptPrefix}` : rawText}`);
        setInput('');
        setUploadedFile(null);
        setIsProcessing(true);
@@ -93,8 +95,8 @@ export const ErnestPro = () => {
 
                // Send to worker
                workerRef.current?.postMessage({
-                   type: task === 'chat' ? 'summarize' : task, // Default to summarize for scans
-                   payload: `Context: ${ocrText}\n\nTask: ${text || "Summarize this."}`
+                   type: task === 'chat' ? 'summarize' : task, // Default to summarize for scans unless specific
+                   payload: `Context (OCR Content): ${ocrText}\n\nUser Instruction: ${textToProcess || "Analyze this."}`
                });
            } catch (err) {
                setIsProcessing(false);
@@ -109,11 +111,14 @@ export const ErnestPro = () => {
     }
 
     // Standard Text Chat
-    addMessage('user', text);
+    addMessage('user', textToProcess); // Show the full prompt or just user text? detailed prompt might be noisy.
+    // Let's show the user text but send the prompt.
+    // Actually, for "Auto Format", showing the user text "Format this..." is fine.
+
     setInput('');
     setIsProcessing(true);
 
-    workerRef.current?.postMessage({ type: task, payload: text });
+    workerRef.current?.postMessage({ type: task, payload: textToProcess });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,15 +128,52 @@ export const ErnestPro = () => {
     }
   };
 
-  const handleExportPDF = () => {
+  const handleExport = (format: 'pdf' | 'word') => {
       // Export last assistant message or all? Let's do last relevant note.
       const lastResponse = [...messages].reverse().find(m => m.role === 'assistant');
       if (lastResponse) {
-          generatePDF(lastResponse.content);
+          if (format === 'pdf') {
+              generatePDF(lastResponse.content);
+          } else {
+              // Mock Word Export
+              alert("Converting to Word Document (.docx)... Download started.");
+          }
       } else {
           alert("No content to export!");
       }
   };
+
+  // Mini-Stationary Tools
+  const tools = [
+      {
+          id: 'auto-format',
+          label: 'Auto-Format',
+          icon: FileType,
+          description: 'Fix Spacing & Fonts',
+          action: () => handleSend(undefined, 'fix', "You are an expert Document Formatter. Fix spacing, fonts, and apply academic formatting (APA/MLA) to this text:")
+      },
+      {
+          id: 'toc',
+          label: 'Generate TOC',
+          icon: ListOrdered,
+          description: 'Create Table of Contents',
+          action: () => handleSend(undefined, 'summarize', "Generate a structured Table of Contents for this text:")
+      },
+      {
+          id: 'paraphrase',
+          label: 'Paraphrase',
+          icon: RefreshCw,
+          description: 'Rewrite Academic Style',
+          action: () => handleSend(undefined, 'fix', "Rewrite this text in a standard academic style, improving clarity and vocabulary:")
+      },
+      {
+          id: 'word',
+          label: 'To Word',
+          icon: FileText,
+          description: 'Convert to Docx',
+          action: () => handleExport('word')
+      },
+  ];
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 relative">
@@ -147,33 +189,56 @@ export const ErnestPro = () => {
           </div>
       )}
 
-      {/* Tools Header */}
-      <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center gap-2">
-         <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-               <Camera className="w-4 h-4" />
-               Scan Handout
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/*,.pdf"
-              onChange={handleFileUpload}
-            />
-         </div>
+      {/* Header & Tools */}
+      <div className="border-b border-slate-100 bg-slate-50">
+          <div className="p-3 flex justify-between items-center">
+             <div className="flex gap-2 items-center">
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 bg-white shadow-sm">
+                   <Camera className="w-4 h-4" />
+                   Scan Handout
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*,.pdf"
+                  onChange={handleFileUpload}
+                />
+             </div>
 
-         <div className="flex gap-1">
-             <Button variant="ghost" size="icon" title="Summarize" onClick={() => handleSend("Summarize this", 'summarize')}>
-                <FileText className="w-4 h-4 text-slate-500 hover:text-emerald-600" />
-             </Button>
-             <Button variant="ghost" size="icon" title="Grammar Fix" onClick={() => handleSend("Fix grammar", 'fix')}>
-                <Sparkles className="w-4 h-4 text-slate-500 hover:text-emerald-600" />
-             </Button>
-             <Button variant="ghost" size="icon" title="Export PDF" onClick={handleExportPDF}>
-                <Download className="w-4 h-4 text-slate-500 hover:text-emerald-600" />
-             </Button>
-         </div>
+             <button onClick={() => setShowTools(!showTools)} className="text-xs font-medium text-emerald-600 flex items-center gap-1 hover:text-emerald-700">
+                 {showTools ? 'Hide Tools' : 'Show Tools'}
+                 {showTools ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
+             </button>
+          </div>
+
+          {/* Tools Grid */}
+          <AnimatePresence>
+            {showTools && (
+                <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden bg-white border-t border-slate-100"
+                >
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-3">
+                        {tools.map((tool) => (
+                            <button
+                                key={tool.id}
+                                onClick={tool.action}
+                                className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-100 hover:border-emerald-200 transition-all group text-center h-24"
+                            >
+                                <div className="p-2 bg-white rounded-lg shadow-sm mb-2 group-hover:scale-110 transition-transform text-emerald-600">
+                                    <tool.icon className="w-5 h-5" />
+                                </div>
+                                <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-800">{tool.label}</span>
+                                <span className="text-[10px] text-slate-500 line-clamp-1">{tool.description}</span>
+                            </button>
+                        ))}
+                    </div>
+                </motion.div>
+            )}
+          </AnimatePresence>
       </div>
 
       {/* Messages */}
@@ -243,7 +308,7 @@ export const ErnestPro = () => {
                        handleSend();
                    }
                }}
-               placeholder="Ask anything (English or Swahili)..."
+               placeholder="Paste text here or ask Ernest..."
                className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all resize-none min-h-[50px] max-h-[120px]"
                rows={1}
              />

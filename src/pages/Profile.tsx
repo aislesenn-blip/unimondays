@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
-import { User, MapPin, School, LogOut, Settings as SettingsIcon, ChevronRight } from 'lucide-react';
+import { User, School, LogOut } from 'lucide-react';
 import { useState } from 'react';
 
 const universities = ["UDSM", "IFM", "CBE", "DIT", "UDOM", "ARU", "MUHAS", "SUA"];
