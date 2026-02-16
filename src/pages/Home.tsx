@@ -15,8 +15,9 @@ export const Home = () => {
   return (
     <div className="space-y-12 pb-24">
       {/* Hero Section - Clean Light Mode with Massive Search */}
-      <section className="pt-8 pb-4 px-4">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
+      {/* Container Card for Header */}
+      <section className="bg-white shadow-md rounded-b-[30px] pt-8 pb-8 px-4 border-b border-slate-100">
+        <div className="max-w-4xl mx-auto text-center space-y-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -24,27 +25,27 @@ export const Home = () => {
             className="flex flex-col items-center"
           >
             {/* Greeting */}
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 mb-3">
+            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 mb-2">
               Hello, <span className="text-emerald-500">{user?.name?.split(' ')[0] || 'Scholar'}</span>.
             </h1>
 
             <div className="flex items-center gap-3 text-lg md:text-xl font-medium text-slate-800">
               It's UɴiMonday
-              <span className="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full font-bold tracking-wide uppercase shadow-sm">
+              <span className="bg-emerald-50 text-emerald-700 text-xs px-3 py-1 rounded-full font-bold tracking-wide uppercase shadow-sm border border-emerald-100">
                 {user?.university || 'Campus'}
               </span>
             </div>
 
             {/* Huge Floating Search Bar Card */}
-            <div className="w-full max-w-2xl mt-10 bg-white p-4 rounded-xl shadow-md border border-slate-100">
-              <div className="relative group">
+            <div className="w-full max-w-2xl mt-8 bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-inner">
+              <div className="relative group bg-white rounded-xl shadow-sm">
                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
                    <Search className="h-6 w-6 text-emerald-500 group-focus-within:text-emerald-600 transition-colors" />
                  </div>
                  <input
                    type="text"
                    placeholder="Search notes, food, or travel..."
-                   className="w-full pl-12 pr-4 h-12 text-lg bg-slate-50 border-0 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                   className="w-full pl-12 pr-4 h-14 text-lg bg-transparent border-0 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 transition-all font-medium"
                  />
               </div>
             </div>
