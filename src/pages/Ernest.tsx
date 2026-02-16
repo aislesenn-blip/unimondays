@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ErnestPro } from '../components/ernest/ErnestPro';
-import { Button } from '../components/ui/Button';
-import { Zap, Wifi, Download, Globe } from 'lucide-react';
+import { Zap, Download, Globe } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const Ernest = () => {
