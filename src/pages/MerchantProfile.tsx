@@ -161,10 +161,10 @@ export const MerchantProfile = () => {
 
                  <div className="pt-2">
                     {business.price && (
-                       <div className="mb-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                          <p className="text-xs text-slate-400 mb-1">Starting from</p>
+                       <div className="mb-4 bg-white border border-slate-100 p-4 rounded-xl shadow-sm">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Starting from</p>
                           <div className="flex items-baseline gap-1">
-                             <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                             <span className="text-3xl font-extrabold text-slate-900">
                                 {new Intl.NumberFormat('sw-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(business.price)}
                              </span>
                           </div>
@@ -172,14 +172,14 @@ export const MerchantProfile = () => {
                     )}
 
                     <Button
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.02] text-white shadow-lg shadow-emerald-500/20 border-0 h-12 text-base font-semibold transition-all"
+                      className="w-full bg-[#25D366] hover:bg-[#128C7E] hover:scale-[1.02] text-white shadow-lg shadow-green-500/20 border-0 h-14 text-lg font-bold transition-all rounded-xl"
                       onClick={() => window.open(`https://wa.me/${business.whatsapp}`, '_blank')}
                     >
-                      <MessageCircle className="w-5 h-5 mr-2" />
-                      Partner with Us
+                      <MessageCircle className="w-6 h-6 mr-2 fill-current" />
+                      Order via WhatsApp
                     </Button>
-                    <p className="text-[10px] text-center text-slate-400 mt-3 flex items-center justify-center gap-1">
-                       <ShieldCheck className="w-3 h-3" /> 100% Secure & Verified
+                    <p className="text-[10px] text-center text-slate-400 mt-3 flex items-center justify-center gap-1 font-medium">
+                       <ShieldCheck className="w-3 h-3 text-emerald-500" /> 100% Secure & Verified
                     </p>
                  </div>
               </Card>

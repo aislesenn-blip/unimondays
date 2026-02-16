@@ -2,7 +2,7 @@ import type { Business } from '../../types';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { Printer, Pizza, Bus, Smartphone, Scissors, Star, Wifi, Zap, Truck, Briefcase } from 'lucide-react';
+import { Printer, Star, Wifi, Zap, Truck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,20 +17,8 @@ const amenityIcons: Record<string, any> = {
   color_print: Printer,
 };
 
-const categoryIcons: Record<string, any> = {
-  Stationary: Printer,
-  Food: Pizza,
-  Travel: Bus,
-  Tech: Smartphone,
-  Grooming: Scissors,
-  Opportunities: Briefcase,
-  Other: Star,
-};
-
 export const BusinessCard = ({ business }: BusinessCardProps) => {
   const navigate = useNavigate();
-  // Determine icon based on category or fallback
-  const IconComponent = categoryIcons[business.category] || Star;
 
   const handleCardClick = () => {
     navigate(`/merchant/${business.id}`);
@@ -47,28 +35,36 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
     >
       <Card className="h-full flex flex-col hover:shadow-xl transition-all duration-300 border-slate-100 group overflow-hidden bg-white">
 
-        {/* Icon-based Header (No Photos) */}
-        <div className="relative h-40 w-full bg-slate-50 flex items-center justify-center overflow-hidden transition-colors group-hover:bg-indigo-50/50">
-          <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(0deg,white,transparent)]" />
+        {/* Photo Header with Unsplash Fallback */}
+        <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
+          {/* Use business imageUrl if exists, else Unsplash based on Category */}
+          <img
+            src={business.imageUrl || `https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400`} // Default to Food/General if missing logic, but let's improve
+            srcSet={business.imageUrl || `https://source.unsplash.com/featured/400x300?${business.category.replace(' ', ',')},university`}
+            onError={(e) => {
+                // Fallback if unsplash fails
+                e.currentTarget.src = "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=400";
+            }}
+            alt={business.name}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          />
 
-          <div className="relative z-10 p-4 bg-white rounded-full shadow-sm ring-1 ring-slate-100 group-hover:scale-110 transition-transform duration-500">
-            <IconComponent className="w-10 h-10 text-indigo-600" strokeWidth={1.5} />
-          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-60" />
 
-          <div className="absolute top-2 right-2 flex gap-1 z-20">
+          <div className="absolute top-3 right-3 flex gap-1 z-20">
              {business.amenities.slice(0, 2).map((amenity) => {
                const AmIcon = amenityIcons[amenity];
                return (
                  <div key={amenity} className="bg-white/90 p-1.5 rounded-full shadow-sm backdrop-blur-md border border-slate-100" title={amenity}>
-                   <AmIcon className="w-3 h-3 text-indigo-600" />
+                   <AmIcon className="w-3 h-3 text-emerald-600" />
                  </div>
                );
              })}
           </div>
 
-          <div className="absolute bottom-2 left-2 flex gap-1 z-20">
-            <Badge variant="accent" className="shadow-sm backdrop-blur-md bg-lime-400 text-slate-900 border-0 h-6 px-2 font-bold">
-              <Star className="w-3 h-3 mr-1 fill-current" />
+          <div className="absolute bottom-3 left-3 flex gap-2 z-20">
+            <Badge className="bg-white/90 text-slate-900 shadow-sm backdrop-blur-md border-0 h-6 px-2 font-bold flex items-center gap-1">
+              <Star className="w-3 h-3 text-yellow-500 fill-current" />
               {business.rating}
             </Badge>
             {!business.isOpen && (
