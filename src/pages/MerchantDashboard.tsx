@@ -3,8 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
-import { Store, Clock, Tag, Share2, Plus, Edit2, CheckCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Store, Tag, Share2, Plus, CheckCircle } from 'lucide-react';
 import type { Category } from '../types';
 
 const categories: Category[] = ['Stationary', 'Food', 'Travel', 'Opportunities', 'Tech', 'Grooming', 'Other'];
