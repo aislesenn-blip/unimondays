@@ -2,13 +2,15 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import {
-  Zap, Upload, Printer, Download, Sparkles, FileText, ChevronLeft
+  Zap, Upload, Printer, Download, Sparkles, FileText, ChevronLeft, MessageSquare
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { mockBusinesses } from '../data/mockData';
+import { GeminiHandler, LiteHandler, XHandler } from '../services/playbook/aiEngine';
+import { extractTextFromPdf, generateDocx, generatePdf } from '../services/playbook/fileHandler';
 
 // Playbook Context (Local State for now)
-type PlaybookMode = 'lite' | 'pro';
+type PlaybookMode = 'lite' | 'pro' | 'x';
 
 export const Playbook = () => {
   const navigate = useNavigate();
@@ -27,52 +29,100 @@ export const Playbook = () => {
 
   const handleModeSelect = (selectedMode: PlaybookMode) => {
     setMode(selectedMode);
-    // In a real app, this would initialize the WebGPU model (Lite) or API client (Pro)
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsProcessing(true);
-    // Mock Processing Delay
-    setTimeout(() => {
-        setContent(prev => prev + `\n\n[Parsed content from ${file.name}]:\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`);
+    try {
+        if (file.type === 'application/pdf') {
+            const text = await extractTextFromPdf(file);
+            setContent(prev => prev + `\n\n[PDF Content]:\n${text}`);
+        } else {
+            // For images, we would use Vision API, for now basic placeholder or text
+            // In Pro mode, we could upload image to Gemini.
+            // For MVP, just acknowledging upload.
+            setContent(prev => prev + `\n\n[Uploaded ${file.name} - Vision Analysis Pending]`);
+        }
+    } catch (error) {
+        console.error("Upload Error:", error);
+        alert("Failed to parse file.");
+    } finally {
         setIsProcessing(false);
-    }, 1500);
+    }
   };
 
-  const handleRunPrompt = () => {
+  const handleRunPrompt = async () => {
     if (!prompt) return;
     setIsProcessing(true);
 
-    // Mock AI Response
-    setTimeout(() => {
-        const response = `\n\n[Playbook ${mode === 'pro' ? 'Pro' : 'Lite'}]: Based on your request "${prompt}", I have formatted the document.`;
-        setContent(prev => prev + response);
+    let response = "";
+    try {
+        if (mode === 'pro') {
+            response = await GeminiHandler(`Content:\n${content}\n\nUser Request: ${prompt}`);
+        } else if (mode === 'lite') {
+            response = await LiteHandler(prompt);
+        } else if (mode === 'x') {
+            response = await XHandler(prompt);
+        }
+
+        if (mode === 'x') {
+             // Chat mode appends differently
+             setContent(prev => prev + `\n\nUser: ${prompt}\nPlaybook X: ${response}`);
+        } else {
+             // Document mode replaces or appends based on context
+             // For simplicity in MVP, we append or replace if empty
+             setContent(response || "No response generated.");
+        }
+    } catch (error) {
+        console.error(error);
+        alert("AI processing failed.");
+    } finally {
         setPrompt('');
         setIsProcessing(false);
-    }, 1000);
+    }
   };
 
-  const handleExport = (format: 'pdf' | 'docx') => {
-      alert(`Exporting as ${format.toUpperCase()}... (Clean, No Watermark)`);
+  const handleExport = async (format: 'pdf' | 'docx') => {
+      if (!content) return;
+
+      const blob = format === 'pdf' ? generatePdf(content) : await generateDocx(content);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Playbook_Export.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
       setShowExportMenu(false);
   };
 
-  const handleSendToPrint = (vendorId: string) => {
+  const handleSendToPrint = async (vendorId: string) => {
       const vendor = stationaryVendors.find(v => v.id === vendorId);
-      if (vendor) {
-          navigate('/submit-task', {
-              state: {
-                  vendorId: vendor.id,
-                  vendorConfig: {}, // Populate if needed
-                  business: vendor,
-                  // Pass the Playbook content as a "file" or context
-                  prefilledInstructions: `Please print the document I created in Playbook. Content length: ${content.length} chars.`
-              }
-          });
-      }
+      if (!vendor) return;
+
+      // Generate a temporary file blob to pass
+      // const blob = await generateDocx(content);
+      // Create a File object to simulate upload (Unused in this version, relying on text)
+      // const file = new File([blob], "Playbook_Document.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+
+      // Navigate to submit task
+      // We can't pass File object in state efficiently if large, but for local it works.
+      // Better to pass metadata or use a global context store.
+      // For this MVP, we'll assume the user will manually attach or we rely on 'prefilledInstructions'.
+
+      navigate('/submit-task', {
+          state: {
+              vendorId: vendor.id,
+              vendorConfig: {},
+              business: vendor,
+              prefilledInstructions: `[Attached Playbook Document] Please print. Content length: ${content.length} chars.`
+          }
+      });
   };
 
   // --- SELECTION SCREEN ---
@@ -113,6 +163,20 @@ export const Playbook = () => {
                  <div>
                     <h3 className="font-bold text-slate-900 text-lg">Playbook Pro</h3>
                     <p className="text-slate-500 text-sm mt-1">Online. Deep formatting, Vision API, & Conversion.</p>
+                 </div>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                onClick={() => handleModeSelect('x')}
+                className="flex items-start gap-4 p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-indigo-500 hover:ring-1 hover:ring-indigo-500 transition-all text-left group"
+              >
+                 <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-100">
+                    <MessageSquare className="w-6 h-6" />
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-slate-900 text-lg">Playbook X (Chat)</h3>
+                    <p className="text-slate-500 text-sm mt-1">Fast conversational answers. No canvas.</p>
                  </div>
               </motion.button>
            </div>
@@ -230,7 +294,7 @@ export const Playbook = () => {
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRunPrompt()}
-                    placeholder={mode === 'pro' ? "Ask Pro to format, summarize, or convert..." : "Ask Lite to fix grammar..."}
+                    placeholder={mode === 'x' ? "Ask X anything..." : mode === 'pro' ? "Ask Pro to format, summarize, or convert..." : "Ask Lite to fix grammar..."}
                     className="w-full h-12 pl-4 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none transition-all shadow-inner"
                   />
                   <div className="absolute right-2 top-2">
