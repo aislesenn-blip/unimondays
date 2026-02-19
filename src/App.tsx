@@ -14,6 +14,7 @@ import { MerchantDashboard } from './pages/MerchantDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Checkout } from './pages/Checkout';
 import { Orders } from './pages/Orders';
+import { SubmitTask } from './pages/SubmitTask';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="/travel" element={<ServiceList category="Travel" title="Campus Travel" />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/submit-task" element={<SubmitTask />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/merchant-dashboard" element={<MerchantDashboard />} />
             <Route path="/merchant/:id" element={<MerchantProfile />} />

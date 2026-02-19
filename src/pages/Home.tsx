@@ -2,9 +2,17 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { Search, MapPin, Coffee, Printer, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { mockBusinesses } from '../data/mockData';
+import { BusinessCard } from '../components/marketplace/BusinessCard';
 
 export const Home = () => {
   const { user } = useAuth();
+
+  // Filter trending businesses: Show a mix of Food and Stationary
+  const trendingBusinesses = mockBusinesses.filter(b =>
+    (b.university === (user?.university || 'UDSM')) &&
+    (b.category === 'Food' || b.category === 'Stationary')
+  ).slice(0, 4); // Show top 4
 
   return (
     <div className="space-y-12 pb-24">
@@ -71,6 +79,25 @@ export const Home = () => {
                  {action.label}
                </span>
              </Link>
+           ))}
+        </div>
+      </section>
+
+      {/* Trending Now */}
+      <section className="max-w-5xl mx-auto px-4 pt-4">
+        <div className="flex justify-between items-center mb-6 px-2">
+           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Trending Now</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-2">
+           {trendingBusinesses.map((business, index) => (
+             <motion.div
+               key={business.id}
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ delay: index * 0.1, duration: 0.5 }}
+             >
+               <BusinessCard business={business} />
+             </motion.div>
            ))}
         </div>
       </section>

@@ -2,7 +2,7 @@ import type { Business } from '../../types';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { Printer, Star, Wifi, Zap, Truck } from 'lucide-react';
+import { Printer, Star, Wifi, Zap, Truck, Bus, Utensils, BookOpen, Scissors } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -37,25 +37,39 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
 
         {/* Photo Header with Unsplash Fallback */}
         <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
-          {/* Use business imageUrl if exists, else Unsplash based on Category */}
-          <img
-            src={business.imageUrl || (() => {
-              switch (business.category) {
-                case 'Food': return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800";
-                case 'Stationary': return "https://images.unsplash.com/photo-1562564055-71e051d33c19?auto=format&fit=crop&q=80&w=800";
-                case 'Travel': return "https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&q=80&w=800";
-                default: return "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800";
-              }
-            })()}
-            onError={(e) => {
-                // Fallback if unsplash fails
-                e.currentTarget.src = "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800";
-            }}
-            alt={business.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-          />
+          {business.imageUrl ? (
+            <img
+              src={business.imageUrl}
+              alt={business.name}
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+          ) : (
+             <div className="w-full h-full flex items-center justify-center bg-slate-100">
+                {(() => {
+                   // Fallback Icon Logic
+                   const fallback = business.iconFallback || 'default';
+                   const Icon = {
+                      'printer': Printer,
+                      'food': Utensils,
+                      'bus': Bus,
+                      'tech': Zap,
+                      'scissors': Scissors,
+                      'book': BookOpen,
+                      'default': Star
+                   }[fallback] || Star;
 
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-60" />
+                   // Subtle pattern background + centered icon
+                   return (
+                      <div className="relative w-full h-full bg-slate-50 flex items-center justify-center">
+                         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+                         <Icon className="w-20 h-20 text-slate-300 relative z-10" />
+                      </div>
+                   )
+                })()}
+             </div>
+          )}
+
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-60" />
 
           <div className="absolute top-3 right-3 flex gap-1 z-20">
              {business.amenities.slice(0, 2).map((amenity) => {

@@ -26,7 +26,8 @@ export const mockBusinesses: Business[] = [
     lipaName: "MAMA SHAVU CATERING",
     orderMode: "realtime",
     orderWindow: { open: "08:00", close: "20:00" },
-    instructions: "Please pay exactly the amount shown. Confirm your name matches the payment name."
+    instructions: "Please pay exactly the amount shown. Confirm your name matches the payment name.",
+    turnaroundTime: "Instant"
   },
   {
     id: "2",
@@ -44,7 +45,8 @@ export const mockBusinesses: Business[] = [
     university: "UDSM",
     openingHours: "08:00",
     closingHours: "20:00",
-    seoKeywords: ["print", "stationery", "thesis", "binding", "udsm"]
+    seoKeywords: ["print", "stationery", "thesis", "binding", "udsm"],
+    turnaroundTime: "2 Hours"
   },
   {
     id: "3",
@@ -63,6 +65,29 @@ export const mockBusinesses: Business[] = [
     closingHours: "22:00",
     seoKeywords: ["transport", "shuttle", "bus", "udsm", "campus"]
   },
+  // New Stationary Vendor
+  {
+    id: "4",
+    name: "UDSM Main Library Print",
+    category: "Stationary",
+    description: "Fast printing, scanning, and lamination inside the Main Library.",
+    iconFallback: "printer",
+    amenities: ["wifi", "express"],
+    whatsapp: "255700000004",
+    rating: 4.7,
+    isOpen: true,
+    tags: ["Print", "Scan", "Lamination", "Library"],
+    price: 50,
+    university: "UDSM",
+    openingHours: "09:00",
+    closingHours: "18:00",
+    lipaNumber: "0700000123",
+    lipaName: "LIBRARY PRINT SERVICES",
+    orderMode: "realtime",
+    orderWindow: { open: "09:00", close: "18:00" },
+    instructions: "Upload your file or explain your order. Pay first.",
+    turnaroundTime: "Instant"
+  },
   // IFM Businesses
   {
     id: "6",
@@ -79,7 +104,8 @@ export const mockBusinesses: Business[] = [
     university: "IFM",
     openingHours: "10:00",
     closingHours: "19:00",
-    seoKeywords: ["food", "fries", "chips", "ifm", "lunch"]
+    seoKeywords: ["food", "fries", "chips", "ifm", "lunch"],
+    turnaroundTime: "Instant"
   },
   {
     id: "8",
@@ -97,7 +123,8 @@ export const mockBusinesses: Business[] = [
     university: "IFM",
     openingHours: "09:00",
     closingHours: "18:00",
-    seoKeywords: ["books", "stationery", "finance", "ifm", "textbooks"]
+    seoKeywords: ["books", "stationery", "finance", "ifm", "textbooks"],
+    turnaroundTime: "Next Day"
   },
 
   // CBE Businesses
@@ -143,6 +170,12 @@ export const mockMenus: Record<string, MenuItem[]> = {
     { id: "m2", name: "Pilau Beef", price: 3500, description: "Spiced rice with beef stew." },
     { id: "m3", name: "Chips Mayai", price: 2500, description: "French fries omelette." },
     { id: "m4", name: "Chapati Beans", price: 1200, description: "2 Chapatis with beans." }
+  ],
+  "4": [
+    { id: "s1", name: "Black & White Print", price: 100, description: "Per Page (A4)" },
+    { id: "s2", name: "Color Print", price: 500, description: "Per Page (A4)" },
+    { id: "s3", name: "Spiral Binding", price: 2000, description: "Up to 100 pages" },
+    { id: "s4", name: "Lamination", price: 1000, description: "A4 Size" }
   ]
 };
 
