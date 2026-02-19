@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun } from "docx";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 import { jsPDF } from "jspdf";
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -19,40 +19,111 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
     return fullText;
 };
 
-export const generateDocx = async (content: string): Promise<Blob> => {
-    // Split content by newlines to create paragraphs
-    const paragraphs = content.split('\n').map(line =>
-        new Paragraph({
-            children: [new TextRun(line)],
-            spacing: { after: 200 }
-        })
-    );
+const parseTextRuns = (node: Node): TextRun[] => {
+    const runs: TextRun[] = [];
+    node.childNodes.forEach(child => {
+        if (child.nodeType === Node.TEXT_NODE) {
+            runs.push(new TextRun(child.textContent || ''));
+        } else if (child.nodeName === 'B' || child.nodeName === 'STRONG') {
+             runs.push(new TextRun({ text: child.textContent || '', bold: true }));
+        } else if (child.nodeName === 'I' || child.nodeName === 'EM') {
+             runs.push(new TextRun({ text: child.textContent || '', italics: true }));
+        } else {
+             // Flatten nested or other tags
+             if (child.childNodes.length > 0) {
+                 runs.push(...parseTextRuns(child));
+             } else {
+                 runs.push(new TextRun(child.textContent || ''));
+             }
+        }
+    });
+    return runs;
+}
 
-    const doc = new Document({
+export const generateDocx = async (htmlContent: string): Promise<Blob> => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    const nodes = Array.from(doc.body.childNodes);
+
+    const children: Paragraph[] = [];
+
+    nodes.forEach(node => {
+        if (node.nodeName === 'H1') {
+            children.push(new Paragraph({
+                text: node.textContent || '',
+                heading: HeadingLevel.HEADING_1,
+                spacing: { after: 200, before: 200 }
+            }));
+        } else if (node.nodeName === 'H2') {
+             children.push(new Paragraph({
+                text: node.textContent || '',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { after: 200, before: 100 }
+            }));
+        } else if (node.nodeName === 'H3') {
+             children.push(new Paragraph({
+                text: node.textContent || '',
+                heading: HeadingLevel.HEADING_3,
+                spacing: { after: 100, before: 100 }
+            }));
+        } else if (node.nodeName === 'P' || node.nodeName === 'DIV') {
+             const textRuns = parseTextRuns(node);
+             // Filter empty paragraphs
+             if (textRuns.length > 0 && textRuns.some(r => r instanceof TextRun && (r as any).root && (r as any).root[1] !== '')) {
+                 children.push(new Paragraph({
+                     children: textRuns,
+                     spacing: { after: 200 }
+                 }));
+             } else if (textRuns.length > 0) { // Push anyway if it has content
+                 children.push(new Paragraph({
+                     children: textRuns,
+                     spacing: { after: 200 }
+                 }));
+             }
+        } else if (node.nodeName === '#text') {
+            if (node.textContent?.trim()) {
+                 children.push(new Paragraph({
+                     children: [new TextRun(node.textContent)],
+                     spacing: { after: 200 }
+                 }));
+            }
+        }
+    });
+
+    const docx = new Document({
         sections: [{
             properties: {},
-            children: paragraphs,
+            children: children,
         }],
     });
 
-    return await Packer.toBlob(doc);
+    return await Packer.toBlob(docx);
 };
 
-export const generatePdf = (content: string): Blob => {
-    const doc = new jsPDF();
+export const generatePdf = (htmlContent: string): Promise<Blob> => {
+    return new Promise((resolve) => {
+        const doc = new jsPDF('p', 'pt', 'a4');
+        const element = document.createElement('div');
+        element.innerHTML = htmlContent;
+        // Style element to match A4 width roughly for converting
+        element.style.width = '550pt';
+        element.style.fontFamily = 'serif';
+        element.style.fontSize = '12pt';
+        element.style.lineHeight = '1.5';
+        element.style.padding = '20px';
 
-    // Split text to fit page
-    const splitText = doc.splitTextToSize(content, 180);
-    let y = 10;
+        document.body.appendChild(element);
 
-    splitText.forEach((line: string) => {
-        if (y > 280) {
-            doc.addPage();
-            y = 10;
-        }
-        doc.text(line, 10, y);
-        y += 7;
+        doc.html(element, {
+            callback: (doc) => {
+                document.body.removeChild(element);
+                resolve(doc.output('blob'));
+            },
+            x: 20,
+            y: 20,
+            width: 555,
+            windowWidth: 600,
+            autoPaging: 'text'
+        });
     });
-
-    return doc.output('blob');
 };

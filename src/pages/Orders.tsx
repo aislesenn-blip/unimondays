@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useOrder } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
@@ -18,24 +18,37 @@ export const Orders = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isRedeeming, setIsRedeeming] = useState(false);
 
+  // Ref for timer to prevent dependency loops
+  const timerRef = useRef<number>(15.00);
+
   // Filter orders for the current student
   const myOrders = orders.filter(o => o.studentId === (user?.id || 'guest')).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  // Timer Logic (Milliseconds)
+  // Timer Logic (Milliseconds) - Optimized
   useEffect(() => {
       let interval: any;
-      if (activeCoupon && timer > 0) {
+
+      if (activeCoupon) {
+          // Reset timer on activation
+          timerRef.current = 15.00;
+          setTimer(15.00);
+
           interval = setInterval(() => {
-              setTimer(prev => Math.max(0, prev - 0.03));
+              timerRef.current = Math.max(0, timerRef.current - 0.03);
+              setTimer(timerRef.current);
+
+              if (timerRef.current <= 0) {
+                  clearInterval(interval);
+                  // Time's up! Mark as redeemed
+                  redeemItem(activeCoupon.orderId, activeCoupon.item.id);
+                  setIsRedeeming(false);
+                  setActiveCoupon(null);
+              }
           }, 30);
-      } else if (activeCoupon && timer <= 0) {
-          // Time's up! Mark as redeemed
-          redeemItem(activeCoupon.orderId, activeCoupon.item.id);
-          setIsRedeeming(false);
-          setActiveCoupon(null);
       }
+
       return () => clearInterval(interval);
-  }, [activeCoupon, timer, redeemItem]);
+  }, [activeCoupon, redeemItem]);
 
   // Live Clock Logic
   useEffect(() => {
@@ -48,6 +61,7 @@ export const Orders = () => {
   }, [isRedeeming]);
 
   const handleActivate = (orderId: string, item: OrderItem) => {
+      timerRef.current = 15.00;
       setTimer(15.00);
       setCurrentTime(new Date());
       setActiveCoupon({ orderId, item });
@@ -171,12 +185,12 @@ export const Orders = () => {
                   exit={{ opacity: 0, scale: 0.9 }}
                   className="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center p-4"
               >
-                  <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
+                  <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative min-h-[500px]">
                       {/* PROOF OF LIFE: Spinning Gradient Border */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400 animate-[spin_2s_linear_infinite] opacity-100 pointer-events-none p-2 rounded-3xl"></div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400 animate-[spin_2s_linear_infinite] opacity-100 pointer-events-none rounded-3xl"></div>
 
                       {/* Content Container */}
-                      <div className="absolute inset-2 bg-white rounded-2xl z-10 flex flex-col items-center p-6 text-center space-y-5 h-[calc(100%-16px)]">
+                      <div className="absolute inset-2 bg-white rounded-2xl z-10 flex flex-col items-center p-6 text-center space-y-5">
 
                           {/* Header */}
                           <div className="bg-emerald-50 text-emerald-600 p-3 rounded-full shadow-inner animate-pulse">
