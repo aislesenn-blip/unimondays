@@ -72,7 +72,7 @@ export const Playbook = () => {
                         <FileText className="w-4 h-4 mr-2 text-blue-600" /> Word
                      </Button>
                      <Button
-                        variant="default"
+                        variant="primary"
                         size="sm"
                         onClick={() => handleExport('pdf')}
                         disabled={isExporting}

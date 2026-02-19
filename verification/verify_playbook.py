@@ -82,13 +82,13 @@ def test_playbook_pivot(page: Page):
     # It appears twice: once in cover page header, once in TOC list
     expect(page.get_by_text("CS 101 Finals")).to_have_count(2)
 
-    # 6. Change Format to APA
+    # 6. Change Format to APA (Now University Standard)
     # Format button triggers hover menu.
     # Hover over 'Format'
     page.get_by_text("Format").hover()
     time.sleep(0.5) # Wait for animation
-    page.get_by_text("APA Style").click()
-    print("Changed to APA Style")
+    page.get_by_text("University Standard").click()
+    print("Changed to University Standard")
 
     # 7. Screenshot
     time.sleep(1) # Let styles apply

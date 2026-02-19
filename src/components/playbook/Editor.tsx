@@ -198,10 +198,10 @@ export const Editor = () => {
                         <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">Format</span>
                     </button>
                     {/* Format Dropdown (Hover) */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-32 bg-slate-800 rounded-xl shadow-xl overflow-hidden hidden group-hover:block border border-slate-700">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-48 bg-slate-800 rounded-xl shadow-xl overflow-hidden hidden group-hover:block border border-slate-700">
                          <button onClick={() => setFormatStyle('standard')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'standard' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>Standard</button>
-                         <button onClick={() => setFormatStyle('apa')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'apa' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>APA Style</button>
-                         <button onClick={() => setFormatStyle('mla')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'mla' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>MLA Style</button>
+                         <button onClick={() => setFormatStyle('apa')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'apa' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>University Standard</button>
+                         <button onClick={() => setFormatStyle('mla')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'mla' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>Formal Report</button>
                     </div>
                 </div>
 
