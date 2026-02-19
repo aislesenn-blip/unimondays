@@ -1,62 +1,118 @@
-import { useState } from 'react';
-import { ErnestPro } from '../components/ernest/ErnestPro';
-import { Zap, Download, Globe } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '../components/ui/Button';
+import {
+  Zap, Upload, Printer, Download, Sparkles, FileText, ChevronLeft
+} from 'lucide-react';
 import { motion } from 'framer-motion';
+import { mockBusinesses } from '../data/mockData';
+
+// Playbook Context (Local State for now)
+type PlaybookMode = 'lite' | 'pro';
 
 export const Playbook = () => {
-  const [mode, setMode] = useState<'selection' | 'lite' | 'pro'>('selection');
+  const navigate = useNavigate();
+  const [mode, setMode] = useState<PlaybookMode | null>(null);
+  const [content, setContent] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showVendorMenu, setShowVendorMenu] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (mode === 'selection') {
+  // Filter Stationary Vendors
+  const stationaryVendors = mockBusinesses.filter(b => b.category === 'Stationary');
+
+  // --- HANDLERS ---
+
+  const handleModeSelect = (selectedMode: PlaybookMode) => {
+    setMode(selectedMode);
+    // In a real app, this would initialize the WebGPU model (Lite) or API client (Pro)
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    // Mock Processing Delay
+    setTimeout(() => {
+        setContent(prev => prev + `\n\n[Parsed content from ${file.name}]:\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`);
+        setIsProcessing(false);
+    }, 1500);
+  };
+
+  const handleRunPrompt = () => {
+    if (!prompt) return;
+    setIsProcessing(true);
+
+    // Mock AI Response
+    setTimeout(() => {
+        const response = `\n\n[Playbook ${mode === 'pro' ? 'Pro' : 'Lite'}]: Based on your request "${prompt}", I have formatted the document.`;
+        setContent(prev => prev + response);
+        setPrompt('');
+        setIsProcessing(false);
+    }, 1000);
+  };
+
+  const handleExport = (format: 'pdf' | 'docx') => {
+      alert(`Exporting as ${format.toUpperCase()}... (Clean, No Watermark)`);
+      setShowExportMenu(false);
+  };
+
+  const handleSendToPrint = (vendorId: string) => {
+      const vendor = stationaryVendors.find(v => v.id === vendorId);
+      if (vendor) {
+          navigate('/submit-task', {
+              state: {
+                  vendorId: vendor.id,
+                  vendorConfig: {}, // Populate if needed
+                  business: vendor,
+                  // Pass the Playbook content as a "file" or context
+                  prefilledInstructions: `Please print the document I created in Playbook. Content length: ${content.length} chars.`
+              }
+          });
+      }
+  };
+
+  // --- SELECTION SCREEN ---
+  if (!mode) {
     return (
       <div className="h-[calc(100vh-140px)] flex items-center justify-center p-4">
         <div className="max-w-md w-full space-y-8">
            <div className="text-center space-y-2">
-             <h1 className="text-3xl font-bold text-slate-900">Choose Your Partner</h1>
-             <p className="text-slate-500">Select how you want to use Playbook.</p>
+             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+               <span className="text-emerald-500">Playbook</span> Workspace
+             </h1>
+             <p className="text-slate-500">Your AI-powered mini-stationary.</p>
            </div>
 
            <div className="grid gap-4">
-              {/* Lite Option */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setMode('lite')}
+                onClick={() => handleModeSelect('lite')}
                 className="flex items-start gap-4 p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-emerald-500 hover:ring-1 hover:ring-emerald-500 transition-all text-left group"
               >
-                 <div className="p-3 bg-slate-50 text-slate-600 rounded-xl group-hover:bg-slate-100 transition-colors">
-                    <Globe className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <h3 className="font-bold text-slate-900 text-lg">Playbook Lite (Online)</h3>
-                    <p className="text-slate-500 text-sm mt-1">
-                       Fast, lightweight, and perfect for basic chat. Requires internet connection.
-                    </p>
-                    <span className="inline-block mt-3 text-xs font-semibold bg-slate-100 text-slate-700 px-2 py-1 rounded-md">
-                       Instant Access
-                    </span>
-                 </div>
-              </motion.button>
-
-              {/* Pro Option */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setMode('pro')}
-                className="flex items-start gap-4 p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-emerald-500 hover:ring-1 hover:ring-emerald-500 transition-all text-left group"
-              >
-                 <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-100 transition-colors">
+                 <div className="p-3 bg-slate-50 text-slate-600 rounded-xl group-hover:bg-slate-100">
                     <Zap className="w-6 h-6" />
                  </div>
                  <div>
-                    <h3 className="font-bold text-slate-900 text-lg">Playbook Pro (Offline)</h3>
-                    <p className="text-slate-500 text-sm mt-1">
-                       Powerful local AI model. Works without internet forever after download.
-                    </p>
-                    <div className="flex items-center gap-2 mt-3">
-                       <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md flex items-center gap-1">
-                          <Download className="w-3 h-3" /> 270MB Download
-                       </span>
-                    </div>
+                    <h3 className="font-bold text-slate-900 text-lg">Playbook Lite</h3>
+                    <p className="text-slate-500 text-sm mt-1">Offline. Instant grammar checks & summaries.</p>
+                 </div>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                onClick={() => handleModeSelect('pro')}
+                className="flex items-start gap-4 p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-emerald-500 hover:ring-1 hover:ring-emerald-500 transition-all text-left group"
+              >
+                 <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-100">
+                    <Sparkles className="w-6 h-6" />
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-slate-900 text-lg">Playbook Pro</h3>
+                    <p className="text-slate-500 text-sm mt-1">Online. Deep formatting, Vision API, & Conversion.</p>
                  </div>
               </motion.button>
            </div>
@@ -65,19 +121,132 @@ export const Playbook = () => {
     );
   }
 
+  // --- WORKSPACE UI ---
   return (
-    <div className="h-[calc(100vh-140px)] md:h-[calc(100vh-100px)] w-full flex flex-col">
-      {/*
-         In a real implementation, 'lite' would use a different component or API.
-         For this demo, we'll reuse ErnestPro but effectively 'Lite' users
-         wouldn't trigger the heavy worker if we had a separate 'ErnestLite'.
-         Since the requirement is to STOP auto-download, by putting it behind this gate,
-         we ensure the worker init (and download) only happens if they enter this view.
+    <div className="h-[calc(100vh-80px)] flex flex-col bg-slate-50 relative">
 
-         To strictly separate, we could pass a prop to ErnestPro or use a different component.
-         For now, passing the mode to ErnestPro could let it decide whether to load the model or mock it.
-      */}
-      <ErnestPro mode={mode} />
+      {/* 1. Header / Toolbar */}
+      <div className="h-16 bg-white border-b border-slate-200 px-4 flex items-center justify-between shadow-sm z-10">
+          <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setMode(null)} className="text-slate-400 hover:text-slate-600">
+                  <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <h2 className="font-bold text-slate-700 flex items-center gap-2">
+                  Playbook <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500">{mode}</span>
+              </h2>
+          </div>
+
+          <div className="flex gap-2">
+              {/* Export Dropdown */}
+              <div className="relative">
+                  <Button variant="outline" size="sm" onClick={() => setShowExportMenu(!showExportMenu)}>
+                      <Download className="w-4 h-4 mr-2" /> Export
+                  </Button>
+                  {showExportMenu && (
+                      <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 p-2 flex flex-col gap-1 z-50">
+                          <button onClick={() => handleExport('pdf')} className="text-left px-4 py-2 hover:bg-slate-50 rounded-lg text-sm font-medium text-slate-700">As PDF Document</button>
+                          <button onClick={() => handleExport('docx')} className="text-left px-4 py-2 hover:bg-slate-50 rounded-lg text-sm font-medium text-slate-700">As Word (.docx)</button>
+                      </div>
+                  )}
+              </div>
+
+              {/* Send to Print */}
+              <div className="relative">
+                  <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => setShowVendorMenu(!showVendorMenu)}>
+                      <Printer className="w-4 h-4 mr-2" /> Print
+                  </Button>
+                  {showVendorMenu && (
+                      <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 p-2 z-50">
+                          <p className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Select Vendor</p>
+                          {stationaryVendors.map(v => (
+                              <button
+                                key={v.id}
+                                onClick={() => handleSendToPrint(v.id)}
+                                className="w-full text-left px-3 py-2 hover:bg-indigo-50 rounded-lg text-sm font-medium text-slate-700 flex items-center gap-2"
+                              >
+                                  <Printer className="w-3 h-3 text-indigo-400" /> {v.name}
+                              </button>
+                          ))}
+                      </div>
+                  )}
+              </div>
+          </div>
+      </div>
+
+      {/* 2. Canvas (Document Preview) */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-3xl bg-white min-h-[800px] shadow-lg border border-slate-100 rounded-sm p-8 md:p-12 relative"
+          >
+              {content ? (
+                  <div className="prose prose-slate max-w-none whitespace-pre-wrap font-serif text-lg leading-relaxed text-slate-800">
+                      {content}
+                  </div>
+              ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 pointer-events-none">
+                      <FileText className="w-16 h-16 mb-4 opacity-20" />
+                      <p className="text-xl font-medium">Untitled Document</p>
+                      <p className="text-sm">Type a command or upload a file to begin.</p>
+                  </div>
+              )}
+
+              {isProcessing && (
+                  <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-20">
+                      <div className="flex flex-col items-center gap-3">
+                          <Sparkles className="w-8 h-8 text-emerald-500 animate-spin" />
+                          <p className="text-sm font-bold text-emerald-600 animate-pulse">Playbook is thinking...</p>
+                      </div>
+                  </div>
+              )}
+          </motion.div>
+      </div>
+
+      {/* 3. Command Bar (Floating) */}
+      <div className="h-24 bg-white border-t border-slate-200 px-4 md:px-0 flex items-center justify-center z-20">
+          <div className="w-full max-w-3xl flex gap-2 relative">
+
+              {/* Upload Button */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileUpload}
+                accept=".pdf,.doc,.docx,.png,.jpg"
+              />
+              <Button
+                variant="outline"
+                className="h-12 w-12 rounded-xl border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                  <Upload className="w-5 h-5" />
+              </Button>
+
+              {/* Command Input */}
+              <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRunPrompt()}
+                    placeholder={mode === 'pro' ? "Ask Pro to format, summarize, or convert..." : "Ask Lite to fix grammar..."}
+                    className="w-full h-12 pl-4 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none transition-all shadow-inner"
+                  />
+                  <div className="absolute right-2 top-2">
+                      <Button
+                        size="sm"
+                        className={`h-8 w-8 p-0 rounded-lg ${prompt ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-slate-200 text-slate-400'}`}
+                        onClick={handleRunPrompt}
+                        disabled={!prompt}
+                      >
+                          <Zap className="w-4 h-4 fill-current" />
+                      </Button>
+                  </div>
+              </div>
+          </div>
+      </div>
+
     </div>
   );
 };

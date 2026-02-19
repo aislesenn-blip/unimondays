@@ -39,7 +39,8 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
         <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
           {business.imageUrl ? (
             <img
-              src={business.imageUrl}
+              src={business.imageUrl.includes('unsplash') ? `${business.imageUrl}&w=400&q=80` : business.imageUrl}
+              loading="lazy"
               alt={business.name}
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             />

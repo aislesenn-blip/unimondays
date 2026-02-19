@@ -1,24 +1,36 @@
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { Search, MapPin, Coffee, Printer, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { mockBusinesses } from '../data/mockData';
-import { BusinessCard } from '../components/marketplace/BusinessCard';
+
+// Lazy Load Trending Businesses
+const BusinessCard = lazy(() => import('../components/marketplace/BusinessCard').then(module => ({ default: module.BusinessCard })));
 
 export const Home = () => {
   const { user } = useAuth();
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const placeholders = ["Search for Notes...", "Search for Print Services...", "Search for Food..."];
 
-  // Filter trending businesses: Show a mix of Food and Stationary
+  // Typing animation for placeholder
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Filter trending businesses
   const trendingBusinesses = mockBusinesses.filter(b =>
     (b.university === (user?.university || 'UDSM')) &&
     (b.category === 'Food' || b.category === 'Stationary')
-  ).slice(0, 4); // Show top 4
+  ).slice(0, 4);
 
   return (
     <div className="space-y-12 pb-24">
-      {/* Hero Section - Clean Light Mode with Massive Search */}
-      {/* Container Card for Header */}
-      <section className="bg-white shadow-md rounded-b-[30px] pt-8 pb-8 px-4 border-b border-slate-100">
+      {/* Hero Section - Clean Light Mode with Floating Search */}
+      <section className="bg-white rounded-b-[30px] pt-8 pb-8 px-4">
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -26,28 +38,29 @@ export const Home = () => {
             transition={{ duration: 0.5 }}
             className="flex flex-col items-center"
           >
-            {/* Greeting */}
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 mb-2">
-              Hello, <span className="text-emerald-500">{user?.name?.split(' ')[0] || 'Scholar'}</span>.
+            {/* Branding - UniMonday Wordmark */}
+            <h1 className="text-4xl md:text-6xl tracking-tight mb-2 font-sans">
+              <span className="text-slate-900 font-extrabold">Uni</span>
+              <span className="text-emerald-500 font-bold">Monday</span>
             </h1>
 
             <div className="flex items-center gap-3 text-lg md:text-xl font-medium text-slate-800">
-              It's UɴiMonday
+              Your Campus Super App
               <span className="bg-emerald-50 text-emerald-700 text-xs px-3 py-1 rounded-full font-bold tracking-wide uppercase shadow-sm border border-emerald-100">
                 {user?.university || 'Campus'}
               </span>
             </div>
 
-            {/* Huge Floating Search Bar Card */}
-            <div className="w-full max-w-2xl mt-8">
-              <div className="relative group bg-white rounded-2xl shadow-xl border border-slate-100 transition-all hover:shadow-2xl">
+            {/* Optimized Floating Search Bar */}
+            <div className="w-full max-w-2xl mt-8 px-2">
+              <div className="relative group shadow-md rounded-full bg-white transition-all hover:shadow-lg">
                  <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
                    <Search className="h-6 w-6 text-emerald-500" />
                  </div>
                  <input
                    type="text"
-                   placeholder="Search notes, food, or travel..."
-                   className="w-full pl-16 pr-6 h-16 text-xl bg-transparent border-0 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold"
+                   placeholder={placeholders[placeholderIndex]}
+                   className="w-full pl-16 pr-6 h-16 text-lg bg-transparent border-0 rounded-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
                  />
               </div>
             </div>
@@ -83,22 +96,24 @@ export const Home = () => {
         </div>
       </section>
 
-      {/* Trending Now */}
+      {/* Trending Now (Lazy Loaded) */}
       <section className="max-w-5xl mx-auto px-4 pt-4">
         <div className="flex justify-between items-center mb-6 px-2">
            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Trending Now</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-2">
-           {trendingBusinesses.map((business, index) => (
-             <motion.div
-               key={business.id}
-               initial={{ opacity: 0, y: 20 }}
-               animate={{ opacity: 1, y: 0 }}
-               transition={{ delay: index * 0.1, duration: 0.5 }}
-             >
-               <BusinessCard business={business} />
-             </motion.div>
-           ))}
+           <Suspense fallback={<div className="col-span-full text-center text-slate-400 py-12">Loading trends...</div>}>
+             {trendingBusinesses.map((business, index) => (
+               <motion.div
+                 key={business.id}
+                 initial={{ opacity: 0, y: 20 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 transition={{ delay: index * 0.1, duration: 0.5 }}
+               >
+                 <BusinessCard business={business} />
+               </motion.div>
+             ))}
+           </Suspense>
         </div>
       </section>
 
