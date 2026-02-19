@@ -24,11 +24,52 @@ export interface Business {
   isOpen: boolean;
   tags?: string[];
   isNegotiable?: boolean;
-  price?: number; // Base price for sorting (e.g., avg meal cost or printing per page)
+  price?: number; // Base price for sorting
   university: string;
   openingHours?: string;
   closingHours?: string;
   seoKeywords?: string[];
+  // New props for Vendor Config (merged into Business for simplicity or managed separately in OrderContext)
+  lipaNumber?: string;
+  lipaName?: string;
+  orderMode?: 'realtime' | 'batch';
+  orderWindow?: { open: string; close: string };
+}
+
+export interface VendorConfig {
+  lipaNumber: string;
+  lipaName: string;
+  orderMode: 'realtime' | 'batch';
+  orderWindow: { open: string; close: string };
+  instructions: string;
+}
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  price: number;
+  description?: string;
+  // No image
+}
+
+export interface OrderItem {
+  id: string; // unique instance id for redemption
+  menuItemId: string;
+  name: string;
+  price: number;
+  status: 'active' | 'redeemed';
+}
+
+export interface Order {
+  id: string;
+  vendorId: string;
+  studentId: string;
+  items: OrderItem[];
+  totalAmount: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  paymentName: string;
+  contactPhone: string;
+  timestamp: Date;
 }
 
 export interface ErnestMessage {
