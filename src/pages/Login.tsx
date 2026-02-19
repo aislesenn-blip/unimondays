@@ -18,15 +18,15 @@ const slides = [
   },
   {
     id: 2,
-    title: "Meet Ernest AI",
+    title: "Meet Playbook",
     description: "The smartest student on campus. Format docs, scan notes, and get assignment help instantly.",
     image: "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&q=80",
   },
   {
     id: 3,
-    title: "Student Marketplace",
-    description: "Order late-night noodles, book bus tickets, or find a second-hand book. All student-friendly prices.",
-    image: "https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&q=80",
+    title: "On-Demand Services",
+    description: "Order late-night noodles, book bus tickets, or find professional printing. All student-friendly prices.",
+    image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80",
   },
 ];
 

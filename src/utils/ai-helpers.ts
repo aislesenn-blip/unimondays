@@ -27,12 +27,12 @@ export const performOCR = async (
 };
 
 // --- PDF Generation Function ---
-export const generatePDF = (content: string, filename: string = 'ernest-notes.pdf') => {
+export const generatePDF = (content: string, filename: string = 'playbook-notes.pdf') => {
   const doc = new jsPDF();
 
   // Add Title
   doc.setFontSize(18);
-  doc.text("Ernest AI Notes", 10, 15);
+  doc.text("Playbook Notes", 10, 15);
 
   // Add Content
   doc.setFontSize(12);

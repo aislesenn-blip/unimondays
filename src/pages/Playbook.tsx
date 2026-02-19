@@ -3,7 +3,7 @@ import { ErnestPro } from '../components/ernest/ErnestPro';
 import { Zap, Download, Globe } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export const Ernest = () => {
+export const Playbook = () => {
   const [mode, setMode] = useState<'selection' | 'lite' | 'pro'>('selection');
 
   if (mode === 'selection') {
@@ -12,7 +12,7 @@ export const Ernest = () => {
         <div className="max-w-md w-full space-y-8">
            <div className="text-center space-y-2">
              <h1 className="text-3xl font-bold text-slate-900">Choose Your Partner</h1>
-             <p className="text-slate-500">Select how you want to use Ernest AI.</p>
+             <p className="text-slate-500">Select how you want to use Playbook.</p>
            </div>
 
            <div className="grid gap-4">
@@ -23,15 +23,15 @@ export const Ernest = () => {
                 onClick={() => setMode('lite')}
                 className="flex items-start gap-4 p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-emerald-500 hover:ring-1 hover:ring-emerald-500 transition-all text-left group"
               >
-                 <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-100 transition-colors">
+                 <div className="p-3 bg-slate-50 text-slate-600 rounded-xl group-hover:bg-slate-100 transition-colors">
                     <Globe className="w-6 h-6" />
                  </div>
                  <div>
-                    <h3 className="font-bold text-slate-900 text-lg">Ernest Lite (Online)</h3>
+                    <h3 className="font-bold text-slate-900 text-lg">Playbook Lite (Online)</h3>
                     <p className="text-slate-500 text-sm mt-1">
                        Fast, lightweight, and perfect for basic chat. Requires internet connection.
                     </p>
-                    <span className="inline-block mt-3 text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-md">
+                    <span className="inline-block mt-3 text-xs font-semibold bg-slate-100 text-slate-700 px-2 py-1 rounded-md">
                        Instant Access
                     </span>
                  </div>
@@ -48,7 +48,7 @@ export const Ernest = () => {
                     <Zap className="w-6 h-6" />
                  </div>
                  <div>
-                    <h3 className="font-bold text-slate-900 text-lg">Ernest Pro (Offline)</h3>
+                    <h3 className="font-bold text-slate-900 text-lg">Playbook Pro (Offline)</h3>
                     <p className="text-slate-500 text-sm mt-1">
                        Powerful local AI model. Works without internet forever after download.
                     </p>

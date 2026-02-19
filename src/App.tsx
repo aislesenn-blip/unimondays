@@ -5,8 +5,8 @@ import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
 import { Landing } from './pages/Landing';
 import { Home } from './pages/Home';
-import { Ernest } from './pages/Ernest';
-import { Marketplace } from './pages/Marketplace';
+import { Playbook } from './pages/Playbook';
+import { ServiceList } from './pages/ServiceList';
 import { Profile } from './pages/Profile';
 import { MerchantProfile } from './pages/MerchantProfile';
 import { MerchantDashboard } from './pages/MerchantDashboard';
@@ -23,8 +23,10 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/home" element={<Home />} />
-            <Route path="/ernest" element={<Ernest />} />
-            <Route path="/marketplace" element={<Marketplace />} />
+            <Route path="/playbook" element={<Playbook />} />
+            <Route path="/dining" element={<ServiceList category="Food" title="Dining" />} />
+            <Route path="/print" element={<ServiceList category="Stationary" title="Print & Stationaries" />} />
+            <Route path="/travel" element={<ServiceList category="Travel" title="Campus Travel" />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/merchant-dashboard" element={<MerchantDashboard />} />
             <Route path="/merchant/:id" element={<MerchantProfile />} />

@@ -87,11 +87,11 @@ export const TravelTrendsChart = ({ data }: ChartProps) => {
   );
 };
 
-export const ErnestUsageChart = ({ data }: ChartProps) => {
+export const PlaybookUsageChart = ({ data }: ChartProps) => {
   return (
     <Card className="h-80">
       <CardContent className="h-full pt-6">
-        <h3 className="text-lg font-semibold mb-4 text-slate-700 dark:text-slate-200">Ernest Usage by Subject</h3>
+        <h3 className="text-lg font-semibold mb-4 text-slate-700 dark:text-slate-200">Playbook Usage by Subject</h3>
         <ResponsiveContainer width="100%" height="85%">
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />

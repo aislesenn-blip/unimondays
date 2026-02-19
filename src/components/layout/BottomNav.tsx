@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Search, ShoppingBag, User, LayoutDashboard } from 'lucide-react';
+import { Home, Zap, User, LayoutDashboard } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
@@ -8,8 +8,7 @@ export const BottomNav = () => {
 
   const navItems = [
     { icon: Home, label: 'Home', path: '/' },
-    { icon: Search, label: 'Ernest', path: '/ernest' },
-    { icon: ShoppingBag, label: 'Market', path: '/marketplace' },
+    { icon: Zap, label: 'Playbook', path: '/playbook' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];
 
@@ -29,7 +28,7 @@ export const BottomNav = () => {
             className={({ isActive }) => cn(
               "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
               isActive
-                ? "text-indigo-600"
+                ? "text-emerald-600"
                 : "text-slate-400 hover:text-slate-600"
             )}
           >
