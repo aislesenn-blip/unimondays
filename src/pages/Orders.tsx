@@ -11,7 +11,7 @@ import type { OrderItem } from '../types';
 
 export const Orders = () => {
   const { user } = useAuth();
-  const { orders, redeemItem, vendors } = useOrder();
+  const { orders, redeemItem } = useOrder();
   const navigate = useNavigate();
   const [activeCoupon, setActiveCoupon] = useState<{orderId: string, item: OrderItem} | null>(null);
   const [timer, setTimer] = useState(15);
@@ -90,13 +90,19 @@ export const Orders = () => {
                                             <span className="text-xs font-bold text-indigo-900">Paid: {order.totalAmount} TZS</span>
 
                                             {order.status === 'confirmed' ? (
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => handleActivate(order.id, { id: 'task-'+order.id, menuItemId: 'custom', name: 'Custom Task', price: order.totalAmount, status: 'active' })}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 w-32 font-bold animate-pulse"
-                                                >
-                                                    Activate Pickup
-                                                </Button>
+                                                order.items[0]?.status === 'redeemed' ? (
+                                                    <Button disabled size="sm" className="bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed w-32">
+                                                        CONSUMED
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => handleActivate(order.id, order.items[0])}
+                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 w-32 font-bold animate-pulse"
+                                                    >
+                                                        Activate Pickup
+                                                    </Button>
+                                                )
                                             ) : (
                                                 <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded">
                                                     {order.status === 'pending' ? 'Pending' : 'Cancelled'}
