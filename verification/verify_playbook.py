@@ -74,8 +74,8 @@ def test_playbook_pivot(page: Page):
 
     # 5. Insert TOC
     # The headings from Cover Page (CS101, CS 101 Finals) are H1/H2
-    page.get_by_text("TOC").click()
-    print("Clicked TOC button")
+    page.get_by_text("Insert TOC").click()
+    print("Clicked Insert TOC button")
 
     # Verify TOC
     expect(page.get_by_text("Table of Contents")).to_be_visible()
@@ -85,9 +85,10 @@ def test_playbook_pivot(page: Page):
     # 6. Change Format to APA (Now University Standard)
     # Format button triggers hover menu.
     # Hover over 'Format'
-    page.get_by_text("Format").hover()
-    time.sleep(0.5) # Wait for animation
-    page.get_by_text("University Standard").click()
+    # Use force click if needed due to potential hover issues or layout shifts
+    page.get_by_text("Magic Format").hover()
+    time.sleep(1) # Wait for animation
+    page.get_by_text("University Standard").click(force=True)
     print("Changed to University Standard")
 
     # 7. Screenshot

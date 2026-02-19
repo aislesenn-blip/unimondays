@@ -1,8 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FloatingToolbar } from './FloatingToolbar';
 import { LiteAssistant } from './LiteAssistant';
 import { Button } from '../ui/Button';
-import { createWorker } from 'tesseract.js';
 import {
     LayoutTemplate,
     ListOrdered,
@@ -11,20 +10,55 @@ import {
     X,
     Check,
     ScanText,
-    Loader2
+    Loader2,
+    FileText,
+    Printer,
+    Menu
 } from 'lucide-react';
+import { generateDocx, generatePdf } from '../../services/playbook/fileHandler';
+import { useNavigate } from 'react-router-dom';
 
 export const Editor = () => {
     const editorRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const navigate = useNavigate();
+
+    // -- State --
     const [isLiteReady, setIsLiteReady] = useState(false);
     const [formatStyle, setFormatStyle] = useState<'standard' | 'apa' | 'mla'>('standard');
     const [showCoverModal, setShowCoverModal] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
+    const [scanError, setScanError] = useState<string | null>(null);
+    const [showExportMenu, setShowExportMenu] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     // Cover Page Form State
     const [coverData, setCoverData] = useState({ title: '', name: '', regNo: '', course: '' });
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    // -- Web Worker --
+    const workerRef = useRef<Worker | null>(null);
+
+    useEffect(() => {
+        // Initialize Worker
+        workerRef.current = new Worker(new URL('../../workers/ocrWorker.ts', import.meta.url), { type: 'module' });
+
+        workerRef.current.onmessage = (e) => {
+            const { status, text, error } = e.data;
+            if (status === 'success') {
+                document.execCommand('insertText', false, text);
+                setIsScanning(false);
+            } else {
+                setScanError(error || "Scanning failed.");
+                setIsScanning(false);
+            }
+        };
+
+        return () => {
+            workerRef.current?.terminate();
+        };
+    }, []);
+
+    // -- Handlers --
 
     const handleFormat = (command: string, value?: string) => {
         document.execCommand(command, false, value);
@@ -36,20 +70,21 @@ export const Editor = () => {
         if (!file) return;
 
         setIsScanning(true);
-        try {
-            const worker = await createWorker('eng');
-            const { data: { text } } = await worker.recognize(file);
-            await worker.terminate();
+        setScanError(null);
 
-            // Insert text
-            document.execCommand('insertText', false, text);
-        } catch (error) {
-            console.error(error);
-            alert("OCR Failed. Please try again.");
-        } finally {
-            setIsScanning(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
+        const reader = new FileReader();
+        reader.onload = () => {
+             // Send image data to worker
+             workerRef.current?.postMessage({ image: reader.result });
+        };
+        reader.readAsDataURL(file);
+
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const cancelOCR = () => {
+        setIsScanning(false);
+        // Worker termination/restart logic could go here if deeply cancelled
     };
 
     const insertCoverPage = () => {
@@ -105,7 +140,6 @@ export const Editor = () => {
         headings.forEach((h, index) => {
             const text = h.textContent || '';
             const indent = h.tagName === 'H2' ? 'ml-6' : '';
-            // Add ID to heading for linking (if we wanted anchors, but for print usually just list)
             h.id = `toc-${index}`;
             tocHTML += `<li class="${indent} flex items-center justify-between text-slate-700">
                 <span>${text}</span>
@@ -116,21 +150,60 @@ export const Editor = () => {
 
         tocHTML += `</ul></div><br />`;
 
-        // Ensure focus and insert at end
         editorRef.current.focus();
 
-        // Move cursor to end if needed (or just append if simpler, but execCommand is nice)
+        // Ensure insertion at the end or current cursor, preferably end if nothing selected
         const selection = window.getSelection();
-        if (selection) {
-            const range = document.createRange();
-            range.selectNodeContents(editorRef.current);
-            range.collapse(false); // Collapse to end
-            selection.removeAllRanges();
-            selection.addRange(range);
+        if (selection && selection.rangeCount > 0) {
+            // Check if selection is inside editor
+            if (editorRef.current.contains(selection.anchorNode)) {
+                 document.execCommand('insertHTML', false, tocHTML);
+            } else {
+                 // Append to end
+                 editorRef.current.innerHTML += tocHTML;
+            }
+        } else {
+            editorRef.current.innerHTML += tocHTML;
         }
-
-        document.execCommand('insertHTML', false, tocHTML);
     };
+
+    const handleExport = async (type: 'pdf' | 'docx' | 'print') => {
+        setIsExporting(true);
+        setShowExportMenu(false);
+        try {
+            const content = editorRef.current?.innerHTML || '';
+            if (!content) {
+                alert("Document is empty.");
+                return;
+            }
+
+            if (type === 'pdf') {
+                const blob = await generatePdf(content);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Playbook_Document.pdf";
+                a.click();
+            } else if (type === 'docx') {
+                const blob = await generateDocx(content);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Playbook_Document.docx";
+                a.click();
+            } else if (type === 'print') {
+                // Navigate to print checkout
+                 navigate('/print', { state: { fromPlaybook: true } });
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert("Export failed.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
 
     return (
         <div className="flex flex-col items-center w-full relative pb-40">
@@ -143,6 +216,54 @@ export const Editor = () => {
                 accept="image/*"
                 onChange={handleOCR}
             />
+
+            {/* OCR Loading Overlay */}
+            {isScanning && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex flex-col items-center justify-center text-white">
+                    <Loader2 className="w-12 h-12 animate-spin text-emerald-500 mb-4" />
+                    <h3 className="text-xl font-bold">Scanning Document...</h3>
+                    <p className="text-slate-400 mb-6">Please wait while we extract the text.</p>
+                    <Button variant="outline" className="text-white border-white hover:bg-white/10" onClick={cancelOCR}>
+                        Cancel
+                    </Button>
+                </div>
+            )}
+
+            {/* Error Toast (Simple) */}
+            {scanError && (
+                <div className="fixed top-20 right-4 bg-red-500 text-white p-4 rounded-xl shadow-lg z-[100] animate-in slide-in-from-right duration-300 flex items-center gap-3">
+                     <span>{scanError}</span>
+                     <button onClick={() => setScanError(null)}><X className="w-4 h-4" /></button>
+                </div>
+            )}
+
+            {/* Top Export Button (Floating) */}
+            <div className="fixed top-20 right-4 z-40">
+                <div className="relative">
+                    <Button
+                        onClick={() => setShowExportMenu(!showExportMenu)}
+                        className="bg-slate-900 text-white shadow-xl hover:bg-slate-800 rounded-full px-6"
+                    >
+                        {isExporting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Menu className="w-4 h-4 mr-2" />}
+                        Export & Print
+                    </Button>
+
+                    {showExportMenu && (
+                        <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in duration-200">
+                             <button onClick={() => handleExport('pdf')} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
+                                 <FileText className="w-4 h-4 text-red-500" /> Download PDF
+                             </button>
+                             <button onClick={() => handleExport('docx')} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
+                                 <FileText className="w-4 h-4 text-blue-500" /> Download Word
+                             </button>
+                             <div className="h-px bg-slate-100 my-1"></div>
+                             <button onClick={() => handleExport('print')} className="w-full text-left px-4 py-3 hover:bg-indigo-50 flex items-center gap-2 text-sm font-bold text-indigo-600">
+                                 <Printer className="w-4 h-4" /> Send to Campus Print
+                             </button>
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {/* Lite Mode Banner */}
             {!isLiteReady && (
@@ -176,29 +297,29 @@ export const Editor = () => {
             </div>
 
             {/* Bottom Action Bar (The "Menu") */}
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl rounded-full p-2 flex items-center gap-1 z-40 transition-all hover:scale-105">
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl rounded-full p-2 flex items-center gap-1 z-[60] transition-all hover:scale-105 overflow-x-auto max-w-[90vw]">
 
-                <button onClick={() => setShowCoverModal(true)} className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors group">
-                    <LayoutTemplate className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">Cover</span>
+                <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors group min-w-[60px]">
+                    <ScanText className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wide whitespace-nowrap">Scan Notes</span>
                 </button>
 
                 <div className="w-px h-8 bg-slate-700 mx-1"></div>
 
-                <button onClick={insertTOC} className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors group">
-                    <ListOrdered className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">TOC</span>
+                <button onClick={() => setShowCoverModal(true)} className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors group min-w-[60px]">
+                    <LayoutTemplate className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wide whitespace-nowrap">Cover Page</span>
                 </button>
 
                 <div className="w-px h-8 bg-slate-700 mx-1"></div>
 
                 <div className="relative group">
-                    <button className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors">
+                    <button className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors min-w-[60px]">
                         <FileType className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">Format</span>
+                        <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wide whitespace-nowrap">Magic Format</span>
                     </button>
                     {/* Format Dropdown (Hover) */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-48 bg-slate-800 rounded-xl shadow-xl overflow-hidden hidden group-hover:block border border-slate-700">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-48 bg-slate-800 rounded-xl shadow-xl overflow-hidden hidden group-hover:block border border-slate-700 z-[70]">
                          <button onClick={() => setFormatStyle('standard')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'standard' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>Standard</button>
                          <button onClick={() => setFormatStyle('apa')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'apa' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>University Standard</button>
                          <button onClick={() => setFormatStyle('mla')} className={`w-full text-left px-4 py-2 text-xs font-bold ${formatStyle === 'mla' ? 'text-emerald-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>Formal Report</button>
@@ -207,13 +328,9 @@ export const Editor = () => {
 
                 <div className="w-px h-8 bg-slate-700 mx-1"></div>
 
-                <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors group">
-                    {isScanning ? (
-                        <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
-                    ) : (
-                        <ScanText className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                    )}
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">Scan</span>
+                <button onClick={insertTOC} className="flex flex-col items-center gap-1 px-4 py-2 hover:bg-slate-800 rounded-xl transition-colors group min-w-[60px]">
+                    <ListOrdered className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wide whitespace-nowrap">Insert TOC</span>
                 </button>
 
             </div>

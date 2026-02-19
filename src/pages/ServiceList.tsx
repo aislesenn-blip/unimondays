@@ -1,6 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { MarketplaceGrid } from '../components/marketplace/MarketplaceGrid';
 import { mockBusinesses } from '../data/mockData';
+import { TravelHero } from '../components/travel/TravelHero';
 import type { Category } from '../types';
 
 interface ServiceListProps {
@@ -22,6 +23,13 @@ export const ServiceList = ({ category, title }: ServiceListProps) => {
             {filteredBusinesses.length} Available
         </span>
       </div>
+
+      {/* Hero for Travel */}
+      {category === 'Travel' && (
+          <div className="px-4">
+              <TravelHero />
+          </div>
+      )}
 
       <div className="px-2">
          {filteredBusinesses.length > 0 ? (
