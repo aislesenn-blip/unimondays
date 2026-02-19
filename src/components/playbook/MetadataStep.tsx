@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '../ui/Button';
-import { LayoutTemplate, ListOrdered, FileType, CheckCircle, ChevronRight, User, BookOpen } from 'lucide-react';
+import { LayoutTemplate, ListOrdered, FileType, CheckCircle, ChevronRight, User, BookOpen, PenTool, X } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
 
 interface MetadataStepProps {
   onData: (metadata: any) => void;
@@ -15,14 +16,34 @@ export const MetadataStep = ({ onData, onNext, onBack }: MetadataStepProps) => {
      course: '',
      lecturer: '',
      title: '',
+     groupCode: '',
+     sectionName: '',
      style: 'standard', // standard | formal
      coverPage: true,
      pageNumbers: true,
-     toc: false
+     toc: false,
+     signature: null as string | null
   });
+
+  const sigPadRef = useRef<SignatureCanvas>(null);
+  const [showSigPad, setShowSigPad] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const saveSignature = () => {
+      if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
+          setFormData(prev => ({ ...prev, signature: sigPadRef.current?.toDataURL() || null }));
+          setShowSigPad(false);
+      } else {
+          setShowSigPad(false);
+      }
+  };
+
+  const clearSignature = () => {
+      sigPadRef.current?.clear();
+      setFormData(prev => ({ ...prev, signature: null }));
   };
 
   const handleContinue = () => {
@@ -96,6 +117,34 @@ export const MetadataStep = ({ onData, onNext, onBack }: MetadataStepProps) => {
         </div>
 
         <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2 border-t border-slate-100 pt-4">
+          <User className="w-4 h-4 text-emerald-500" />
+          Group Workspace (Optional)
+        </h3>
+
+        <div className="grid md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Group Code</label>
+              <input
+                name="groupCode"
+                value={formData.groupCode}
+                onChange={handleChange}
+                placeholder="e.g. GRP-101"
+                className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+           </div>
+           <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Section Name</label>
+              <input
+                name="sectionName"
+                value={formData.sectionName}
+                onChange={handleChange}
+                placeholder="e.g. Introduction"
+                className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+           </div>
+        </div>
+
+        <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2 border-t border-slate-100 pt-4">
           <BookOpen className="w-4 h-4 text-emerald-500" />
           Formatting Rules
         </h3>
@@ -148,9 +197,44 @@ export const MetadataStep = ({ onData, onNext, onBack }: MetadataStepProps) => {
               </div>
               <input type="checkbox" checked={formData.toc} disabled className="accent-emerald-500 w-5 h-5" />
            </label>
+
+           <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+              <div className="flex items-center gap-3">
+                 <PenTool className="w-5 h-5 text-slate-400" />
+                 <span className="font-medium text-slate-700 text-sm">Digital Signature</span>
+              </div>
+              {formData.signature ? (
+                  <div className="flex items-center gap-2">
+                      <span className="text-xs text-emerald-600 font-bold">Signed</span>
+                      <button onClick={clearSignature} className="text-red-400 hover:text-red-600"><X className="w-4 h-4"/></button>
+                  </div>
+              ) : (
+                  <Button size="sm" variant="outline" onClick={() => setShowSigPad(true)}>Sign Now</Button>
+              )}
+           </div>
         </div>
 
       </div>
+
+      {showSigPad && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl p-4 shadow-2xl w-full max-w-md">
+                  <h3 className="font-bold text-lg mb-2 text-slate-900">Sign Below</h3>
+                  <div className="border-2 border-dashed border-slate-300 rounded-xl mb-4 bg-slate-50">
+                      <SignatureCanvas
+                          ref={sigPadRef}
+                          canvasProps={{ className: 'w-full h-40' }}
+                          backgroundColor="rgba(248, 250, 252, 1)"
+                      />
+                  </div>
+                  <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setShowSigPad(false)} className="flex-1">Cancel</Button>
+                      <Button onClick={() => sigPadRef.current?.clear()} variant="ghost" className="flex-1 text-red-500 hover:text-red-600">Clear</Button>
+                      <Button onClick={saveSignature} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">Save</Button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       <div className="flex gap-4">
          <Button variant="outline" onClick={onBack} className="flex-1 h-14 text-lg font-bold border-slate-300 text-slate-500 hover:bg-slate-100">

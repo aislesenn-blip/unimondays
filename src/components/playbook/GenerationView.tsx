@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui/Button';
-import { Download, Printer, CheckCircle, Loader2, FileText, ChevronRight } from 'lucide-react';
+import { Download, Printer, CheckCircle, Loader2, FileText, Presentation } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import DocumentWorker from '../../workers/documentFactory.worker?worker';
+import PresentationWorker from '../../workers/presentationFactory.worker?worker';
 
 interface GenerationViewProps {
   text: string;
@@ -13,12 +15,15 @@ export const GenerationView = ({ text, metadata, onBack }: GenerationViewProps) 
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Initializing...');
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [generatingPPT, setGeneratingPPT] = useState(false);
+
   const workerRef = useRef<Worker | null>(null);
+  const pptWorkerRef = useRef<Worker | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Start Worker
-    workerRef.current = new Worker(new URL('../../workers/documentFactory.worker.ts', import.meta.url), { type: 'module' });
+    // Start Document Worker
+    workerRef.current = new DocumentWorker();
 
     // Simulate Progress Steps
     const steps = [
@@ -64,9 +69,39 @@ export const GenerationView = ({ text, metadata, onBack }: GenerationViewProps) 
 
     return () => {
         workerRef.current?.terminate();
+        pptWorkerRef.current?.terminate();
         clearInterval(interval);
     };
   }, [text, metadata]);
+
+  const handleGeneratePPT = () => {
+      setGeneratingPPT(true);
+      pptWorkerRef.current = new PresentationWorker();
+
+      pptWorkerRef.current.postMessage({
+          type: 'generate_ppt',
+          content: text,
+          metadata
+      });
+
+      pptWorkerRef.current.onmessage = (e) => {
+          const { status, blob } = e.data;
+          if (status === 'success') {
+              setGeneratingPPT(false);
+
+              // Download immediately
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${metadata.title.replace(/\s+/g, '_')}_Presentation.pptx`;
+              a.click();
+              URL.revokeObjectURL(url);
+          } else {
+              alert("Failed to generate presentation.");
+              setGeneratingPPT(false);
+          }
+      };
+  };
 
   const handleDownload = () => {
       if (!pdfBlob) return;
@@ -117,6 +152,11 @@ export const GenerationView = ({ text, metadata, onBack }: GenerationViewProps) 
 
                  <Button onClick={handlePrint} className="h-14 bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200 text-lg font-bold">
                      <Printer className="w-5 h-5 mr-2" /> Send to UniMonday Print
+                 </Button>
+
+                 <Button onClick={handleGeneratePPT} disabled={generatingPPT} className="h-14 bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl shadow-emerald-200 text-lg font-bold">
+                     {generatingPPT ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Presentation className="w-5 h-5 mr-2" />}
+                     {generatingPPT ? "Building Slides..." : "Generate Presentation"}
                  </Button>
 
                  <Button variant="ghost" onClick={onBack} className="text-slate-400 hover:text-slate-600">

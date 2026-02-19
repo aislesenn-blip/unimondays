@@ -1,5 +1,4 @@
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 self.onmessage = async (e) => {
     const { type, content, metadata, options } = e.data;
@@ -80,19 +79,24 @@ self.onmessage = async (e) => {
         // For MVP, we'll skip auto-TOC on raw text unless structured.
         // However, user asked for "Scan for short lines/numbered lines".
 
-        const lines = content.split('\n');
-        const headings: { text: string, page: number }[] = [];
-
         // Simulating TOC finding (We'll do this during main loop or pre-scan)
         // Let's do a pre-scan logic strictly for TOC generation if requested.
         // ... (Skipping complexity for MVP to ensure reliability, unless we implement a 2-pass render)
 
         // --- 3. MAIN CONTENT ---
+        // Group Assembly Logic (Mock): If Group Code is present, we would fetch other sections here.
+        // For MVP, if sectionName is present, we treat this document as a "part" and append a header.
+
+        let finalContent = content;
+        if (metadata.sectionName) {
+            finalContent = `SECTION: ${metadata.sectionName.toUpperCase()}\n\n${content}`;
+        }
+
         doc.setFont(fontName, 'normal');
         doc.setFontSize(fontSizeBody);
         doc.setTextColor(0, 0, 0);
 
-        const linesOfText = doc.splitTextToSize(content, pageWidth - (margin * 2));
+        const linesOfText = doc.splitTextToSize(finalContent, pageWidth - (margin * 2));
         const pageHeightContent = pageHeight - margin;
 
         linesOfText.forEach((line: string) => {
@@ -111,6 +115,25 @@ self.onmessage = async (e) => {
             doc.text(line, margin, cursorY);
             cursorY += (fontSizeBody * lineHeight);
         });
+
+        // --- 4. SIGNATURE (If present) ---
+        if (metadata.signature) {
+            // Check if we need a new page for signature if not enough space
+            if (cursorY > pageHeight - 150) {
+                doc.addPage();
+                cursorY = margin;
+            }
+
+            // Add spacing
+            cursorY += 40;
+
+            doc.addImage(metadata.signature, 'PNG', margin, cursorY, 150, 60);
+            cursorY += 70;
+
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text("Digitally Signed via UniMonday Playbook", margin, cursorY);
+        }
 
         // Output
         const blob = doc.output('blob');

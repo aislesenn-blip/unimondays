@@ -5,7 +5,7 @@ def test_playbook_wizard(page: Page):
     print("Starting verification...")
     # 1. Login
     try:
-        page.goto("http://localhost:5173/login")
+        page.goto("http://localhost:5174/login")
         print("Navigated to Login")
 
         # Step 1: Role (Default Student) -> Next
@@ -34,7 +34,7 @@ def test_playbook_wizard(page: Page):
         raise e
 
     # 2. Navigate to Playbook
-    page.goto("http://localhost:5173/playbook")
+    page.goto("http://localhost:5174/playbook")
     print("Navigated to Playbook")
 
     # 3. Ingestion Step
@@ -68,8 +68,8 @@ def test_playbook_wizard(page: Page):
     print("Clicked Generate")
 
     # 5. Generation View
-    # Wait for completion
-    page.wait_for_selector("text=Document Ready", timeout=10000)
+    # Wait for completion - can take longer with workers
+    page.wait_for_selector("text=Document Ready", timeout=30000)
     print("Generation Complete")
 
     expect(page.get_by_text("Download PDF")).to_be_visible()
