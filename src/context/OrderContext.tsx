@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { Order, VendorConfig, MenuItem } from '../types';
+import { mockBusinesses, mockMenus } from '../data/mockData';
 
 interface OrderContextType {
   orders: Order[];
@@ -15,29 +16,61 @@ interface OrderContextType {
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [vendors, setVendors] = useState<Record<string, VendorConfig>>({});
-  const [menus, setMenus] = useState<Record<string, MenuItem[]>>({});
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const saved = localStorage.getItem('unimonday_orders');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Initialize vendors from mockData
+  const [vendors, setVendors] = useState<Record<string, VendorConfig>>(() => {
+    const initialVendors: Record<string, VendorConfig> = {};
+    mockBusinesses.forEach(b => {
+      if (b.lipaNumber && b.lipaName && b.orderWindow) {
+         initialVendors[b.id] = {
+           lipaNumber: b.lipaNumber,
+           lipaName: b.lipaName,
+           orderMode: b.orderMode || 'realtime',
+           orderWindow: b.orderWindow,
+           instructions: b.instructions || ''
+         };
+      }
+    });
+    return initialVendors;
+  });
+
+  const [menus, setMenus] = useState<Record<string, MenuItem[]>>(mockMenus);
 
   const createOrder = (order: Order) => {
-    setOrders(prev => [...prev, order]);
+    setOrders(prev => {
+      const newOrders = [...prev, order];
+      localStorage.setItem('unimonday_orders', JSON.stringify(newOrders));
+      return newOrders;
+    });
   };
 
   const updateOrderStatus = (orderId: string, status: Order['status']) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    setOrders(prev => {
+      const newOrders = prev.map(o => o.id === orderId ? { ...o, status } : o);
+      localStorage.setItem('unimonday_orders', JSON.stringify(newOrders));
+      return newOrders;
+    });
   };
 
   const redeemItem = (orderId: string, itemId: string) => {
-    setOrders(prev => prev.map(o => {
-      if (o.id === orderId) {
-        const newItems = o.items.map(i => i.id === itemId ? { ...i, status: 'redeemed' as const } : i);
-        return {
-          ...o,
-          items: newItems
-        };
-      }
-      return o;
-    }));
+    setOrders(prev => {
+      const newOrders = prev.map(o => {
+        if (o.id === orderId) {
+          const newItems = o.items.map(i => i.id === itemId ? { ...i, status: 'redeemed' as const } : i);
+          return {
+            ...o,
+            items: newItems
+          };
+        }
+        return o;
+      });
+      localStorage.setItem('unimonday_orders', JSON.stringify(newOrders));
+      return newOrders;
+    });
   };
 
   const updateVendorConfig = (vendorId: string, config: VendorConfig) => {

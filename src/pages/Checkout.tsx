@@ -113,8 +113,8 @@ export const Checkout = () => {
                         <div>
                             <h3 className="font-bold text-emerald-900">Manual Payment Required</h3>
                             <p className="text-sm text-emerald-700 leading-relaxed mt-1">
-                                Send <strong>{totalAmount} TZS</strong> to the Lipa Namba below.
-                                Your order will be confirmed once the vendor verifies the name on the transaction.
+                                Please pay exactly <strong>{totalAmount} TZS</strong> to Lipa Namba <strong>{vendorConfig?.lipaNumber || business?.whatsapp || 'N/A'}</strong>.
+                                Your order will be confirmed based on the vendor's processing window.
                             </p>
                         </div>
                     </div>

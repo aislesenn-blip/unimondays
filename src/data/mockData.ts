@@ -1,4 +1,4 @@
-import type { Business, AdminStats } from "../types";
+import type { Business, AdminStats, MenuItem } from "../types";
 
 export const mockBusinesses: Business[] = [
   // UDSM Businesses
@@ -7,7 +7,8 @@ export const mockBusinesses: Business[] = [
     name: "Mama Shavu's Kitchen",
     category: "Food",
     description: "Authentic Swahili cuisine. Late-night service available near Hall 4.",
-    imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80",
+    // imageUrl removed as per request for no photos, using iconFallback
+    iconFallback: "food",
     amenities: ["delivery", "express"],
     whatsapp: "255700000001",
     rating: 4.8,
@@ -18,7 +19,14 @@ export const mockBusinesses: Business[] = [
     university: "UDSM",
     openingHours: "07:00",
     closingHours: "23:00",
-    seoKeywords: ["food", "udsm", "wali", "cheap", "dinner"]
+    seoKeywords: ["food", "udsm", "wali", "cheap", "dinner"],
+
+    // Vendor Config
+    lipaNumber: "55667788",
+    lipaName: "MAMA SHAVU CATERING",
+    orderMode: "realtime",
+    orderWindow: { open: "08:00", close: "20:00" },
+    instructions: "Please pay exactly the amount shown. Confirm your name matches the payment name."
   },
   {
     id: "2",
@@ -128,6 +136,15 @@ export const mockBusinesses: Business[] = [
     seoKeywords: ["food", "lunch", "cbe", "cheap", "cafeteria"]
   }
 ];
+
+export const mockMenus: Record<string, MenuItem[]> = {
+  "1": [
+    { id: "m1", name: "Wali Maharage", price: 1500, description: "Rice with beans and vegetables." },
+    { id: "m2", name: "Pilau Beef", price: 3500, description: "Spiced rice with beef stew." },
+    { id: "m3", name: "Chips Mayai", price: 2500, description: "French fries omelette." },
+    { id: "m4", name: "Chapati Beans", price: 1200, description: "2 Chapatis with beans." }
+  ]
+};
 
 export const mockAdminStats: AdminStats = {
   peakHungerTimes: [

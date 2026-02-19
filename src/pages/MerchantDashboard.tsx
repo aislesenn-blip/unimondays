@@ -14,6 +14,9 @@ export const MerchantDashboard = () => {
   const { vendors, menus, orders, updateVendorConfig, updateVendorMenu, updateOrderStatus } = useOrder();
   const [activeTab, setActiveTab] = useState<'settings' | 'menu' | 'verification'>('settings');
 
+  // Determine vendor ID (prioritize businessId for linked accounts)
+  const vendorId = user?.businessId || user?.id;
+
   // Vendor Config State
   const [shopName, setShopName] = useState(user?.name || 'My Campus Shop');
   const [category, setCategory] = useState<Category>('Stationary');
@@ -35,8 +38,8 @@ export const MerchantDashboard = () => {
   const [searchPaymentName, setSearchPaymentName] = useState('');
 
   useEffect(() => {
-    if (user) {
-        const config = vendors[user.id];
+    if (vendorId) {
+        const config = vendors[vendorId];
         if (config) {
             setLipaName(config.lipaName);
             setLipaNumber(config.lipaNumber);
@@ -45,16 +48,16 @@ export const MerchantDashboard = () => {
             setOrderMode(config.orderMode);
             setInstructions(config.instructions);
         }
-        const menu = menus[user.id];
+        const menu = menus[vendorId];
         if (menu) {
             setMenuItems(menu);
         }
     }
-  }, [user, vendors, menus]);
+  }, [vendorId, vendors, menus]);
 
   const handleSaveSettings = () => {
-      if (!user) return;
-      updateVendorConfig(user.id, {
+      if (!vendorId) return;
+      updateVendorConfig(vendorId, {
           lipaName,
           lipaNumber,
           orderMode,
@@ -66,7 +69,7 @@ export const MerchantDashboard = () => {
   };
 
   const handleAddMenuItem = () => {
-      if (!user || !newItemName || !newItemPrice) return;
+      if (!vendorId || !newItemName || !newItemPrice) return;
       const newItem: MenuItem = {
           id: Date.now().toString(),
           name: newItemName,
@@ -75,20 +78,20 @@ export const MerchantDashboard = () => {
       };
       const updatedMenu = [...menuItems, newItem];
       setMenuItems(updatedMenu);
-      updateVendorMenu(user.id, updatedMenu);
+      updateVendorMenu(vendorId, updatedMenu);
       setNewItemName('');
       setNewItemPrice('');
       setNewItemDesc('');
   };
 
   const handleDeleteMenuItem = (id: string) => {
-      if (!user) return;
+      if (!vendorId) return;
       const updatedMenu = menuItems.filter(item => item.id !== id);
       setMenuItems(updatedMenu);
-      updateVendorMenu(user.id, updatedMenu);
+      updateVendorMenu(vendorId, updatedMenu);
   };
 
-  const pendingOrders = orders.filter(o => o.vendorId === user?.id && o.status === 'pending');
+  const pendingOrders = orders.filter(o => o.vendorId === vendorId && o.status === 'pending');
   const filteredOrders = pendingOrders.filter(o =>
       o.paymentName.toLowerCase().includes(searchPaymentName.toLowerCase())
   );

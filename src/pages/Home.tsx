@@ -54,7 +54,7 @@ export const Home = () => {
         </div>
         <div className="grid grid-cols-4 gap-4 md:gap-8 px-2">
            {[
-             { icon: Zap, label: "Playbook", path: "/playbook", bg: "bg-amber-100", color: "text-amber-600" },
+             { icon: Zap, label: "Playbook", path: "/playbook", bg: "bg-purple-100", color: "text-purple-600" },
              { icon: Coffee, label: "Dining", path: "/dining", bg: "bg-orange-100", color: "text-orange-600" },
              { icon: Printer, label: "Print", path: "/print", bg: "bg-blue-100", color: "text-blue-600" },
              { icon: MapPin, label: "Travel", path: "/travel", bg: "bg-emerald-100", color: "text-emerald-600" },
