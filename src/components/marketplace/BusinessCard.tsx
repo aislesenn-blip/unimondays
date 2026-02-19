@@ -39,11 +39,17 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
         <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
           {/* Use business imageUrl if exists, else Unsplash based on Category */}
           <img
-            src={business.imageUrl || `https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400`} // Default to Food/General if missing logic, but let's improve
-            srcSet={business.imageUrl || `https://source.unsplash.com/featured/400x300?${business.category.replace(' ', ',')},university`}
+            src={business.imageUrl || (() => {
+              switch (business.category) {
+                case 'Food': return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800";
+                case 'Stationary': return "https://images.unsplash.com/photo-1562564055-71e051d33c19?auto=format&fit=crop&q=80&w=800";
+                case 'Travel': return "https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&q=80&w=800";
+                default: return "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800";
+              }
+            })()}
             onError={(e) => {
                 // Fallback if unsplash fails
-                e.currentTarget.src = "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=400";
+                e.currentTarget.src = "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800";
             }}
             alt={business.name}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
@@ -76,7 +82,7 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
         <CardContent className="flex-1 flex flex-col gap-3 pt-5 pb-5">
           <div>
             <div className="flex justify-between items-start mb-1 gap-2">
-               <h3 className="font-bold text-lg leading-tight line-clamp-1 text-slate-900 group-hover:text-indigo-600 transition-colors">
+               <h3 className="font-bold text-lg leading-tight line-clamp-1 text-slate-900 group-hover:text-emerald-600 transition-colors">
                  {business.name}
                </h3>
             </div>
@@ -101,7 +107,7 @@ export const BusinessCard = ({ business }: BusinessCardProps) => {
 
           <div className="mt-auto pt-2">
             <Button
-              className="w-full bg-slate-900 hover:bg-indigo-600 text-white shadow-none border-0 transition-all h-10 text-sm font-semibold tracking-wide pointer-events-none"
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-none border-0 transition-all h-10 text-sm font-semibold tracking-wide pointer-events-none"
               tabIndex={-1}
             >
               View Profile

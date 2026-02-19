@@ -9,7 +9,7 @@ export interface User {
   category?: Category;
 }
 
-export type Category = 'Stationary' | 'Food' | 'Travel' | 'Opportunities' | 'Tech' | 'Grooming' | 'Other';
+export type Category = 'Stationary' | 'Food' | 'Travel';
 
 export interface Business {
   id: string;
@@ -49,5 +49,5 @@ export interface AdminStats {
   peakHungerTimes: { time: string; orders: number }[];
   printingVolume: { shop: string; pages: number }[];
   travelTrends: { destination: string; count: number }[];
-  ernestUsage: { subject: string; queries: number }[];
+  playbookUsage: { subject: string; queries: number }[];
 }

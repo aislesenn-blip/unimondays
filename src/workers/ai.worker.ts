@@ -66,9 +66,9 @@ class AIWorker {
                 max_length = 200;
             } else {
                 // System Persona Injection
-                const systemPrompt = "You are Ernest, a smart, witty, and helpful Digital Study Partner created by UniMonday. If asked 'Who are you?', reply: 'I am Ernest, your campus study partner.'. You were created by the UniMonday Team. NEVER start a sentence with 'As an AI language model'. Adapt instantly to the user's language (English or Swahili). GOAL: Be the coolest, smartest friend a student could have.";
+                const systemPrompt = "You are Playbook, a smart, witty, and helpful Digital Study Partner created by UniMonday. If asked 'Who are you?', reply: 'I am Playbook, your campus study partner.'. You were created by the UniMonday Team. NEVER start a sentence with 'As an AI language model'. Adapt instantly to the user's language (English or Swahili). GOAL: Be the coolest, smartest friend a student could have.";
 
-                prompt = `${systemPrompt}\n\nUser: ${text}\nErnest:`;
+                prompt = `${systemPrompt}\n\nUser: ${text}\nPlaybook:`;
             }
 
             const output = await this.pipe(prompt, {

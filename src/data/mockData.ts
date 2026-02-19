@@ -55,42 +55,6 @@ export const mockBusinesses: Business[] = [
     closingHours: "22:00",
     seoKeywords: ["transport", "shuttle", "bus", "udsm", "campus"]
   },
-  {
-    id: "4",
-    name: "The Tech Guy (CoICT)",
-    category: "Tech",
-    description: "Expert phone repair, screen replacements, and accessories.",
-    iconFallback: "tech",
-    amenities: ["express"],
-    whatsapp: "255700000004",
-    rating: 4.9,
-    isOpen: true,
-    tags: ["Repair", "Phone", "Simu", "Screen", "Battery", "Fundi"],
-    isNegotiable: true,
-    price: 15000,
-    university: "UDSM",
-    openingHours: "09:00",
-    closingHours: "18:00",
-    seoKeywords: ["repair", "phone", "tech", "udsm", "screen"]
-  },
-  {
-    id: "5",
-    name: "Ernest AI Premium",
-    category: "Other",
-    description: "Unlock advanced academic intelligence tools for UDSM students.",
-    iconFallback: "default",
-    amenities: ["wifi"],
-    whatsapp: "255700000005",
-    rating: 5.0,
-    isOpen: true,
-    tags: ["AI", "Smart", "Study", "Premium", "Help"],
-    price: 5000,
-    university: "UDSM",
-    openingHours: "00:00",
-    closingHours: "23:59",
-    seoKeywords: ["ai", "study", "help", "udsm", "smart"]
-  },
-
   // IFM Businesses
   {
     id: "6",
@@ -108,23 +72,6 @@ export const mockBusinesses: Business[] = [
     openingHours: "10:00",
     closingHours: "19:00",
     seoKeywords: ["food", "fries", "chips", "ifm", "lunch"]
-  },
-  {
-    id: "7",
-    name: "Kijana Smart Barber",
-    category: "Grooming",
-    description: "Premium cuts for the modern gentleman near Posta.",
-    iconFallback: "scissors",
-    amenities: ["wifi"],
-    whatsapp: "255700000007",
-    rating: 4.7,
-    isOpen: true,
-    tags: ["Barber", "Cut", "Nyoa", "Hair", "Style"],
-    price: 10000,
-    university: "IFM",
-    openingHours: "08:00",
-    closingHours: "21:00",
-    seoKeywords: ["barber", "haircut", "style", "ifm", "grooming"]
   },
   {
     id: "8",
@@ -203,7 +150,7 @@ export const mockAdminStats: AdminStats = {
     { destination: "Beach", count: 120 },
     { destination: "Mall", count: 210 }
   ],
-  ernestUsage: [
+  playbookUsage: [
     { subject: "Calculus", queries: 340 },
     { subject: "History", queries: 120 },
     { subject: "Physics", queries: 280 },

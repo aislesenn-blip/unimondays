@@ -16,8 +16,8 @@ export const ErnestPro = ({ mode }: ErnestProProps) => {
       id: 'welcome',
       role: 'assistant',
       content: mode === 'pro'
-        ? "Hello! I am Ernest Pro. I am a fully offline Document Wizard stored on your device. I can help you format documents, scan handouts, and study without internet."
-        : "Hello! I am Ernest Lite. I am a fast, online study assistant. How can I help you today?",
+        ? "Hello! I am Playbook Pro. I am your offline Document Wizard. I can help you format papers, scan handouts, and study—completely offline."
+        : "Hello! I am Playbook Lite. I am your rapid online study assistant. How can I help you today?",
       timestamp: new Date(),
     }
   ]);
@@ -132,7 +132,7 @@ export const ErnestPro = ({ mode }: ErnestProProps) => {
        // Mock Lite Response
        setTimeout(() => {
           setIsProcessing(false);
-          addMessage('assistant', `[Ernest Lite]: This is a simulated response. In a real app, I would fetch this from the cloud API.\n\nYou said: "${textToProcess}"`);
+          addMessage('assistant', `[Playbook Lite]: This is a simulated response. In a real app, I would fetch this from the cloud API.\n\nYou said: "${textToProcess}"`);
        }, 1000);
     }
   };
@@ -324,7 +324,7 @@ export const ErnestPro = ({ mode }: ErnestProProps) => {
                        handleSend();
                    }
                }}
-               placeholder="Paste text here or ask Ernest..."
+               placeholder="Paste text here or ask Playbook..."
                className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all resize-none min-h-[50px] max-h-[120px]"
                rows={1}
              />

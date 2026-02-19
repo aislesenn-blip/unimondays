@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Search, ShoppingBag, User, LogOut, LayoutDashboard } from 'lucide-react';
+import { Home, User, LogOut, LayoutDashboard, Coffee, Printer, MapPin, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
@@ -8,8 +8,10 @@ export const Sidebar = () => {
 
   const navItems = [
     { icon: Home, label: 'Home', path: '/' },
-    { icon: Search, label: 'Ernest', path: '/ernest' },
-    { icon: ShoppingBag, label: 'Market', path: '/marketplace' },
+    { icon: Zap, label: 'Playbook', path: '/playbook' },
+    { icon: Coffee, label: 'Dining', path: '/dining' },
+    { icon: Printer, label: 'Print', path: '/print' },
+    { icon: MapPin, label: 'Travel', path: '/travel' },
     { icon: User, label: 'Account', path: '/profile' },
   ];
 

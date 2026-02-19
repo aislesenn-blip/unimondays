@@ -44,7 +44,7 @@ export const Landing = () => {
                onClick={() => navigate('/login')}
                className="h-14 px-8 text-lg bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-xl shadow-emerald-500/30 transform transition-all hover:-translate-y-1"
              >
-               Have your UniMonday account
+               Get Started
              </Button>
           </motion.div>
         </div>
@@ -53,7 +53,7 @@ export const Landing = () => {
       {/* Features Grid */}
       <section className="py-20 px-4 max-w-6xl mx-auto -mt-24 relative z-20">
         <div className="grid md:grid-cols-3 gap-6">
-           {/* Card 1: Marketplace */}
+           {/* Card 1: On-Demand Services */}
            <motion.div
              initial={{ opacity: 0, y: 20 }}
              whileInView={{ opacity: 1, y: 0 }}
@@ -61,22 +61,22 @@ export const Landing = () => {
              transition={{ delay: 0.1 }}
            >
              <Card className="h-full bg-white shadow-xl border-0 p-6 flex flex-col items-center text-center space-y-4 hover:shadow-2xl transition-shadow">
-                <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-2">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-2">
                    <Store className="w-8 h-8" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">Campus Marketplace</h3>
+                <h3 className="text-2xl font-bold text-slate-900">On-Demand Campus Services</h3>
                 <p className="text-slate-600">
-                  Buy, sell, and discover student deals. From textbooks to late-night snacks, find everything within your campus.
+                  Your digital infrastructure for campus life. Get instant access to UNI Cafees, professional printing, and travel logistics without the wait.
                 </p>
                 <img
-                  src="https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&q=80"
-                  alt="Marketplace"
+                  src="https://images.unsplash.com/photo-1559925393-8be0ec4767c8?auto=format&fit=crop&q=80"
+                  alt="Campus Cafe & Services"
                   className="w-full h-32 object-cover rounded-lg mt-auto"
                 />
              </Card>
            </motion.div>
 
-           {/* Card 2: Ernest AI */}
+           {/* Card 2: Playbook */}
            <motion.div
              initial={{ opacity: 0, y: 20 }}
              whileInView={{ opacity: 1, y: 0 }}
@@ -87,7 +87,7 @@ export const Landing = () => {
                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-2">
                    <Zap className="w-8 h-8" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">Ernest AI</h3>
+                <h3 className="text-2xl font-bold text-slate-900">Playbook</h3>
                 <p className="text-slate-600">
                   Your offline-first digital study partner. Summarize notes, fix citations, and format documents instantly.
                 </p>
@@ -107,7 +107,7 @@ export const Landing = () => {
              transition={{ delay: 0.3 }}
            >
              <Card className="h-full bg-white shadow-xl border-0 p-6 flex flex-col items-center text-center space-y-4 hover:shadow-2xl transition-shadow">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-2">
+                <div className="w-16 h-16 bg-slate-100 text-slate-600 rounded-2xl flex items-center justify-center mb-2">
                    <Users className="w-8 h-8" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900">Student Community</h3>

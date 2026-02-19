@@ -4,8 +4,8 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import {
-  ChevronLeft, MessageCircle, Clock, MapPin, Star, ShieldCheck, Share2, Info, Store,
-  Truck, Zap, Wifi, Printer, Pizza, Smartphone, Book, Scissors, Bus, Briefcase as BriefcaseIcon
+  ChevronLeft, MessageCircle, Clock, MapPin, Star, ShieldCheck, Share2, Info,
+  Truck, Zap, Wifi, Printer
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -21,19 +21,6 @@ const AmenityIcon = ({ amenity, className }: { amenity: string, className?: stri
    return <Icon className={className} />;
 };
 
-const StoreIcon = ({ category, className }: { category: string, className?: string }) => {
-   const icons: any = {
-      Food: Pizza,
-      Tech: Smartphone,
-      Stationary: Book,
-      Grooming: Scissors,
-      Travel: Bus,
-      Opportunities: BriefcaseIcon
-   };
-   const Icon = icons[category] || Store;
-   return <Icon className={className} />;
-};
-
 export const MerchantProfile = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -42,11 +29,21 @@ export const MerchantProfile = () => {
   if (!business) {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Merchant Not Found</h2>
+        <h2 className="text-2xl font-bold text-slate-900">Merchant Not Found</h2>
         <Button onClick={() => navigate(-1)}>Go Back</Button>
       </div>
     );
   }
+
+  // Fallback Image Logic
+  const getFallbackImage = () => {
+      switch (business.category) {
+        case 'Food': return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=1200";
+        case 'Stationary': return "https://images.unsplash.com/photo-1562564055-71e051d33c19?auto=format&fit=crop&q=80&w=1200";
+        case 'Travel': return "https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&q=80&w=1200";
+        default: return "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=1200";
+      }
+  };
 
   return (
     <div className="pb-20 space-y-6">
@@ -67,14 +64,13 @@ export const MerchantProfile = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="relative h-64 w-full rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-800 mb-6 shadow-lg group">
-           {business.imageUrl ? (
-             <img src={business.imageUrl} alt={business.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-           ) : (
-             <div className="w-full h-full flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/20 text-indigo-200 dark:text-indigo-800">
-                <StoreIcon category={business.category} className="w-24 h-24 opacity-50" />
-             </div>
-           )}
+        <div className="relative h-64 w-full rounded-3xl overflow-hidden bg-slate-100 mb-6 shadow-lg group">
+           <img
+             src={business.imageUrl || getFallbackImage()}
+             alt={business.name}
+             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+             onError={(e) => { e.currentTarget.src = getFallbackImage(); }}
+           />
            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/20 to-transparent" />
 
            <div className="absolute bottom-6 left-6 right-6 text-white">
@@ -100,14 +96,14 @@ export const MerchantProfile = () => {
            {/* Left Column: Details */}
            <div className="md:col-span-2 space-y-8">
               <section>
-                 <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">About</h3>
-                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-base">
+                 <h3 className="text-lg font-bold text-slate-900 mb-3">About</h3>
+                 <p className="text-slate-600 leading-relaxed text-base">
                     {business.description}
                  </p>
                  {business.tags && (
                    <div className="flex flex-wrap gap-2 mt-4">
                       {business.tags.map(tag => (
-                        <span key={tag} className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                        <span key={tag} className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
                           #{tag}
                         </span>
                       ))}
@@ -116,14 +112,14 @@ export const MerchantProfile = () => {
               </section>
 
               <section>
-                 <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">Amenities</h3>
+                 <h3 className="text-lg font-bold text-slate-900 mb-4">Amenities</h3>
                  <div className="grid grid-cols-2 gap-3">
                     {business.amenities.map(amenity => (
-                       <div key={amenity} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                          <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
-                             <AmenityIcon amenity={amenity} className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                       <div key={amenity} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                          <div className="p-2 bg-white rounded-lg shadow-sm">
+                             <AmenityIcon amenity={amenity} className="w-4 h-4 text-emerald-600" />
                           </div>
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">
+                          <span className="text-sm font-medium text-slate-700 capitalize">
                              {amenity.replace('_', ' ')}
                           </span>
                        </div>
@@ -134,21 +130,21 @@ export const MerchantProfile = () => {
 
            {/* Right Column: Actions */}
            <div className="space-y-6">
-              <Card className="p-6 space-y-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
+              <Card className="p-6 space-y-6 bg-white border-slate-200 shadow-xl shadow-slate-200/50">
                  <div>
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                        <Clock className="w-3 h-3" /> Opening Hours
                     </h3>
                     <div className="space-y-3">
-                       <div className="flex justify-between text-sm pb-2 border-b border-slate-50 dark:border-slate-800">
+                       <div className="flex justify-between text-sm pb-2 border-b border-slate-50">
                           <span className="text-slate-500">Mon - Fri</span>
-                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                          <span className="font-medium text-slate-900">
                              {business.openingHours || '08:00'} - {business.closingHours || '20:00'}
                           </span>
                        </div>
-                       <div className="flex justify-between text-sm pb-2 border-b border-slate-50 dark:border-slate-800">
+                       <div className="flex justify-between text-sm pb-2 border-b border-slate-50">
                           <span className="text-slate-500">Sat</span>
-                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                          <span className="font-medium text-slate-900">
                              {business.openingHours || '09:00'} - 17:00
                           </span>
                        </div>
@@ -184,48 +180,10 @@ export const MerchantProfile = () => {
                  </div>
               </Card>
 
-              {/* Product Catalogue */}
-              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl">
-                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Catalogue</h3>
-                 <div className="space-y-4">
-                    {[
-                      { name: "Full Binding", price: 2500, desc: "Spiral or Hardcover" },
-                      { name: "Color Print (A4)", price: 500, desc: "High quality paper" },
-                      { name: "Scanning", price: 200, desc: "Per page" }
-                    ].map((item, i) => (
-                      <div key={i} className="flex justify-between items-start border-b border-slate-50 pb-3 last:border-0 last:pb-0">
-                         <div>
-                            <p className="font-bold text-slate-800 text-sm">{item.name}</p>
-                            <p className="text-xs text-slate-500">{item.desc}</p>
-                         </div>
-                         <span className="font-bold text-emerald-600 text-sm">
-                            {item.price.toLocaleString()} TZS
-                         </span>
-                      </div>
-                    ))}
-                 </div>
-              </Card>
-
-              {/* Gallery Grid */}
-              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl">
-                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Gallery</h3>
-                 <div className="grid grid-cols-2 gap-2">
-                    {[1, 2, 3, 4].map((i) => (
-                       <div key={i} className="aspect-square rounded-lg bg-slate-100 overflow-hidden">
-                          <img
-                            src={`https://source.unsplash.com/random/200x200?sig=${i}&office`}
-                            alt="Gallery"
-                            className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity"
-                          />
-                       </div>
-                    ))}
-                 </div>
-              </Card>
-
               {/* Verified Badge Card */}
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl flex items-start gap-3 border border-indigo-100 dark:border-indigo-900/30">
-                 <Info className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
-                 <p className="text-sm text-indigo-900 dark:text-indigo-200 leading-snug">
+              <div className="bg-emerald-50 p-4 rounded-xl flex items-start gap-3 border border-emerald-100">
+                 <Info className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                 <p className="text-sm text-emerald-900 leading-snug">
                     This merchant is officially verified by <strong>{business.university}</strong> administration for student services.
                  </p>
               </div>

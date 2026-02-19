@@ -6,7 +6,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Store, Tag, Share2, Plus, CheckCircle } from 'lucide-react';
 import type { Category } from '../types';
 
-const categories: Category[] = ['Stationary', 'Food', 'Travel', 'Opportunities', 'Tech', 'Grooming', 'Other'];
+const categories: Category[] = ['Stationary', 'Food', 'Travel'];
 
 export const MerchantDashboard = () => {
   const { user } = useAuth();
