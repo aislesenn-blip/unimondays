@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { IngestionStep } from '../components/playbook/IngestionStep';
 import { MetadataStep } from '../components/playbook/MetadataStep';
 import { GenerationView } from '../components/playbook/GenerationView';
-import { ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const Playbook = () => {
