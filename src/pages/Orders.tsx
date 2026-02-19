@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
@@ -24,31 +24,13 @@ export const Orders = () => {
   // Filter orders for the current student
   const myOrders = orders.filter(o => o.studentId === (user?.id || 'guest')).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  // Timer Logic (Milliseconds) - Optimized
-  useEffect(() => {
-      let interval: any;
-
-      if (activeCoupon) {
-          // Reset timer on activation
-          timerRef.current = 15.00;
-          setTimer(15.00);
-
-          interval = setInterval(() => {
-              timerRef.current = Math.max(0, timerRef.current - 0.03);
-              setTimer(timerRef.current);
-
-              if (timerRef.current <= 0) {
-                  clearInterval(interval);
-                  // Time's up! Mark as redeemed
-                  redeemItem(activeCoupon.orderId, activeCoupon.item.id);
-                  setIsRedeeming(false);
-                  setActiveCoupon(null);
-              }
-          }, 30);
-      }
-
-      return () => clearInterval(interval);
-  }, [activeCoupon, redeemItem]);
+  const handleTimerComplete = () => {
+    if (activeCoupon) {
+      redeemItem(activeCoupon.orderId, activeCoupon.item.id);
+      setIsRedeeming(false);
+      setActiveCoupon(null);
+    }
+  };
 
   // Live Clock Logic
   useEffect(() => {
@@ -220,12 +202,10 @@ export const Orders = () => {
 
                           {/* Millisecond Timer */}
                           <div className="flex-1 flex flex-col items-center justify-center">
-                              <div className="relative flex flex-col items-center justify-center w-36 h-36 rounded-full border-8 border-red-500 bg-red-50 shadow-inner">
-                                  <span className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">
-                                      {timer.toFixed(2)}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-red-400 uppercase mt-[-5px]">Seconds Remaining</span>
-                              </div>
+                              <RedemptionTimer
+                                initialTime={15.00}
+                                onComplete={handleTimerComplete}
+                              />
                           </div>
 
                           <p className="text-[10px] text-slate-400 max-w-[200px] leading-tight">
