@@ -1,30 +1,30 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { mockBusinesses } from '../data/mockData';
+import { useOrder } from '../context/OrderContext';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import {
-  ChevronLeft, MessageCircle, Clock, MapPin, Star, ShieldCheck, Share2, Info,
-  Truck, Zap, Wifi, Printer
+  ChevronLeft, Clock, MapPin, Star, Share2, Info, Search, Plus, ShoppingCart, Trash2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-// Helper Components for Icons
-const AmenityIcon = ({ amenity, className }: { amenity: string, className?: string }) => {
-   const icons: any = {
-      delivery: Truck,
-      express: Zap,
-      wifi: Wifi,
-      color_print: Printer
-   };
-   const Icon = icons[amenity] || Star;
-   return <Icon className={className} />;
-};
+import type { MenuItem } from '../types';
 
 export const MerchantProfile = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { vendors, menus } = useOrder();
   const business = mockBusinesses.find(b => b.id === id);
+  const vendorConfig = id ? vendors[id] : null;
+  const vendorMenu = id ? menus[id] : [];
+
+  // Cart State
+  const [cart, setCart] = useState<{item: MenuItem, quantity: number}[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // If no menu in context (e.g. mock data vendor), use empty array or simulate
+  const displayMenu = vendorMenu.length > 0 ? vendorMenu : [];
 
   if (!business) {
     return (
@@ -34,6 +34,34 @@ export const MerchantProfile = () => {
       </div>
     );
   }
+
+  // Filter Menu
+  const filteredMenu = displayMenu.filter(item =>
+     item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const addToCart = (item: MenuItem) => {
+      setCart(prev => {
+          const existing = prev.find(i => i.item.id === item.id);
+          if (existing) {
+              return prev.map(i => i.item.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+          }
+          return [...prev, { item, quantity: 1 }];
+      });
+  };
+
+  const removeFromCart = (itemId: string) => {
+      setCart(prev => {
+          const existing = prev.find(i => i.item.id === itemId);
+          if (existing && existing.quantity > 1) {
+              return prev.map(i => i.item.id === itemId ? { ...i, quantity: i.quantity - 1 } : i);
+          }
+          return prev.filter(i => i.item.id !== itemId);
+      });
+  };
+
+  const cartTotal = cart.reduce((acc, curr) => acc + (curr.item.price * curr.quantity), 0);
+  const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
   // Fallback Image Logic
   const getFallbackImage = () => {
@@ -46,7 +74,7 @@ export const MerchantProfile = () => {
   };
 
   return (
-    <div className="pb-20 space-y-6">
+    <div className="pb-24 space-y-6 relative">
       {/* Header / Nav */}
       <div className="flex items-center justify-between px-2">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="-ml-2 text-slate-500">
@@ -93,42 +121,67 @@ export const MerchantProfile = () => {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-           {/* Left Column: Details */}
+           {/* Left Column: Menu & Search */}
            <div className="md:col-span-2 space-y-8">
-              <section>
-                 <h3 className="text-lg font-bold text-slate-900 mb-3">About</h3>
-                 <p className="text-slate-600 leading-relaxed text-base">
-                    {business.description}
-                 </p>
-                 {business.tags && (
-                   <div className="flex flex-wrap gap-2 mt-4">
-                      {business.tags.map(tag => (
-                        <span key={tag} className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-                          #{tag}
-                        </span>
-                      ))}
-                   </div>
-                 )}
-              </section>
-
-              <section>
-                 <h3 className="text-lg font-bold text-slate-900 mb-4">Amenities</h3>
-                 <div className="grid grid-cols-2 gap-3">
-                    {business.amenities.map(amenity => (
-                       <div key={amenity} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                          <div className="p-2 bg-white rounded-lg shadow-sm">
-                             <AmenityIcon amenity={amenity} className="w-4 h-4 text-emerald-600" />
+              {/* Vendor Policy & Lipa */}
+              {vendorConfig && (
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-2">
+                      <div className="flex justify-between items-start">
+                          <div>
+                              <h3 className="font-bold text-emerald-900">Ordering Policy</h3>
+                              <p className="text-sm text-emerald-700">{vendorConfig.instructions}</p>
                           </div>
-                          <span className="text-sm font-medium text-slate-700 capitalize">
-                             {amenity.replace('_', ' ')}
-                          </span>
-                       </div>
-                    ))}
+                          <Badge className="bg-emerald-200 text-emerald-800 hover:bg-emerald-300 border-0">
+                              Window: {vendorConfig.orderWindow.open} - {vendorConfig.orderWindow.close}
+                          </Badge>
+                      </div>
+                      <div className="pt-2 border-t border-emerald-200/50 mt-2">
+                           <p className="text-xs font-bold text-emerald-600 uppercase">Lipa Namba Payment</p>
+                           <p className="text-lg font-mono text-emerald-900">{vendorConfig.lipaNumber} <span className="text-sm text-emerald-700">({vendorConfig.lipaName})</span></p>
+                      </div>
+                  </div>
+              )}
+
+              {/* Menu Section */}
+              <section>
+                 <div className="flex items-center justify-between mb-4">
+                     <h3 className="text-lg font-bold text-slate-900">Menu</h3>
+                     <div className="relative w-1/2">
+                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                         <input
+                            type="text"
+                            placeholder="Search items..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 bg-slate-50 border-0 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                         />
+                     </div>
+                 </div>
+
+                 <div className="space-y-3">
+                     {filteredMenu.length > 0 ? (
+                         filteredMenu.map(item => (
+                             <div key={item.id} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-xl hover:shadow-md transition-all">
+                                 <div>
+                                     <h4 className="font-bold text-slate-900">{item.name}</h4>
+                                     <p className="text-xs text-slate-500">{item.description}</p>
+                                     <span className="text-sm font-semibold text-emerald-600">{item.price} TZS</span>
+                                 </div>
+                                 <Button size="sm" onClick={() => addToCart(item)} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100">
+                                     <Plus className="w-4 h-4 mr-1" /> Add
+                                 </Button>
+                             </div>
+                         ))
+                     ) : (
+                         <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                             <p className="text-slate-400">No menu items available.</p>
+                         </div>
+                     )}
                  </div>
               </section>
            </div>
 
-           {/* Right Column: Actions */}
+           {/* Right Column: Info & Cart */}
            <div className="space-y-6">
               <Card className="p-6 space-y-6 bg-white border-slate-200 shadow-xl shadow-slate-200/50">
                  <div>
@@ -142,41 +195,38 @@ export const MerchantProfile = () => {
                              {business.openingHours || '08:00'} - {business.closingHours || '20:00'}
                           </span>
                        </div>
-                       <div className="flex justify-between text-sm pb-2 border-b border-slate-50">
-                          <span className="text-slate-500">Sat</span>
-                          <span className="font-medium text-slate-900">
-                             {business.openingHours || '09:00'} - 17:00
-                          </span>
-                       </div>
-                       <div className="flex justify-between text-sm">
-                          <span className="text-slate-500">Sun</span>
-                          <span className="text-slate-400 italic">Closed</span>
-                       </div>
                     </div>
                  </div>
 
+                 {/* Sticky Cart Summary for Mobile/Desktop */}
                  <div className="pt-2">
-                    {business.price && (
-                       <div className="mb-4 bg-white border border-slate-100 p-4 rounded-xl shadow-sm">
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Starting from</p>
-                          <div className="flex items-baseline gap-1">
-                             <span className="text-3xl font-extrabold text-slate-900">
-                                {new Intl.NumberFormat('sw-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(business.price)}
-                             </span>
-                          </div>
-                       </div>
+                    {cartCount > 0 ? (
+                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 space-y-3">
+                            <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
+                                {cart.map((c) => (
+                                    <div key={c.item.id} className="flex justify-between text-xs text-emerald-800 items-center">
+                                        <span>{c.quantity}x {c.item.name}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span>{c.item.price * c.quantity}</span>
+                                            <button onClick={() => removeFromCart(c.item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex justify-between items-center text-emerald-900 font-bold pt-2 border-t border-emerald-200">
+                                <span>Total ({cartCount})</span>
+                                <span>{cartTotal} TZS</span>
+                            </div>
+                            <Button
+                                onClick={() => navigate('/checkout', { state: { cart, vendorId: id, vendorConfig, business } })}
+                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                                <ShoppingCart className="w-4 h-4 mr-2" /> Checkout
+                            </Button>
+                        </div>
+                    ) : (
+                         <p className="text-center text-slate-400 text-sm py-2">Select items to order</p>
                     )}
-
-                    <Button
-                      className="w-full bg-[#25D366] hover:bg-[#128C7E] hover:scale-[1.02] text-white shadow-lg shadow-green-500/20 border-0 h-14 text-lg font-bold transition-all rounded-xl"
-                      onClick={() => window.open(`https://wa.me/${business.whatsapp}`, '_blank')}
-                    >
-                      <MessageCircle className="w-6 h-6 mr-2 fill-current" />
-                      Order via WhatsApp
-                    </Button>
-                    <p className="text-[10px] text-center text-slate-400 mt-3 flex items-center justify-center gap-1 font-medium">
-                       <ShieldCheck className="w-3 h-3 text-emerald-500" /> 100% Secure & Verified
-                    </p>
                  </div>
               </Card>
 
@@ -184,7 +234,7 @@ export const MerchantProfile = () => {
               <div className="bg-emerald-50 p-4 rounded-xl flex items-start gap-3 border border-emerald-100">
                  <Info className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                  <p className="text-sm text-emerald-900 leading-snug">
-                    This merchant is officially verified by <strong>{business.university}</strong> administration for student services.
+                    Verified by <strong>{business.university}</strong>.
                  </p>
               </div>
            </div>

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { OrderProvider } from './context/OrderContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
@@ -11,12 +12,15 @@ import { Profile } from './pages/Profile';
 import { MerchantProfile } from './pages/MerchantProfile';
 import { MerchantDashboard } from './pages/MerchantDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { Checkout } from './pages/Checkout';
+import { Orders } from './pages/Orders';
 
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Landing />} />
+      <OrderProvider>
+        <Routes>
+          <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
 
         {/* Protected Routes for Students/Merchants */}
@@ -28,6 +32,8 @@ function App() {
             <Route path="/print" element={<ServiceList category="Stationary" title="Print & Stationaries" />} />
             <Route path="/travel" element={<ServiceList category="Travel" title="Campus Travel" />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/orders" element={<Orders />} />
             <Route path="/merchant-dashboard" element={<MerchantDashboard />} />
             <Route path="/merchant/:id" element={<MerchantProfile />} />
           </Route>
@@ -40,9 +46,10 @@ function App() {
            </Route>
         </Route>
 
-        {/* Catch all redirect */}
-        <Route path="*" element={<Navigate to="/home" replace />} />
-      </Routes>
+          {/* Catch all redirect */}
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </OrderProvider>
     </AuthProvider>
   );
 }

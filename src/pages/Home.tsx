@@ -54,18 +54,18 @@ export const Home = () => {
         </div>
         <div className="grid grid-cols-4 gap-4 md:gap-8 px-2">
            {[
-             { icon: Zap, label: "Playbook", path: "/playbook" },
-             { icon: Coffee, label: "Dining", path: "/dining" },
-             { icon: Printer, label: "Print", path: "/print" },
-             { icon: MapPin, label: "Travel", path: "/travel" },
+             { icon: Zap, label: "Playbook", path: "/playbook", bg: "bg-amber-100", color: "text-amber-600" },
+             { icon: Coffee, label: "Dining", path: "/dining", bg: "bg-orange-100", color: "text-orange-600" },
+             { icon: Printer, label: "Print", path: "/print", bg: "bg-blue-100", color: "text-blue-600" },
+             { icon: MapPin, label: "Travel", path: "/travel", bg: "bg-emerald-100", color: "text-emerald-600" },
            ].map((action, idx) => (
              <Link key={idx} to={action.path} className="flex flex-col items-center gap-3 group">
                <motion.div
                  whileHover={{ scale: 1.05 }}
                  whileTap={{ scale: 0.95 }}
-                 className={`w-16 h-16 md:w-20 md:h-20 rounded-3xl flex items-center justify-center shadow-sm border border-slate-100 bg-white group-hover:border-emerald-500 group-hover:shadow-md transition-all`}
+                 className={`w-16 h-16 md:w-20 md:h-20 rounded-3xl flex items-center justify-center shadow-sm border border-slate-100 ${action.bg} group-hover:shadow-md transition-all`}
                >
-                 <action.icon className="w-8 h-8 text-emerald-600" />
+                 <action.icon className={`w-8 h-8 ${action.color}`} />
                </motion.div>
                <span className="text-sm md:text-base font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">
                  {action.label}
