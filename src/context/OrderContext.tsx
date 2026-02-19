@@ -46,6 +46,12 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('unimonday_orders', JSON.stringify(newOrders));
       return newOrders;
     });
+
+    // 3-Second Auto-Simulation Logic
+    // Automatically confirms the order after 3000ms
+    setTimeout(() => {
+      updateOrderStatus(order.id, 'confirmed');
+    }, 3000);
   };
 
   const updateOrderStatus = (orderId: string, status: Order['status']) => {

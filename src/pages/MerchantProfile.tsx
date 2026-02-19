@@ -111,6 +111,11 @@ export const MerchantProfile = () => {
                  ) : (
                     <Badge variant="destructive" className="backdrop-blur-md border-0 px-3 py-1">Closed</Badge>
                  )}
+                 {business.turnaroundTime && (
+                   <Badge className="bg-indigo-500/80 text-white backdrop-blur-md border-0 px-3 py-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {business.turnaroundTime}
+                   </Badge>
+                 )}
               </div>
               <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2 drop-shadow-md">{business.name}</h1>
               <div className="flex items-center text-sm text-slate-200 gap-4 font-medium">
@@ -145,12 +150,14 @@ export const MerchantProfile = () => {
               {/* Menu Section */}
               <section>
                  <div className="flex items-center justify-between mb-4">
-                     <h3 className="text-lg font-bold text-slate-900">Menu</h3>
+                     <h3 className="text-lg font-bold text-slate-900">
+                        {business.category === 'Stationary' ? 'Services' : 'Menu'}
+                     </h3>
                      <div className="relative w-1/2">
                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                          <input
                             type="text"
-                            placeholder="Search items..."
+                            placeholder="Search..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-9 pr-3 py-2 bg-slate-50 border-0 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -172,14 +179,16 @@ export const MerchantProfile = () => {
                                          <span className="text-sm font-semibold text-emerald-600">{item.price} TZS</span>
                                      </div>
                                  </div>
-                                 <Button size="sm" onClick={() => addToCart(item)} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100">
-                                     <Plus className="w-4 h-4 mr-1" /> Add
-                                 </Button>
+                                 {business.category !== 'Stationary' && (
+                                   <Button size="sm" onClick={() => addToCart(item)} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100">
+                                       <Plus className="w-4 h-4 mr-1" /> Add
+                                   </Button>
+                                 )}
                              </div>
                          ))
                      ) : (
                          <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                             <p className="text-slate-400">No menu items available.</p>
+                             <p className="text-slate-400">No items available.</p>
                          </div>
                      )}
                  </div>
@@ -205,32 +214,49 @@ export const MerchantProfile = () => {
 
                  {/* Sticky Cart Summary for Mobile/Desktop */}
                  <div className="pt-2">
-                    {cartCount > 0 ? (
-                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 space-y-3">
-                            <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
-                                {cart.map((c) => (
-                                    <div key={c.item.id} className="flex justify-between text-xs text-emerald-800 items-center">
-                                        <span>{c.quantity}x {c.item.name}</span>
-                                        <div className="flex items-center gap-2">
-                                            <span>{c.item.price * c.quantity}</span>
-                                            <button onClick={() => removeFromCart(c.item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="flex justify-between items-center text-emerald-900 font-bold pt-2 border-t border-emerald-200">
-                                <span>Total ({cartCount})</span>
-                                <span>{cartTotal} TZS</span>
-                            </div>
-                            <Button
-                                onClick={() => navigate('/checkout', { state: { cart, vendorId: id, vendorConfig, business } })}
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                            >
-                                <ShoppingCart className="w-4 h-4 mr-2" /> Checkout
-                            </Button>
-                        </div>
+                    {business.category === 'Stationary' ? (
+                       <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-3">
+                           <h3 className="font-bold text-indigo-900 text-center">Custom Task Order</h3>
+                           <p className="text-xs text-indigo-700 text-center">
+                              Explain your printing or binding task in detail and pay manually.
+                           </p>
+                           <Button
+                               onClick={() => navigate('/submit-task', { state: { vendorId: id, vendorConfig, business } })}
+                               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200"
+                           >
+                               Submit Custom Task
+                           </Button>
+                       </div>
                     ) : (
-                         <p className="text-center text-slate-400 text-sm py-2">Select items to order</p>
+                      <>
+                        {cartCount > 0 ? (
+                            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 space-y-3">
+                                <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
+                                    {cart.map((c) => (
+                                        <div key={c.item.id} className="flex justify-between text-xs text-emerald-800 items-center">
+                                            <span>{c.quantity}x {c.item.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span>{c.item.price * c.quantity}</span>
+                                                <button onClick={() => removeFromCart(c.item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex justify-between items-center text-emerald-900 font-bold pt-2 border-t border-emerald-200">
+                                    <span>Total ({cartCount})</span>
+                                    <span>{cartTotal} TZS</span>
+                                </div>
+                                <Button
+                                    onClick={() => navigate('/checkout', { state: { cart, vendorId: id, vendorConfig, business } })}
+                                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                    <ShoppingCart className="w-4 h-4 mr-2" /> Checkout
+                                </Button>
+                            </div>
+                        ) : (
+                             <p className="text-center text-slate-400 text-sm py-2">Select items to order</p>
+                        )}
+                      </>
                     )}
                  </div>
               </Card>

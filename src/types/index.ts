@@ -12,6 +12,8 @@ export interface User {
 
 export type Category = 'Stationary' | 'Food' | 'Travel';
 
+export type TurnaroundTime = 'Instant' | '2 Hours' | 'Next Day';
+
 export interface Business {
   id: string;
   name: string;
@@ -37,6 +39,7 @@ export interface Business {
   orderMode?: 'realtime' | 'batch';
   orderWindow?: { open: string; close: string };
   instructions?: string;
+  turnaroundTime?: TurnaroundTime;
 }
 
 export interface VendorConfig {
@@ -74,6 +77,13 @@ export interface Order {
   paymentName: string;
   contactPhone: string;
   timestamp: Date;
+
+  // Custom Task Fields
+  type: 'standard' | 'custom_task';
+  customDetails?: {
+    description: string;
+    fileUrl?: string;
+  };
 }
 
 export interface ErnestMessage {

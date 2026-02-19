@@ -73,44 +73,70 @@ export const Orders = () => {
                       <div className="p-4 space-y-4">
                           {order.status === 'pending' && (
                               <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-lg flex items-start gap-2 border border-amber-100">
-                                  <Clock className="w-4 h-4 shrink-0 mt-0.5" />
+                                  <Clock className="w-4 h-4 shrink-0 mt-0.5 animate-spin" />
                                   <p>
-                                      Waiting for vendor confirmation. This usually takes 5-10 minutes.
-                                      If delayed, call <strong>{vendors[order.vendorId]?.lipaNumber || 'the vendor'}</strong>.
+                                      Waiting for vendor confirmation...
                                   </p>
                               </div>
                           )}
 
-                          <div className="space-y-3">
-                              {order.items.map((item) => (
-                                  <div key={item.id} className="flex items-center justify-between p-3 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors">
-                                      <div className="flex flex-col">
-                                          <span className="font-bold text-slate-900">{item.name}</span>
-                                          <span className="text-xs text-slate-500 font-mono">ID: {item.id.slice(0,6)}</span>
-                                      </div>
+                          {order.type === 'custom_task' ? (
+                              <div className="space-y-3">
+                                  <div className="p-3 border border-indigo-100 bg-indigo-50/50 rounded-xl">
+                                       <h4 className="font-bold text-indigo-900 text-sm mb-1">Custom Task Request</h4>
+                                       <p className="text-xs text-indigo-700 italic mb-2">"{order.customDetails?.description}"</p>
 
-                                      {order.status === 'confirmed' ? (
-                                          item.status === 'redeemed' ? (
-                                              <Button disabled size="sm" className="bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed w-32">
-                                                  CONSUMED
-                                              </Button>
-                                          ) : (
-                                              <Button
-                                                  size="sm"
-                                                  onClick={() => handleActivate(order.id, item)}
-                                                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 w-32 font-bold animate-pulse"
-                                              >
-                                                  Activate Pickup
-                                              </Button>
-                                          )
-                                      ) : (
-                                          <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded">
-                                              {order.status === 'pending' ? 'Pending' : 'Cancelled'}
-                                          </span>
-                                      )}
+                                       <div className="flex items-center justify-between mt-3">
+                                            <span className="text-xs font-bold text-indigo-900">Paid: {order.totalAmount} TZS</span>
+
+                                            {order.status === 'confirmed' ? (
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleActivate(order.id, { id: 'task-'+order.id, menuItemId: 'custom', name: 'Custom Task', price: order.totalAmount, status: 'active' })}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 w-32 font-bold animate-pulse"
+                                                >
+                                                    Activate Pickup
+                                                </Button>
+                                            ) : (
+                                                <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                                    {order.status === 'pending' ? 'Pending' : 'Cancelled'}
+                                                </span>
+                                            )}
+                                       </div>
                                   </div>
-                              ))}
-                          </div>
+                              </div>
+                          ) : (
+                              <div className="space-y-3">
+                                  {order.items.map((item) => (
+                                      <div key={item.id} className="flex items-center justify-between p-3 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors">
+                                          <div className="flex flex-col">
+                                              <span className="font-bold text-slate-900">{item.name}</span>
+                                              <span className="text-xs text-slate-500 font-mono">ID: {item.id.slice(0,6)}</span>
+                                          </div>
+
+                                          {order.status === 'confirmed' ? (
+                                              item.status === 'redeemed' ? (
+                                                  <Button disabled size="sm" className="bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed w-32">
+                                                      CONSUMED
+                                                  </Button>
+                                              ) : (
+                                                  <Button
+                                                      size="sm"
+                                                      onClick={() => handleActivate(order.id, item)}
+                                                      className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 w-32 font-bold animate-pulse"
+                                                  >
+                                                      Activate Pickup
+                                                  </Button>
+                                              )
+                                          ) : (
+                                              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                                  {order.status === 'pending' ? 'Pending' : 'Cancelled'}
+                                              </span>
+                                          )}
+                                      </div>
+                                  ))}
+                              </div>
+                          )}
                       </div>
                   </Card>
               ))
