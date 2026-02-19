@@ -14,19 +14,21 @@ export const Orders = () => {
   const { orders, redeemItem } = useOrder();
   const navigate = useNavigate();
   const [activeCoupon, setActiveCoupon] = useState<{orderId: string, item: OrderItem} | null>(null);
-  const [timer, setTimer] = useState(15);
+  const [timer, setTimer] = useState(15.00);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const [isRedeeming, setIsRedeeming] = useState(false);
 
   // Filter orders for the current student
   const myOrders = orders.filter(o => o.studentId === (user?.id || 'guest')).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+  // Timer Logic (Milliseconds)
   useEffect(() => {
       let interval: any;
       if (activeCoupon && timer > 0) {
           interval = setInterval(() => {
-              setTimer(prev => prev - 1);
-          }, 1000);
-      } else if (activeCoupon && timer === 0) {
+              setTimer(prev => Math.max(0, prev - 0.03));
+          }, 30);
+      } else if (activeCoupon && timer <= 0) {
           // Time's up! Mark as redeemed
           redeemItem(activeCoupon.orderId, activeCoupon.item.id);
           setIsRedeeming(false);
@@ -35,8 +37,19 @@ export const Orders = () => {
       return () => clearInterval(interval);
   }, [activeCoupon, timer, redeemItem]);
 
+  // Live Clock Logic
+  useEffect(() => {
+      if (isRedeeming) {
+          const clockInterval = setInterval(() => {
+              setCurrentTime(new Date());
+          }, 1000);
+          return () => clearInterval(clockInterval);
+      }
+  }, [isRedeeming]);
+
   const handleActivate = (orderId: string, item: OrderItem) => {
-      setTimer(15);
+      setTimer(15.00);
+      setCurrentTime(new Date());
       setActiveCoupon({ orderId, item });
       setIsRedeeming(true);
   };
@@ -159,50 +172,51 @@ export const Orders = () => {
                   className="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center p-4"
               >
                   <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
-                      {/* Animated Anti-Fraud Border */}
-                      <div className="absolute inset-0 border-[8px] border-emerald-500 rounded-3xl animate-[spin_4s_linear_infinite] opacity-50 pointer-events-none" style={{ clipPath: 'inset(0 round 24px)' }}></div>
+                      {/* PROOF OF LIFE: Spinning Gradient Border */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400 animate-[spin_2s_linear_infinite] opacity-100 pointer-events-none p-2 rounded-3xl"></div>
 
-                      {/* Content */}
-                      <div className="p-8 flex flex-col items-center text-center space-y-6 relative z-10 bg-white m-1 rounded-2xl h-full">
+                      {/* Content Container */}
+                      <div className="absolute inset-2 bg-white rounded-2xl z-10 flex flex-col items-center p-6 text-center space-y-5 h-[calc(100%-16px)]">
 
-                          <div className="bg-emerald-100 text-emerald-600 p-4 rounded-full animate-bounce">
-                              <CheckCircle className="w-12 h-12" />
+                          {/* Header */}
+                          <div className="bg-emerald-50 text-emerald-600 p-3 rounded-full shadow-inner animate-pulse">
+                              <CheckCircle className="w-10 h-10" />
                           </div>
 
                           <div>
-                              <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-1">
+                              <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">
                                   {activeCoupon.item.name}
                               </h2>
-                              <p className="text-slate-500 font-medium text-lg">
-                                  Valid Coupon
+                              <div className="flex items-center justify-center gap-2 mt-2">
+                                 <span className="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+                                 <p className="text-red-500 font-bold text-xs uppercase tracking-widest">Live Ticket</p>
+                              </div>
+                          </div>
+
+                          {/* Live Clock Card */}
+                          <div className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200">
+                              <p className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Validated At</p>
+                              <p className="text-2xl font-mono font-bold text-slate-900 tabular-nums">
+                                  {currentTime.toLocaleTimeString()}
+                              </p>
+                              <p className="text-xs text-slate-500 font-medium">
+                                  {currentTime.toLocaleDateString()}
                               </p>
                           </div>
 
-                          <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200">
-                              <p className="text-xs text-slate-400 uppercase font-bold mb-1">Current Time</p>
-                              <p className="text-xl font-mono font-bold text-slate-900">
-                                  {new Date().toLocaleTimeString()}
-                              </p>
-                              <p className="text-sm text-slate-500 font-medium">
-                                  {new Date().toLocaleDateString()}
-                              </p>
+                          {/* Millisecond Timer */}
+                          <div className="flex-1 flex flex-col items-center justify-center">
+                              <div className="relative flex flex-col items-center justify-center w-36 h-36 rounded-full border-8 border-red-500 bg-red-50 shadow-inner">
+                                  <span className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">
+                                      {timer.toFixed(2)}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-red-400 uppercase mt-[-5px]">Seconds Remaining</span>
+                              </div>
                           </div>
 
-                          {/* Timer */}
-                          <div className="flex flex-col items-center justify-center w-32 h-32 rounded-full border-4 border-red-500 relative">
-                              <span className="text-5xl font-black text-red-600 tabular-nums">
-                                  {timer}
-                              </span>
-                              <span className="text-xs font-bold text-red-400 uppercase mt-1">Seconds</span>
-
-                              {/* Pulse Effect */}
-                              <div className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping"></div>
-                          </div>
-
-                          <p className="text-xs text-slate-400 max-w-[200px]">
-                              Show this screen to the vendor immediately. This coupon will expire in {timer} seconds.
+                          <p className="text-[10px] text-slate-400 max-w-[200px] leading-tight">
+                              This screen must be moving. Static screenshots are invalid.
                           </p>
-
                       </div>
                   </div>
               </motion.div>
