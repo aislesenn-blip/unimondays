@@ -11,7 +11,7 @@ import type { OrderItem } from '../types';
 
 export const Orders = () => {
   const { user } = useAuth();
-  const { orders, redeemItem } = useOrder();
+  const { orders, redeemItem, vendors } = useOrder();
   const navigate = useNavigate();
   const [activeCoupon, setActiveCoupon] = useState<{orderId: string, item: OrderItem} | null>(null);
   const [timer, setTimer] = useState(15);
@@ -76,7 +76,7 @@ export const Orders = () => {
                                   <Clock className="w-4 h-4 shrink-0 mt-0.5" />
                                   <p>
                                       Waiting for vendor confirmation. This usually takes 5-10 minutes.
-                                      If delayed, call <strong>{order.contactPhone}</strong> (Vendor).
+                                      If delayed, call <strong>{vendors[order.vendorId]?.lipaNumber || 'the vendor'}</strong>.
                                   </p>
                               </div>
                           )}

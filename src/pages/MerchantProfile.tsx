@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import {
-  ChevronLeft, Clock, MapPin, Star, Share2, Info, Search, Plus, ShoppingCart, Trash2
+  ChevronLeft, Clock, MapPin, Star, Share2, Info, Search, Plus, ShoppingCart, Trash2, Utensils
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { MenuItem } from '../types';
@@ -162,10 +162,15 @@ export const MerchantProfile = () => {
                      {filteredMenu.length > 0 ? (
                          filteredMenu.map(item => (
                              <div key={item.id} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-xl hover:shadow-md transition-all">
-                                 <div>
-                                     <h4 className="font-bold text-slate-900">{item.name}</h4>
-                                     <p className="text-xs text-slate-500">{item.description}</p>
-                                     <span className="text-sm font-semibold text-emerald-600">{item.price} TZS</span>
+                                 <div className="flex items-start gap-3">
+                                     <div className="bg-emerald-50 p-2 rounded-lg">
+                                       <Utensils className="w-5 h-5 text-emerald-600" />
+                                     </div>
+                                     <div>
+                                         <h4 className="font-bold text-slate-900">{item.name}</h4>
+                                         <p className="text-xs text-slate-500">{item.description}</p>
+                                         <span className="text-sm font-semibold text-emerald-600">{item.price} TZS</span>
+                                     </div>
                                  </div>
                                  <Button size="sm" onClick={() => addToCart(item)} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100">
                                      <Plus className="w-4 h-4 mr-1" /> Add

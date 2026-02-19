@@ -7,6 +7,7 @@ export interface User {
   phone?: string;
   university?: string;
   category?: Category;
+  businessId?: string; // Link to a business if role is merchant
 }
 
 export type Category = 'Stationary' | 'Food' | 'Travel';
@@ -29,11 +30,13 @@ export interface Business {
   openingHours?: string;
   closingHours?: string;
   seoKeywords?: string[];
-  // New props for Vendor Config (merged into Business for simplicity or managed separately in OrderContext)
+
+  // Vendor Configuration
   lipaNumber?: string;
   lipaName?: string;
   orderMode?: 'realtime' | 'batch';
   orderWindow?: { open: string; close: string };
+  instructions?: string;
 }
 
 export interface VendorConfig {
@@ -49,7 +52,7 @@ export interface MenuItem {
   name: string;
   price: number;
   description?: string;
-  // No image
+  icon?: string; // Lucide icon name or similar identifier
 }
 
 export interface OrderItem {
@@ -58,6 +61,7 @@ export interface OrderItem {
   name: string;
   price: number;
   status: 'active' | 'redeemed';
+  redeemedAt?: Date;
 }
 
 export interface Order {

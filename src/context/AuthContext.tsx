@@ -30,15 +30,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Secret Admin Backdoor (Simulates User/Pass: 123/123)
         // If specific admin credentials match, force admin role regardless of selected role
         if (username === '123' && passwordOrOtp === '123') {
-          const adminUser = {
+          const adminUser: User = {
             id: 'admin-001',
             name: 'God View Admin',
-            role: 'admin' as UserRole,
+            role: 'admin',
           };
           setUser(adminUser);
           localStorage.setItem('unimonday_user', JSON.stringify(adminUser));
           resolve(true);
           return;
+        }
+
+        // Test Student Account
+        if (username === 'student@unimonday.com' && passwordOrOtp === 'password123') {
+           const studentUser: User = {
+             id: 'student-test-001',
+             name: 'Test Student',
+             role: 'student',
+             phone: '0700000000',
+             university: 'UDSM',
+           };
+           setUser(studentUser);
+           localStorage.setItem('unimonday_user', JSON.stringify(studentUser));
+           resolve(true);
+           return;
+        }
+
+        // Test Vendor Account
+        if (username === 'vendor@unimonday.com' && passwordOrOtp === 'password123') {
+           const vendorUser: User = {
+             id: 'vendor-test-001',
+             name: "Mama Shavu's Kitchen",
+             role: 'merchant',
+             phone: '0700000001',
+             university: 'UDSM',
+             businessId: '1' // Linking to Mama Shavu
+           };
+           setUser(vendorUser);
+           localStorage.setItem('unimonday_user', JSON.stringify(vendorUser));
+           resolve(true);
+           return;
         }
 
         // Standard Simulation
