@@ -66,7 +66,8 @@ export const Checkout = () => {
             status: 'pending' as const,
             paymentName,
             contactPhone,
-            timestamp: new Date()
+            timestamp: new Date(),
+            type: 'standard' as const
         };
 
         createOrder(newOrder);

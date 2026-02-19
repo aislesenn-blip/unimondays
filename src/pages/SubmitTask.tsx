@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
-import { ChevronLeft, Upload, FileText, Smartphone, DollarSign, Clock } from 'lucide-react';
+import { ChevronLeft, Upload, FileText, DollarSign } from 'lucide-react';
 import type { VendorConfig, Business } from '../types';
 
 export const SubmitTask = () => {
@@ -52,11 +52,20 @@ export const SubmitTask = () => {
 
         setIsSubmitting(true);
 
+        const orderId = Date.now().toString();
+
         const newOrder = {
-            id: Date.now().toString(),
+            id: orderId,
             vendorId,
             studentId: user?.id || 'guest',
-            items: [], // No standard items
+            // Create a pseudo-item to track redemption state
+            items: [{
+                id: 'task-' + orderId,
+                menuItemId: 'custom-task',
+                name: 'Custom Task',
+                price: parseInt(totalAmount),
+                status: 'active' as const
+            }],
             totalAmount: parseInt(totalAmount),
             status: 'pending' as const,
             paymentName,
