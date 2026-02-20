@@ -9,8 +9,10 @@ import {
   Shield,
   Calendar,
   Users,
+  X
 } from 'lucide-react';
 import type { Role } from '../types';
+import { Button } from './ui/Button';
 
 interface LinkItem {
   name: string;
@@ -19,7 +21,11 @@ interface LinkItem {
   roles: Role[];
 }
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+    onLinkClick?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ onLinkClick }) => {
   const { user } = useAuth();
 
   if (!user) return null;
@@ -40,11 +46,17 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full flex-col justify-between bg-white overflow-y-auto">
+    <div className="flex h-full flex-col justify-between bg-white overflow-y-auto relative">
       <div className="px-3 py-4">
-        <div className="flex items-center justify-start px-4 pb-6 mb-6 border-b border-slate-100">
-           <div className="h-8 w-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-bold text-lg mr-3 shadow-lg shadow-slate-900/20">O</div>
-           <h1 className="text-xl font-bold tracking-tight text-slate-900">OSPREY</h1>
+        <div className="flex items-center justify-between px-4 pb-6 mb-6 border-b border-slate-100">
+           <div className="flex items-center">
+                <div className="h-8 w-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-bold text-lg mr-3 shadow-lg shadow-slate-900/20">O</div>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900">OSPREY</h1>
+           </div>
+           {/* Close button for mobile */}
+           <Button variant="ghost" size="sm" className="md:hidden" onClick={onLinkClick}>
+                <X className="h-5 w-5 text-slate-500" />
+           </Button>
         </div>
 
         <div className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -56,6 +68,7 @@ export const Sidebar: React.FC = () => {
             <NavLink
               key={link.path}
               to={link.path}
+              onClick={onLinkClick}
               className={({ isActive }) =>
                 cn(
                   'group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
