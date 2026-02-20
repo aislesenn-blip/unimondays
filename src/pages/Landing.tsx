@@ -89,11 +89,11 @@ export const Landing = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900">Playbook</h3>
                 <p className="text-slate-600">
-                  Your offline-first digital study partner. Summarize notes, fix citations, and format documents instantly.
+                  Your Daily Mental Escape & Inspiration. A personalized visual feed tailored to your field of study.
                 </p>
                 <img
-                  src="https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&q=80"
-                  alt="AI Partner"
+                  src="https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&q=80"
+                  alt="Inspiration"
                   className="w-full h-32 object-cover rounded-lg mt-auto"
                 />
              </Card>

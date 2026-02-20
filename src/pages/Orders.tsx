@@ -49,7 +49,7 @@ export const Orders = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 pb-24 relative">
       {/* Header */}
       <div className="bg-white px-4 py-4 flex items-center gap-2 border-b border-slate-100 sticky top-0 z-10">
           <Button variant="ghost" size="sm" onClick={() => navigate('/home')} className="-ml-2">
@@ -163,7 +163,8 @@ export const Orders = () => {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center p-4"
+                  className="fixed inset-0 z-[9999] bg-slate-900 flex items-center justify-center p-4"
+                  style={{ position: 'fixed' }} // Force fixed
               >
                   <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative min-h-[500px]">
                       {/* PROOF OF LIFE: Spinning Gradient Border */}
