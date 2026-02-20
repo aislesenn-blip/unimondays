@@ -15,9 +15,7 @@ interface PlaybookProProps {
 export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
     // State Machine
     const [status, setStatus] = useState<'idle' | 'bucket_selection' | 'editor' | 'processing' | 'success' | 'error'>('idle');
-    const [progress, setProgress] = useState(0);
     const [resultBlob, setResultBlob] = useState<Blob | null>(null);
-    const [editorContent, setEditorContent] = useState('');
     const [bucket, setBucket] = useState<'research' | 'essay' | 'assignment' | 'ppt' | null>(null);
 
     // Configuration
@@ -107,13 +105,6 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
 
     const handleProcess = () => {
         setStatus('processing');
-        setProgress(0);
-        const interval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 90) { clearInterval(interval); return 90; }
-                return prev + 10;
-            });
-        }, 100);
 
         // Get content
         const content = editorRef.current ? editorRef.current.innerText : ''; // For PPT/Simple text
@@ -149,31 +140,6 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
         }
     };
 
-    const handleServerProcess = async (content: string) => {
-        // Fallback or Heavy Load logic - kept for architecture completeness
-        try {
-            const response = await fetch('/api/format-document', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    html: content,
-                    config,
-                    bucket
-                })
-            });
-
-            if (!response.ok) throw new Error('Processing failed');
-
-            const blob = await response.blob();
-            setResultBlob(blob);
-            setStatus('success');
-        } catch (error) {
-            console.error(error);
-            setStatus('error');
-            alert("Processing Error: " + error);
-        }
-    };
-
     const handleDownload = (format: 'docx' | 'pdf' | 'pptx') => {
         if (!resultBlob) return;
         if (format === 'pdf') {
@@ -201,7 +167,6 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
     const reset = () => {
         setResultBlob(null);
         setStatus('idle');
-        setProgress(0);
         setBucket(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
