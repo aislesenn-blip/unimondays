@@ -4,10 +4,15 @@ import time
 def test_playbook_ecosystem(page: Page):
     print("Starting verification: Playbook Ecosystem")
 
+    page.on("dialog", lambda dialog: print(f"Dialog opened: {dialog.message}"))
+    page.on("console", lambda msg: print(f"Console: {msg.text}"))
+
     # 1. Login
     page.goto("http://localhost:5173/login")
     try:
+        # Check if we are already logged in or need to go through onboarding
         if page.get_by_text("Next Step").is_visible(timeout=3000):
+            print("Going through onboarding...")
             page.get_by_text("Next Step").click()
             page.locator("select").select_option("UDSM")
             page.get_by_text("Next").click()
@@ -15,27 +20,47 @@ def test_playbook_ecosystem(page: Page):
             page.get_by_placeholder("Enter OTP (Simulated)").fill("123")
             page.get_by_role("button", name="Login").click()
             page.wait_for_selector("text=Essentials", timeout=15000)
-    except:
+    except Exception as e:
+        print(f"Login skip/error: {e}")
         pass
+
     print("Logged in")
 
     # 2. Navigate to Playbook
     page.goto("http://localhost:5173/playbook")
     print("Navigated to Playbook")
 
-    # 3. Verify Playbook Pro (Default Mode)
-    expect(page.get_by_text("Document Formatter")).to_be_visible()
+    # 3. Verify Playbook Hub
+    # Check for the new Hub Header
+    expect(page.get_by_text("Create. Automate. Done.")).to_be_visible()
 
-    # 4. Switch to Slides X
-    page.get_by_role("button", name="Slides X").click()
+    # Check for the two cards
+    expect(page.get_by_text("Playbook Pro", exact=False).first).to_be_visible()
+    expect(page.get_by_text("Playbook X", exact=False).first).to_be_visible()
+    print("Hub Verified")
+
+    # 4. Click Playbook X Card
+    # We can select by text inside the card
+    print("Clicking Playbook X...")
+    # Using a more specific selector to avoid the header
+    page.locator(".group").filter(has_text="Playbook X").click()
+
+    # 5. Verify Playbook X Interface
     expect(page.get_by_text("Text-to-PPTX")).to_be_visible()
 
-    # 5. Generate (Mock)
+    # Check for new placeholder text/rules
     textarea = page.locator("textarea")
     expect(textarea).to_be_visible()
+    placeholder = textarea.get_attribute("placeholder")
+    if "Heading 1 = New Slide" in placeholder or "# Slide Title" in placeholder:
+        print("New Placeholder Verified")
+    else:
+        print(f"Warning: Placeholder text mismatch: {placeholder}")
 
+    # 6. Generate Slides
     print("Clicking Generate...")
-    page.get_by_role("button", name="GENERATE PPT").click()
+    # The button text changed to "GENERATE SLIDES"
+    page.get_by_role("button", name="GENERATE SLIDES").click()
 
     # Check for Generating state
     expect(page.get_by_text("Building Slides...")).to_be_visible(timeout=2000)
@@ -56,5 +81,6 @@ if __name__ == "__main__":
             test_playbook_ecosystem(page)
         except Exception as e:
             print(f"Test failed: {e}")
+            page.screenshot(path="verification/failure.png")
         finally:
             browser.close()

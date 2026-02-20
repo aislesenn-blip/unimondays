@@ -11,8 +11,8 @@ interface PlaybookXProps {
 }
 
 export const PlaybookX = ({ isActive }: PlaybookXProps) => {
-    const [text, setText] = useState(`# Introduction\nWelcome to Playbook X.\nThis tool generates slides instantly.\n\n# Our Mission\nTo kill manual formatting.\nZero lag.\n100% Client-Side.\n\n# How It Works\nWrite your content here.\nWe detect headings automatically.\nParagraphs become bullets.`);
-    const [theme, setTheme] = useState<'academic' | 'corporate' | 'startup'>('corporate');
+    const [text, setText] = useState(`# Introduction\nWelcome to Playbook X.\nThis tool generates slides instantly.\n\n# The Rules\nHeading 1 creates a new slide.\nParagraphs become bullet points.\nLong paragraphs are auto-split.\n\n# Features\nZero lag.\n100% Client-Side.\nDeterministic Formatting.`);
+    const [theme, setTheme] = useState<'academic' | 'corporate' | 'dark'>('corporate');
     const [status, setStatus] = useState<'idle' | 'generating' | 'success'>('idle');
     const [pptBlob, setPptBlob] = useState<Blob | null>(null);
 
@@ -79,12 +79,14 @@ export const PlaybookX = ({ isActive }: PlaybookXProps) => {
                     className="flex-1 w-full p-6 bg-transparent resize-none outline-none font-mono text-sm text-slate-700 leading-relaxed placeholder-slate-400"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    placeholder="# Slide Title&#10;Bullet point 1&#10;Bullet point 2"
+                    placeholder={`# Slide Title\nBullet point 1\nBullet point 2\n\n# Next Slide\nMore content...`}
                     spellCheck={false}
                 />
 
-                <div className="p-2 bg-white border-t border-slate-100 text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest">
-                    Markdown Mode: # for Slide Titles
+                <div className="p-2 bg-white border-t border-slate-100 text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest flex justify-between px-4">
+                    <span>Heading 1 = New Slide</span>
+                    <span>Paragraphs = Bullets</span>
+                    <span>{'>'} 3 Lines = Auto-Split</span>
                 </div>
             </div>
 
@@ -97,16 +99,16 @@ export const PlaybookX = ({ isActive }: PlaybookXProps) => {
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Select Theme</label>
                         <div className="grid grid-cols-1 gap-3">
                             {[
-                                { id: 'academic', name: 'University Standard', color: 'bg-slate-100 border-slate-200' },
+                                { id: 'academic', name: 'Academic White', color: 'bg-slate-50 border-slate-200' },
                                 { id: 'corporate', name: 'Corporate Blue', color: 'bg-blue-50 border-blue-200' },
-                                { id: 'startup', name: 'Startup Dark', color: 'bg-slate-900 text-white border-slate-800' }
+                                { id: 'dark', name: 'Minimalist Dark', color: 'bg-slate-900 text-white border-slate-800' }
                             ].map((t) => (
                                 <button
                                     key={t.id}
                                     onClick={() => setTheme(t.id as any)}
                                     className={`relative p-4 rounded-xl border-2 text-left transition-all ${theme === t.id ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-slate-100 hover:border-slate-300'} ${t.color}`}
                                 >
-                                    <span className={`font-bold text-sm ${t.id === 'startup' ? 'text-white' : 'text-slate-900'}`}>{t.name}</span>
+                                    <span className={`font-bold text-sm ${t.id === 'dark' ? 'text-white' : 'text-slate-900'}`}>{t.name}</span>
                                     {theme === t.id && (
                                         <div className="absolute top-2 right-2 w-4 h-4 bg-indigo-600 rounded-full flex items-center justify-center text-white">
                                             <Sparkles className="w-2 h-2" />
@@ -132,7 +134,7 @@ export const PlaybookX = ({ isActive }: PlaybookXProps) => {
                                     onClick={handleGenerate}
                                     className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xl shadow-indigo-200 text-lg"
                                 >
-                                    GENERATE PPT <Play className="w-4 h-4 ml-2 fill-current" />
+                                    GENERATE SLIDES <Play className="w-4 h-4 ml-2 fill-current" />
                                 </Button>
                             </motion.div>
                         ) : status === 'generating' ? (

@@ -184,6 +184,19 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
                                                 <option value="arial">Arial</option>
                                             </select>
                                         </div>
+
+                                        {/* Auto-TOC Toggle */}
+                                        <div className="col-span-2 flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                            <label className="text-sm font-bold text-slate-700">Auto-TOC Generator</label>
+                                            <button
+                                                onClick={() => setConfig({...config, toc: !config.toc})}
+                                                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${config.toc ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                            >
+                                                <span
+                                                    className={`inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out mt-0.5 ml-0.5 ${config.toc ? 'translate-x-5' : 'translate-x-0'}`}
+                                                />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Action Button */}
