@@ -1,6 +1,18 @@
 // api/format-document.js
 import mammoth from 'mammoth';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, TableOfContents } from 'docx';
+import {
+    Document,
+    Packer,
+    Paragraph,
+    TextRun,
+    HeadingLevel,
+    TableOfContents,
+    Footer,
+    PageNumber,
+    AlignmentType,
+    PageOrientation,
+    Convert
+} from 'docx';
 
 export default async function handler(request, response) {
     if (request.method !== 'POST') {
@@ -8,13 +20,9 @@ export default async function handler(request, response) {
     }
 
     try {
-        // Read JSON Body
-        // Vercel serverless functions usually parse JSON body automatically if Content-Type is application/json
-        // but let's be safe and read the stream if needed, or use request.body
         let body = request.body;
 
         if (!body || typeof body !== 'object') {
-            // Fallback: Read stream if body is not parsed
             const chunks = [];
             for await (const chunk of request) {
                 chunks.push(chunk);
@@ -31,7 +39,7 @@ export default async function handler(request, response) {
 
         const fileBuffer = Buffer.from(file, 'base64');
 
-        // 1. EXTRACT RAW TEXT (using mammoth for reliability)
+        // 1. EXTRACT RAW TEXT
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
         const text = result.value;
 
@@ -40,15 +48,39 @@ export default async function handler(request, response) {
         }
 
         // 2. PARSE CONFIG & CONTENT
-        const { spacing = '2.0', font = 'times', toc = true } = config || {};
+        // Default values based on PlaybookProConfig interface
+        const {
+            pageSize = 'a4',
+            orientation = 'portrait',
+            margins = 'normal',
+            fontFamily = 'times',
+            fontSize = 12,
+            lineSpacing = '2.0',
+            alignment = 'left',
+            addPageNumbers = true,
+            autoToc = true,
+            citationStyle = 'apa',
+            imageAlignment = 'center'
+        } = config || {};
 
         // Font Mapping
-        const fontFace = font === 'arial' ? 'Arial' : 'Times New Roman';
+        const fontFace = fontFamily === 'arial' ? 'Arial' : fontFamily === 'calibri' ? 'Calibri' : 'Times New Roman';
 
-        // Spacing Mapping (docx uses "twips", 240 = 1 line)
-        let lineSpacing = 480; // Default 2.0
-        if (spacing === '1.0') lineSpacing = 240;
-        if (spacing === '1.5') lineSpacing = 360;
+        // Spacing Mapping (twips: 240 = 1 line)
+        let docLineSpacing = 480; // 2.0
+        if (lineSpacing === '1.0') docLineSpacing = 240;
+        if (lineSpacing === '1.5') docLineSpacing = 360;
+
+        // Alignment Mapping
+        const docAlignment = alignment === 'justify' ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
+
+        // Margins Mapping (twips: 1440 = 1 inch)
+        let docMargins = { top: 1440, bottom: 1440, left: 1440, right: 1440 }; // Normal
+        if (margins === 'narrow') docMargins = { top: 720, bottom: 720, left: 720, right: 720 }; // 0.5"
+        if (margins === 'wide') docMargins = { top: 1440, bottom: 1440, left: 2880, right: 2880 }; // 2" sides
+
+        // Size Mapping (pt * 2)
+        const docFontSize = fontSize * 2;
 
         const paragraphs = text.split('\n').filter(p => p.trim().length > 0);
 
@@ -60,18 +92,26 @@ export default async function handler(request, response) {
             new Paragraph({
                 children: [
                     new TextRun({
-                        text: "Formatted by Playbook Pro (Secure Cloud)",
+                        text: "Formatted by Playbook Pro",
                         bold: true,
                         size: 32, // 16pt
                         font: fontFace
+                    }),
+                    new TextRun({
+                        text: `\n${citationStyle.toUpperCase()} Style applied`,
+                        italics: true,
+                        size: 20,
+                        font: fontFace,
+                        break: 1
                     })
                 ],
+                alignment: AlignmentType.CENTER,
                 spacing: { after: 400 }
             })
         );
 
         // Auto-TOC
-        if (toc) {
+        if (autoToc) {
             docChildren.push(
                 new Paragraph({
                     children: [
@@ -82,7 +122,7 @@ export default async function handler(request, response) {
                             font: fontFace
                         })
                     ],
-                    heading: HeadingLevel.HEADING_1, // To ensure it doesn't break structure, though usually TOC is separate
+                    heading: HeadingLevel.HEADING_1,
                     spacing: { after: 200 }
                 }),
                 new TableOfContents("Summary", {
@@ -97,38 +137,67 @@ export default async function handler(request, response) {
         }
 
         // Content Processing
-        // Simple Heuristic: If line is short and looks like a title, make it a Heading
-        // Otherwise, paragraph.
         paragraphs.forEach(p => {
             const trimmed = p.trim();
-            const isHeading = trimmed.length < 60 && !trimmed.endsWith('.') && /^[A-Z]/.test(trimmed);
+            // Heuristic for Headings
+            const isHeading = trimmed.length < 80 && !trimmed.endsWith('.') && /^[A-Z]/.test(trimmed) && trimmed.split(' ').length < 10;
 
             if (isHeading) {
                  docChildren.push(new Paragraph({
                     text: trimmed,
                     heading: HeadingLevel.HEADING_1,
-                    spacing: { before: 240, after: 120 }
+                    spacing: { before: 240, after: 120 },
+                    alignment: AlignmentType.LEFT // Headings usually left
                 }));
             } else {
                 docChildren.push(new Paragraph({
                     children: [new TextRun({
                         text: trimmed,
                         font: fontFace,
-                        size: 24 // 12pt
+                        size: docFontSize
                     })],
                     spacing: {
-                        line: lineSpacing,
+                        line: docLineSpacing,
                         after: 200
-                    }
+                    },
+                    alignment: docAlignment
                 }));
             }
         });
 
+        // Sections Configuration
+        const sectionProps = {
+            properties: {
+                page: {
+                    size: {
+                        orientation: orientation === 'landscape' ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
+                    },
+                    margin: docMargins
+                }
+            },
+            children: docChildren,
+        };
+
+        // Footer with Page Numbers
+        if (addPageNumbers) {
+            sectionProps.footers = {
+                default: new Footer({
+                    children: [
+                        new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            children: [
+                                new TextRun({
+                                    children: [PageNumber.CURRENT],
+                                }),
+                            ],
+                        }),
+                    ],
+                }),
+            };
+        }
+
         const doc = new Document({
-            sections: [{
-                properties: {},
-                children: docChildren
-            }]
+            sections: [sectionProps]
         });
 
         // 4. GENERATE BUFFER
@@ -147,6 +216,6 @@ export default async function handler(request, response) {
 
 export const config = {
     api: {
-        bodyParser: true, // Enable body parsing for JSON
+        bodyParser: true,
     },
 };
