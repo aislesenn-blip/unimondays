@@ -1,20 +1,42 @@
 # Playbook Studio: Official Product Manual
 
-## 1. Value Proposition
+## 1. Value Proposition & Success Profiles
 
 **Playbook Studio** is the "Canva of Academic Documents"—a dual-engine platform designed to automate the tedious aspects of student life. We solve two specific problems:
 
-### For Playbook PRO (The Document Formatter):
-*   **The Problem:** Students spend hours fixing margins, fonts, line spacing, and Tables of Contents (TOC) to meet university standards.
-*   **The Solution:** An automated formatting engine. Upload a messy draft, and get a perfectly formatted, submission-ready document in seconds.
-
-### For Playbook X (The Presentation Engine):
-*   **The Problem:** Creating presentation slides requires design skills, alignment, and time-consuming copy-pasting.
-*   **The Solution:** "Write once. Present instantly." A text-to-presentation engine where students focus purely on content, and the system handles all design, layout, and slide creation automatically.
+### The 100% Success Profiles (Who are we saving?)
+*   **The Final-Year Student:** Struggling with Thesis/Dissertation formatting (margins, TOC, page numbers). Playbook PRO ensures compliance with one click.
+*   **The Corporate Intern:** Needs to turn messy meeting notes into a professional PowerPoint presentation in minutes. Playbook X handles the design so they can focus on the content.
+*   **The Lecturer/Teacher:** Wants to convert a syllabus or lecture notes into student handouts quickly.
 
 ---
 
-## 2. Core Capabilities & Limits
+## 2. The User Journey & Expectation Mapping
+
+How do we guarantee 100% satisfaction? By aligning expectations at every step.
+
+**Step 1: The Input (The Mess)**
+*   The user brings a raw `.docx` or `.txt` file. Content is good, but formatting is chaotic.
+
+**Step 2: Expectation Alignment (The Form)**
+*   **Playbook PRO:** The user selects a "One-Click Preset" (e.g., Academic, Corporate). This sets the mental model: "I want this to look like a Harvard paper."
+*   **Playbook X:** The user selects a Theme (e.g., Corporate Blue) and Aspect Ratio. They know exactly what visual style they will get.
+
+**Step 3: The Engine Execution (Zero Error)**
+*   **Hybrid Fallback:** Small files process instantly on the device. Large files (>2MB) are automatically routed to our secure cloud to prevent crashes.
+*   **Strict Rules:** The engine applies the *exact* font, spacing, and margin rules selected. No "AI Hallucinations"—if you asked for Times New Roman, you get Times New Roman.
+
+**Step 4: The Validation (QC Report)**
+*   Before downloading, the user sees a **Quality Control (QC) Report**.
+*   *Example:* "Formatted A4 Layout. Applied Times New Roman 12pt. Generated Table of Contents. 100% Ready."
+*   This confirms that the system did exactly what was asked.
+
+**Step 5: The Output (Perfection)**
+*   The user downloads a file that is ready for submission. No tweaking required.
+
+---
+
+## 3. Core Capabilities & Limits
 
 Playbook Studio operates on a **Hybrid Architecture** to ensure speed, privacy, and stability.
 
@@ -37,7 +59,7 @@ We use a deterministic rule-based engine to turn text into slides. There is no "
 
 ---
 
-## 3. User Guide
+## 4. User Guide
 
 ### How to Use Playbook PRO (Document Formatter)
 Choose a **"One-Click Preset"** for instant setup, or customize manually:
@@ -86,7 +108,7 @@ Automation is changing the industry.
 
 ---
 
-## 4. Expected Outputs
+## 5. Expected Outputs & The 100% Guarantee
 
 We guarantee professional, standard-compliant outputs with a **Quality Control (QC) Report** for every job.
 

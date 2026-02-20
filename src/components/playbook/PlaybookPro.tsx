@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, CheckCircle, Download, Loader2, FileType, AlertTriangle, CloudLightning, Settings2, ChevronDown, Award, Briefcase, GraduationCap } from 'lucide-react';
+import { Upload, FileText, CheckCircle, Download, Loader2, FileType, AlertTriangle, CloudLightning, ChevronDown, Award, Briefcase, GraduationCap } from 'lucide-react';
 import { Button } from '../ui/Button';
 import type { PlaybookProConfig } from '../../types/playbook';
 
@@ -206,18 +206,18 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
                                         <Button variant="ghost" size="sm" onClick={reset} className="text-slate-400 hover:text-red-500 h-8">Remove</Button>
                                     </div>
 
-                                    {/* Presets */}
+                                    {/* Presets - Mobile Optimized Grid */}
                                     <div>
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">One-Click Style Preset</label>
-                                        <div className="grid grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                             {[
                                                 { id: 'academic', name: 'Academic', icon: GraduationCap, color: 'bg-indigo-50 border-indigo-200 text-indigo-700' },
                                                 { id: 'corporate', name: 'Corporate', icon: Briefcase, color: 'bg-blue-50 border-blue-200 text-blue-700' },
                                                 { id: 'essay', name: 'Essay', icon: Award, color: 'bg-slate-50 border-slate-200 text-slate-700' }
                                             ].map((p) => (
-                                                <button key={p.id} onClick={() => applyPreset(p.id as any)} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${config.preset === p.id ? `ring-2 ring-offset-1 ${p.color} border-transparent` : 'border-slate-100 hover:border-slate-300'}`}>
-                                                    <p.icon className={`w-5 h-5 mb-1 ${config.preset === p.id ? 'text-current' : 'text-slate-400'}`} />
-                                                    <span className={`text-[10px] font-bold ${config.preset === p.id ? 'text-current' : 'text-slate-500'}`}>{p.name}</span>
+                                                <button key={p.id} onClick={() => applyPreset(p.id as any)} className={`flex flex-row sm:flex-col items-center justify-start sm:justify-center p-3 rounded-xl border-2 transition-all gap-3 sm:gap-0 ${config.preset === p.id ? `ring-2 ring-offset-1 ${p.color} border-transparent` : 'border-slate-100 hover:border-slate-300'}`}>
+                                                    <p.icon className={`w-5 h-5 mb-0 sm:mb-1 ${config.preset === p.id ? 'text-current' : 'text-slate-400'}`} />
+                                                    <span className={`text-xs sm:text-[10px] font-bold ${config.preset === p.id ? 'text-current' : 'text-slate-500'}`}>{p.name}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -272,19 +272,19 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
 
                             {/* QC Report Modal Inline */}
                             <div className="bg-slate-50 rounded-xl p-4 w-full mb-6 text-left border border-slate-100">
-                                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2"><Award className="w-3 h-3 text-emerald-500" /> Quality Control Report</h4>
+                                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2"><Award className="w-3 h-3 text-emerald-500 shrink-0" /> Quality Control Report</h4>
                                 <ul className="space-y-1">
-                                    <li className="text-xs text-slate-600 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Formatted {config.pageSize.toUpperCase()} Layout</li>
-                                    <li className="text-xs text-slate-600 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Applied {config.fontFamily} {config.fontSize}pt</li>
-                                    {config.autoToc && <li className="text-xs text-slate-600 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Generated Table of Contents</li>}
-                                    <li className="text-xs text-slate-600 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Fixed Image Alignments</li>
-                                    <li className="text-xs text-slate-600 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> 100% Ready for Submission</li>
+                                    <li className="text-xs text-slate-600 flex items-start gap-2 leading-relaxed"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shrink-0" /> Formatted {config.pageSize.toUpperCase()} Layout</li>
+                                    <li className="text-xs text-slate-600 flex items-start gap-2 leading-relaxed"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shrink-0" /> Applied {config.fontFamily} {config.fontSize}pt</li>
+                                    {config.autoToc && <li className="text-xs text-slate-600 flex items-start gap-2 leading-relaxed"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shrink-0" /> Generated Table of Contents</li>}
+                                    <li className="text-xs text-slate-600 flex items-start gap-2 leading-relaxed"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shrink-0" /> Fixed Image Alignments</li>
+                                    <li className="text-xs text-slate-600 flex items-start gap-2 leading-relaxed"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shrink-0" /> 100% Ready for Submission</li>
                                 </ul>
                             </div>
 
-                            <div className="flex gap-3 w-full">
-                                <Button onClick={() => handleDownload('docx')} className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-100"><Download className="w-4 h-4 mr-2" /> .DOCX</Button>
-                                <Button onClick={() => handleDownload('pdf')} className="flex-1 h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-lg shadow-slate-200"><Download className="w-4 h-4 mr-2" /> .PDF</Button>
+                            <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                <Button onClick={() => handleDownload('docx')} className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-100"><Download className="w-4 h-4 mr-2" /> .DOCX</Button>
+                                <Button onClick={() => handleDownload('pdf')} className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-lg shadow-slate-200"><Download className="w-4 h-4 mr-2" /> .PDF</Button>
                             </div>
                             <button onClick={reset} className="mt-6 text-xs font-bold text-slate-400 hover:text-slate-600">Format Another Document</button>
                         </motion.div>
