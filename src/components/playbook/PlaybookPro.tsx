@@ -15,9 +15,7 @@ interface PlaybookProProps {
 export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
     // State Machine
     const [status, setStatus] = useState<'idle' | 'bucket_selection' | 'editor' | 'processing' | 'success' | 'error'>('idle');
-    const [progress, setProgress] = useState(0);
     const [resultBlob, setResultBlob] = useState<Blob | null>(null);
-    const [editorContent, setEditorContent] = useState('');
     const [bucket, setBucket] = useState<'research' | 'essay' | 'assignment' | 'ppt' | null>(null);
 
     // Configuration
@@ -107,13 +105,6 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
 
     const handleProcess = () => {
         setStatus('processing');
-        setProgress(0);
-        const interval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 90) { clearInterval(interval); return 90; }
-                return prev + 10;
-            });
-        }, 100);
 
         // Get content
         const content = editorRef.current ? editorRef.current.innerText : ''; // For PPT/Simple text
@@ -136,43 +127,14 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
         } else {
             // Use ProWorker for Documents (Offline Mode)
             if (!proWorkerRef.current) return;
-            // Strip HTML for now or handle in worker. Sending raw text for robustness in this demo.
-            // But we want to keep structure.
-            // Let's send the text content but let the worker handle it.
-            // Actually, ProWorker expects { file, config }.
-            // We'll send the string as 'file'.
             proWorkerRef.current.postMessage({
-                file: htmlContent, // Send HTML, worker will need to strip it or we strip it here
+                file: htmlContent, // Send HTML
                 config,
                 isHtml: true // Flag for worker
             });
         }
     };
 
-    const handleServerProcess = async (content: string) => {
-        // Fallback or Heavy Load logic - kept for architecture completeness
-        try {
-            const response = await fetch('/api/format-document', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    html: content,
-                    config,
-                    bucket
-                })
-            });
-
-            if (!response.ok) throw new Error('Processing failed');
-
-            const blob = await response.blob();
-            setResultBlob(blob);
-            setStatus('success');
-        } catch (error) {
-            console.error(error);
-            setStatus('error');
-            alert("Processing Error: " + error);
-        }
-    };
 
     const handleDownload = (format: 'docx' | 'pdf' | 'pptx') => {
         if (!resultBlob) return;
@@ -201,7 +163,6 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
     const reset = () => {
         setResultBlob(null);
         setStatus('idle');
-        setProgress(0);
         setBucket(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
