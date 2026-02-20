@@ -1,12 +1,13 @@
 from playwright.sync_api import Page, expect, sync_playwright
 import time
-import io
-import zipfile
 
 def test_playbook_mobile_flow(page: Page):
     print("Starting verification: Playbook Mobile Journey")
 
-    # 1. Login (Mobile View)
+    page.on("dialog", lambda dialog: print(f"Dialog opened: {dialog.message}"))
+    page.on("console", lambda msg: print(f"Console: {msg.text}"))
+
+    # 1. Login
     page.goto("http://localhost:5173/login")
     try:
         if page.get_by_text("Next Step").is_visible(timeout=3000):
@@ -18,6 +19,7 @@ def test_playbook_mobile_flow(page: Page):
             page.get_by_role("button", name="Login").click()
             page.wait_for_selector("text=Essentials", timeout=15000)
     except Exception as e:
+        print(f"Login skip/error: {e}")
         pass
 
     print("Logged in")
@@ -25,16 +27,14 @@ def test_playbook_mobile_flow(page: Page):
     # 2. Navigate to Playbook Hub
     page.goto("http://localhost:5173/playbook")
     expect(page.get_by_text("Create. Automate. Done.")).to_be_visible()
-    page.screenshot(path="verification/mobile_1_hub.png")
     print("Captured Hub")
 
-    # 3. Playbook PRO Flow
+    # 3. Playbook PRO Flow (Document)
     print("Entering Playbook PRO...")
     page.locator(".group").filter(has_text="Playbook Pro").click()
-    expect(page.get_by_text("Drop Document Here")).to_be_visible()
-    page.screenshot(path="verification/mobile_2_pro_upload.png")
+    expect(page.get_by_text("Upload Document")).to_be_visible()
 
-    # Upload dummy .txt file (safer for automated testing than mocking a complex docx)
+    # Upload dummy .txt
     with page.expect_file_chooser() as fc_info:
         page.locator(".border-dashed").click()
     page.locator('input[type="file"]').set_input_files({
@@ -43,54 +43,75 @@ def test_playbook_mobile_flow(page: Page):
         "buffer": b"Chapter 1\n\nThis is a mobile test content for Playbook Pro."
     })
 
-    # Verify Config Form (Presets)
-    expect(page.get_by_text("One-Click Style Preset")).to_be_visible()
-    page.screenshot(path="verification/mobile_3_pro_config.png")
+    # Verify Bucket Selection
+    print("Verifying Buckets...")
+    expect(page.get_by_text("What are you making?")).to_be_visible()
 
-    # Select Preset
-    page.get_by_text("Academic").click()
+    # Select Research
+    page.get_by_text("Research Paper").click()
 
-    # Wait for analysis to finish (simulated 800ms in app)
-    time.sleep(1)
+    # Verify Editor
+    print("Verifying Editor...")
+    expect(page.get_by_text("Playbook Editor")).to_be_visible()
+    expect(page.get_by_text("Editing: RESEARCH")).to_be_visible()
+    # Check for Toolbar items
+    expect(page.locator("button[title='Align Left']")).to_be_visible()
 
     # Process
-    page.get_by_role("button", name="FORMAT DOCUMENT").click()
+    print("Generating...")
+    page.get_by_role("button", name="GENERATE").click()
 
-    # Verify QC Report & Mobile Layout
-    expect(page.get_by_text("Quality Control Report")).to_be_visible(timeout=5000)
-    # Check that buttons are visible and stacked (implied by layout but visible in screenshot)
-    page.screenshot(path="verification/mobile_4_pro_success.png")
+    # Verify Success
+    expect(page.get_by_text("Ready to Submit")).to_be_visible(timeout=10000)
+    expect(page.get_by_text("QC Summary")).to_be_visible()
     print("Captured PRO Success")
 
-    # Go Back
+    # Go Back / Reset
     page.goto("http://localhost:5173/playbook")
 
-    # 4. Playbook X Flow
-    print("Entering Playbook X...")
-    page.locator(".group").filter(has_text="Playbook X").click()
-    expect(page.get_by_text("Text-to-PPTX")).to_be_visible()
-    page.screenshot(path="verification/mobile_5_x_input.png")
+    # 4. Playbook PRO Flow (PPT)
+    print("Entering Playbook PRO for PPT...")
+    page.locator(".group").filter(has_text="Playbook Pro").click()
+
+    # Upload again
+    with page.expect_file_chooser() as fc_info:
+        page.locator(".border-dashed").click()
+    page.locator('input[type="file"]').set_input_files({
+        "name": "presentation.txt",
+        "mimeType": "text/plain",
+        "buffer": b"# Slide 1\nContent"
+    })
+
+    # Select Presentation Bucket
+    print("Selecting Presentation Bucket...")
+    expect(page.get_by_text("What are you making?")).to_be_visible()
+    page.get_by_text("Presentation").click()
+
+    # Check Editor specific to PPT (GENERATE SLIDES button text change in Editor?)
+    # My code: {status === 'editor' && ( <Button ...> {bucket === 'ppt' ? 'GENERATE SLIDES' : 'GENERATE DOC'} </Button> )}
+    expect(page.get_by_role("button", name="GENERATE SLIDES")).to_be_visible()
 
     # Generate
+    print("Generating Slides...")
     page.get_by_role("button", name="GENERATE SLIDES").click()
 
-    # Verify QC Report
-    expect(page.get_by_text("QC Passed")).to_be_visible(timeout=5000)
-    page.screenshot(path="verification/mobile_6_x_success.png")
-    print("Captured X Success")
+    # Verify Success and PPTX button
+    expect(page.get_by_text("Ready to Submit")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("button", name=".PPTX")).to_be_visible()
+    print("Captured PPT Success")
+
+    page.screenshot(path="verification/playbook_final_flow.png")
 
 if __name__ == "__main__":
     with sync_playwright() as p:
-        # Simulate Mobile Device (iPhone 12/13/14 size)
-        iphone = p.devices['iPhone 13']
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(**iphone)
+        # Mobile viewport
+        context = browser.new_context(viewport={"width": 375, "height": 667})
         page = context.new_page()
-
         try:
             test_playbook_mobile_flow(page)
         except Exception as e:
             print(f"Test failed: {e}")
-            page.screenshot(path="verification/mobile_failure.png")
+            page.screenshot(path="verification/failure.png")
         finally:
             browser.close()
