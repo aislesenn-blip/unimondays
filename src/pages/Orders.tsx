@@ -8,6 +8,8 @@ import { ChevronLeft, Clock, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import type { OrderItem } from '../types';
+import { RedemptionTimer } from '../components/orders/RedemptionTimer';
+import { Portal } from '../components/ui/Portal';
 
 export const Orders = () => {
   const { user } = useAuth();
@@ -156,66 +158,67 @@ export const Orders = () => {
           )}
       </div>
 
-      {/* FULL SCREEN REDEMPTION MODAL */}
-      <AnimatePresence>
-          {isRedeeming && activeCoupon && (
-              <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="fixed inset-0 z-[9999] bg-slate-900 flex items-center justify-center p-4"
-                  style={{ position: 'fixed' }} // Force fixed
-              >
-                  <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative min-h-[500px]">
-                      {/* PROOF OF LIFE: Spinning Gradient Border */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400 animate-[spin_2s_linear_infinite] opacity-100 pointer-events-none rounded-3xl"></div>
+      {/* FULL SCREEN REDEMPTION MODAL - VIA PORTAL TO ESCAPE STACKING CONTEXT */}
+      <Portal>
+          <AnimatePresence>
+              {isRedeeming && activeCoupon && (
+                  <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className="fixed inset-0 z-[9999] bg-slate-900 flex items-center justify-center p-4"
+                      style={{ position: 'fixed' }} // Force fixed
+                  >
+                      <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative min-h-[500px]">
+                          {/* PROOF OF LIFE: Spinning Gradient Border */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400 animate-[spin_2s_linear_infinite] opacity-100 pointer-events-none rounded-3xl"></div>
 
-                      {/* Content Container */}
-                      <div className="absolute inset-2 bg-white rounded-2xl z-10 flex flex-col items-center p-6 text-center space-y-5">
+                          {/* Content Container */}
+                          <div className="absolute inset-2 bg-white rounded-2xl z-10 flex flex-col items-center p-6 text-center space-y-5">
 
-                          {/* Header */}
-                          <div className="bg-emerald-50 text-emerald-600 p-3 rounded-full shadow-inner animate-pulse">
-                              <CheckCircle className="w-10 h-10" />
-                          </div>
-
-                          <div>
-                              <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">
-                                  {activeCoupon.item.name}
-                              </h2>
-                              <div className="flex items-center justify-center gap-2 mt-2">
-                                 <span className="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
-                                 <p className="text-red-500 font-bold text-xs uppercase tracking-widest">Live Ticket</p>
+                              {/* Header */}
+                              <div className="bg-emerald-50 text-emerald-600 p-3 rounded-full shadow-inner animate-pulse">
+                                  <CheckCircle className="w-10 h-10" />
                               </div>
-                          </div>
 
-                          {/* Live Clock Card */}
-                          <div className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200">
-                              <p className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Validated At</p>
-                              <p className="text-2xl font-mono font-bold text-slate-900 tabular-nums">
-                                  {currentTime.toLocaleTimeString()}
+                              <div>
+                                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">
+                                      {activeCoupon.item.name}
+                                  </h2>
+                                  <div className="flex items-center justify-center gap-2 mt-2">
+                                     <span className="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+                                     <p className="text-red-500 font-bold text-xs uppercase tracking-widest">Live Ticket</p>
+                                  </div>
+                              </div>
+
+                              {/* Live Clock Card */}
+                              <div className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                  <p className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Validated At</p>
+                                  <p className="text-2xl font-mono font-bold text-slate-900 tabular-nums">
+                                      {currentTime.toLocaleTimeString()}
+                                  </p>
+                                  <p className="text-xs text-slate-500 font-medium">
+                                      {currentTime.toLocaleDateString()}
+                                  </p>
+                              </div>
+
+                              {/* Millisecond Timer */}
+                              <div className="flex-1 flex flex-col items-center justify-center">
+                                  <RedemptionTimer
+                                    initialTime={15.00}
+                                    onComplete={handleTimerComplete}
+                                  />
+                              </div>
+
+                              <p className="text-[10px] text-slate-400 max-w-[200px] leading-tight">
+                                  This screen must be moving. Static screenshots are invalid.
                               </p>
-                              <p className="text-xs text-slate-500 font-medium">
-                                  {currentTime.toLocaleDateString()}
-                              </p>
                           </div>
-
-                          {/* Millisecond Timer */}
-                          <div className="flex-1 flex flex-col items-center justify-center">
-                              {/* @ts-ignore */}
-                              <RedemptionTimer
-                                initialTime={15.00}
-                                onComplete={handleTimerComplete}
-                              />
-                          </div>
-
-                          <p className="text-[10px] text-slate-400 max-w-[200px] leading-tight">
-                              This screen must be moving. Static screenshots are invalid.
-                          </p>
                       </div>
-                  </div>
-              </motion.div>
-          )}
-      </AnimatePresence>
+                  </motion.div>
+              )}
+          </AnimatePresence>
+      </Portal>
     </div>
   );
 };

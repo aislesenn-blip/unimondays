@@ -14,9 +14,10 @@ export const Landing = () => {
         {/* Background Image */}
         <div className="absolute inset-0 z-0">
           <img
-            src="https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&q=80&w=2070"
+            src="https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&q=60&w=1200"
             alt="University Campus Life"
             className="w-full h-full object-cover brightness-[0.4]"
+            loading="eager"
           />
         </div>
 
