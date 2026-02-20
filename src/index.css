@@ -1,43 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-primary: #10B981; /* Emerald-500 equivalent */
-  --color-primary-foreground: #ffffff;
-  --color-accent: #34D399; /* Emerald-400 */
+  --color-osprey-navy: #0f172a; /* Slate 900 */
+  --color-osprey-dark: #1e293b; /* Slate 800 */
+  --color-osprey-slate: #64748b; /* Slate 500 */
+  --color-osprey-light: #f8fafc; /* Slate 50 */
+  --color-osprey-accent: #0ea5e9; /* Sky 500 */
 }
 
-:root {
-  --background: var(--color-slate-50);
-  --foreground: var(--color-slate-900);
-
-  --primary: var(--color-primary);
-  --primary-foreground: var(--color-primary-foreground);
-
-  --muted: var(--color-slate-500);
-  --border: var(--color-slate-200);
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  }
 }
 
-body {
-  font-family: var(--font-sans);
-  background-color: var(--background);
-  color: var(--foreground);
-  @apply antialiased tracking-tight bg-slate-50 text-slate-900;
+/* Scrollbar styling for a premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
-
-/* Force Light Mode - Override any system preference or previous dark classes */
-.dark {
-  color-scheme: light;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-/* Utility classes for the new brand green */
-.text-brand-green {
-  @apply text-emerald-500;
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
 }
-.bg-brand-green {
-  @apply bg-emerald-500;
-}
-.border-brand-green {
-  @apply border-emerald-500;
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
 }
