@@ -9,7 +9,7 @@ def run():
 
         try:
             print("Navigating to Login...")
-            page.goto("http://localhost:3000/login")
+            page.goto("http://localhost:5173/login")
             page.wait_for_selector("text=OSPREY")
             page.screenshot(path="verification/01_login.png")
 
