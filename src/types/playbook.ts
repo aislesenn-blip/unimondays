@@ -1,6 +1,9 @@
 // src/types/playbook.ts
 
 export interface PlaybookProConfig {
+    // 0. Preset (Master Switch)
+    preset?: 'academic' | 'corporate' | 'essay' | 'custom';
+
     // 1. Document Structure
     pageSize: 'a4' | 'letter';
     orientation: 'portrait' | 'landscape';
@@ -35,5 +38,15 @@ export interface PlaybookXConfig {
     addSlideNumbers: boolean;
 
     // 4. Export
-    exportFormat: 'pptx'; // Future: 'pdf'
+    exportFormat: 'pptx' | 'pdf';
+    includeHandouts: boolean;
+}
+
+export interface QCReport {
+    pageCount?: number;
+    slideCount?: number;
+    imageCount?: number;
+    tocGenerated: boolean;
+    appliedRules: string[];
+    status: 'success' | 'error';
 }

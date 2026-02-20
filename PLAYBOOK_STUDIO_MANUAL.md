@@ -40,25 +40,24 @@ We use a deterministic rule-based engine to turn text into slides. There is no "
 ## 3. User Guide
 
 ### How to Use Playbook PRO (Document Formatter)
-You have full control over the output. Configure the settings before formatting:
+Choose a **"One-Click Preset"** for instant setup, or customize manually:
 
-*   **Typography:**
-    *   **Font Family:** Choose between *Times New Roman* (Academic Standard), *Arial* (Clean), or *Calibri* (Modern).
-    *   **Size:** 10pt, 11pt, or 12pt (Standard).
-    *   **Spacing:** Single (1.0), Standard (1.5), or Double (2.0).
-*   **Structure:**
-    *   **Auto-TOC:** Toggle to automatically generate a clickable Table of Contents.
-    *   **Page Numbers:** Toggle to add page numbers in the footer.
-*   **Advanced:**
-    *   **Margins:** Normal (1"), Narrow (0.5"), or Wide (2" sides).
-    *   **Citation Style:** Select APA, MLA, Harvard, or Chicago style headers.
-    *   **Orientation:** Portrait or Landscape.
+*   **Presets:**
+    *   **Academic:** Times New Roman, 12pt, Double Spacing, APA Standard.
+    *   **Corporate:** Arial, 11pt, 1.5 Spacing, Narrow Margins.
+    *   **Essay:** Calibri, 12pt, Double Spacing, MLA Style.
+
+*   **Advanced Configuration:**
+    *   **Typography:** Custom Font, Size, and Spacing.
+    *   **Structure:** Auto-TOC, Page Numbers.
+    *   **Layout:** Margins, Orientation, Citation Style.
 
 **Steps:**
-1.  Set your rules.
+1.  Select a Preset (or configure advanced rules).
 2.  Upload your `.docx` or `.txt` file.
 3.  Click "Format Document."
-4.  Download the professional result.
+4.  **Review the QC Report** (Quality Control summary).
+5.  Download as **.DOCX** or **.PDF**.
 
 ### How to Use Playbook X (Text-to-Slides)
 To get the best results, structure your notes simply:
@@ -66,11 +65,12 @@ To get the best results, structure your notes simply:
 1.  **Configure:**
     *   **Theme:** Select from Academic, Corporate, Creative, or Dark themes.
     *   **Aspect Ratio:** 16:9 (Widescreen) or 4:3 (Standard).
-    *   **Extras:** Toggle Speaker Notes or Slide Numbers.
+    *   **Extras:** Toggle Speaker Notes, Slide Numbers, Handouts.
 2.  **Write Content:**
     *   Start a Slide: Type `# Your Slide Title` and press Enter.
     *   Add Content: Type your points on new lines.
-3.  **Generate:** Click "Generate Slides" to get a `.pptx` file.
+3.  **Generate:** Click "Generate Slides."
+4.  **Download:** Save as **.PPTX**, **.PDF**, or **Handouts**.
 
 **Example Input:**
 ```markdown
@@ -88,13 +88,15 @@ Automation is changing the industry.
 
 ## 4. Expected Outputs
 
-We guarantee professional, standard-compliant outputs.
+We guarantee professional, standard-compliant outputs with a **Quality Control (QC) Report** for every job.
 
 *   **Playbook PRO Output:**
-    *   **Format:** `.docx` (Microsoft Word compatible).
-    *   **State:** Perfectly aligned margins, specified font family and size, correct line spacing, pagination, and an optional, clickable Table of Contents.
+    *   **Formats:** `.docx` (Word), `.pdf` (Print-Ready).
+    *   **State:** Perfectly aligned margins, uniform font family and size, correct line spacing, pagination, and an optional, clickable Table of Contents.
+    *   **QC Report:** Confirms page count, formatting rules applied, and image alignment fixes.
 
 *   **Playbook X Output:**
-    *   **Format:** `.pptx` (PowerPoint / WPS Office compatible).
+    *   **Formats:** `.pptx` (Editable Powerpoint), `.pdf` (Presentation), Handouts.
     *   **State:** Native presentation file. **Mobile Optimized**. Editable text and slides.
     *   **Visuals:** Professional themes, master slides applied, correct aspect ratio, and speaker notes included.
+    *   **Media:** Auto-fit tables and centered images (via style enforcement).

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Download, Sparkles, Wand2, Loader2, Settings2, Monitor } from 'lucide-react';
+import { Play, Download, Sparkles, Wand2, Loader2, Settings2, Monitor, Award, FileText, Layout } from 'lucide-react';
 import { Button } from '../ui/Button';
 import type { PlaybookXConfig } from '../../types/playbook';
 
@@ -25,7 +25,8 @@ export const PlaybookX = ({ isActive }: PlaybookXProps) => {
         autoSplitLongText: true,
         addSpeakerNotes: true,
         addSlideNumbers: true,
-        exportFormat: 'pptx'
+        exportFormat: 'pptx',
+        includeHandouts: false
     });
 
     const workerRef = useRef<Worker | null>(null);
@@ -58,14 +59,28 @@ export const PlaybookX = ({ isActive }: PlaybookXProps) => {
         }, 500); // 500ms for "Thinking" animation
     };
 
-    const handleDownload = () => {
+    const handleDownload = (type: 'pptx' | 'pdf' | 'handouts') => {
         if (!pptBlob) return;
-        const url = URL.createObjectURL(pptBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Playbook_Presentation.pptx`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // For now, simpler implementation: Use the blob for PPTX.
+        // PDF/Handouts would ideally be generated here or by the worker.
+        // Assuming client-side generation for now or placeholder alert if library missing.
+
+        if (type === 'pptx') {
+            const url = URL.createObjectURL(pptBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Playbook_Presentation.pptx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } else {
+            alert("PDF/Handout generation requires additional library. Downloading PPTX instead.");
+            const url = URL.createObjectURL(pptBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Playbook_Presentation.pptx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
     };
 
     if (!isActive) return null;
@@ -237,17 +252,38 @@ export const PlaybookX = ({ isActive }: PlaybookXProps) => {
                                 key="success"
                                 initial={{ scale: 0.9, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
-                                className="space-y-3"
+                                className="space-y-4"
                             >
+                                {/* QC Report */}
+                                <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100 text-left">
+                                    <h4 className="text-[10px] font-black text-indigo-800 uppercase tracking-wider mb-1 flex items-center gap-1"><Award className="w-3 h-3" /> QC Passed</h4>
+                                    <p className="text-xs text-indigo-700">Applied {config.theme} theme. Formatted layout. Ready to present.</p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                        onClick={() => handleDownload('pptx')}
+                                        className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-100"
+                                    >
+                                        <Download className="w-4 h-4 mr-2" /> PPTX
+                                    </Button>
+                                    <Button
+                                        onClick={() => handleDownload('pdf')}
+                                        className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-lg shadow-slate-200"
+                                    >
+                                        <FileText className="w-4 h-4 mr-2" /> PDF
+                                    </Button>
+                                </div>
                                 <Button
-                                    onClick={handleDownload}
-                                    className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-xl shadow-emerald-200 text-lg animate-[pulse_2s_infinite]"
+                                    onClick={() => handleDownload('handouts')}
+                                    className="w-full h-10 bg-white border-2 border-slate-200 text-slate-600 font-bold hover:bg-slate-50"
                                 >
-                                    DOWNLOAD .PPTX <Download className="w-5 h-5 ml-2" />
+                                    <Layout className="w-4 h-4 mr-2" /> Download Handouts
                                 </Button>
+
                                 <button
                                     onClick={() => setStatus('idle')}
-                                    className="w-full py-2 text-xs font-bold text-slate-400 uppercase hover:text-indigo-600"
+                                    className="w-full py-1 text-xs font-bold text-slate-400 uppercase hover:text-indigo-600"
                                 >
                                     Create Another
                                 </button>

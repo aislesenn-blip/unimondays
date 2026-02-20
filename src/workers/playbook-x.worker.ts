@@ -108,7 +108,6 @@ self.onmessage = async (e: MessageEvent) => {
                 if (i > 0) title += " (cont.)";
 
                 // RULE: Column Rule (Heuristic: > 5 bullets = 2 cols, IF allowed by visual space)
-                // If aspect ratio is 4:3, maybe stricter? keeping simple for now.
                 const layout = chunk.length >= 5 ? '2-col' : '1-col';
                 finalSlides.push({ title, bullets: chunk, layout });
             }
@@ -176,7 +175,14 @@ self.onmessage = async (e: MessageEvent) => {
             type: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         });
 
-        self.postMessage({ status: 'success', blob: finalBlob });
+        // 7. STATS for QC
+        const stats = {
+            slideCount: finalSlides.length,
+            layout: config.aspectRatio,
+            theme: config.theme
+        };
+
+        self.postMessage({ status: 'success', blob: finalBlob, stats });
 
     } catch (e: any) {
         console.error(e);
