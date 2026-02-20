@@ -1,14 +1,25 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
-import { Bell, LogOut } from 'lucide-react';
+import { Bell, LogOut, Menu } from 'lucide-react';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/90 backdrop-blur-sm px-6 shadow-sm">
       <div className="flex items-center gap-4">
+        <button
+          type="button"
+          className="md:hidden -ml-2 p-2 text-slate-500 hover:text-slate-900 focus:outline-none"
+          onClick={onMenuClick}
+        >
+          <Menu className="h-6 w-6" />
+        </button>
         <h2 className="text-lg font-semibold text-slate-800">
           Welcome back, {user?.name.split(' ')[0]}
         </h2>
