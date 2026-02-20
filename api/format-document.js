@@ -1,6 +1,6 @@
 // api/format-document.js
 import mammoth from 'mammoth';
-import { Document, Packer, Paragraph, TextRun } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, TableOfContents } from 'docx';
 
 export default async function handler(request, response) {
     if (request.method !== 'POST') {
@@ -8,56 +8,126 @@ export default async function handler(request, response) {
     }
 
     try {
-        const chunks = [];
-        for await (const chunk of request) {
-            chunks.push(chunk);
-        }
-        const buffer = Buffer.concat(chunks);
+        // Read JSON Body
+        // Vercel serverless functions usually parse JSON body automatically if Content-Type is application/json
+        // but let's be safe and read the stream if needed, or use request.body
+        let body = request.body;
 
-        if (!buffer || buffer.length === 0) {
+        if (!body || typeof body !== 'object') {
+            // Fallback: Read stream if body is not parsed
+            const chunks = [];
+            for await (const chunk of request) {
+                chunks.push(chunk);
+            }
+            const buffer = Buffer.concat(chunks);
+            body = JSON.parse(buffer.toString());
+        }
+
+        const { file, config } = body;
+
+        if (!file) {
              return response.status(400).json({ message: 'No file provided' });
         }
 
+        const fileBuffer = Buffer.from(file, 'base64');
+
         // 1. EXTRACT RAW TEXT (using mammoth for reliability)
-        const result = await mammoth.extractRawText({ buffer: buffer });
+        const result = await mammoth.extractRawText({ buffer: fileBuffer });
         const text = result.value;
 
         if (!text) {
              return response.status(400).json({ message: 'Could not extract text from document.' });
         }
 
-        // 2. PARSE CONTENT (Simplified rule-based parser)
+        // 2. PARSE CONFIG & CONTENT
+        const { spacing = '2.0', font = 'times', toc = true } = config || {};
+
+        // Font Mapping
+        const fontFace = font === 'arial' ? 'Arial' : 'Times New Roman';
+
+        // Spacing Mapping (docx uses "twips", 240 = 1 line)
+        let lineSpacing = 480; // Default 2.0
+        if (spacing === '1.0') lineSpacing = 240;
+        if (spacing === '1.5') lineSpacing = 360;
+
         const paragraphs = text.split('\n').filter(p => p.trim().length > 0);
 
         // 3. REBUILD WITH DOCX
+        const docChildren = [];
+
+        // Title Page / Header
+        docChildren.push(
+            new Paragraph({
+                children: [
+                    new TextRun({
+                        text: "Formatted by Playbook Pro (Secure Cloud)",
+                        bold: true,
+                        size: 32, // 16pt
+                        font: fontFace
+                    })
+                ],
+                spacing: { after: 400 }
+            })
+        );
+
+        // Auto-TOC
+        if (toc) {
+            docChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: "Table of Contents",
+                            bold: true,
+                            size: 28, // 14pt
+                            font: fontFace
+                        })
+                    ],
+                    heading: HeadingLevel.HEADING_1, // To ensure it doesn't break structure, though usually TOC is separate
+                    spacing: { after: 200 }
+                }),
+                new TableOfContents("Summary", {
+                    hyperlink: true,
+                    headingStyleRange: "1-3",
+                }),
+                new Paragraph({
+                    children: [],
+                    pageBreakBefore: true
+                })
+            );
+        }
+
+        // Content Processing
+        // Simple Heuristic: If line is short and looks like a title, make it a Heading
+        // Otherwise, paragraph.
+        paragraphs.forEach(p => {
+            const trimmed = p.trim();
+            const isHeading = trimmed.length < 60 && !trimmed.endsWith('.') && /^[A-Z]/.test(trimmed);
+
+            if (isHeading) {
+                 docChildren.push(new Paragraph({
+                    text: trimmed,
+                    heading: HeadingLevel.HEADING_1,
+                    spacing: { before: 240, after: 120 }
+                }));
+            } else {
+                docChildren.push(new Paragraph({
+                    children: [new TextRun({
+                        text: trimmed,
+                        font: fontFace,
+                        size: 24 // 12pt
+                    })],
+                    spacing: {
+                        line: lineSpacing,
+                        after: 200
+                    }
+                }));
+            }
+        });
+
         const doc = new Document({
             sections: [{
                 properties: {},
-                children: [
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: "Formatted by Playbook Pro (Secure Cloud)",
-                                bold: true,
-                                size: 32, // 16pt
-                                font: "Arial"
-                            })
-                        ],
-                        spacing: { after: 400 }
-                    }),
-                    // Add extracted paragraphs
-                    ...paragraphs.map(p => new Paragraph({
-                        children: [new TextRun({
-                            text: p.trim(),
-                            font: "Times New Roman",
-                            size: 24 // 12pt
-                        })],
-                        spacing: {
-                            line: 480, // Double spacing (240 * 2)
-                            after: 200
-                        }
-                    }))
-                ]
+                children: docChildren
             }]
         });
 
@@ -77,6 +147,6 @@ export default async function handler(request, response) {
 
 export const config = {
     api: {
-        bodyParser: false, // We handle the raw stream
+        bodyParser: true, // Enable body parsing for JSON
     },
 };

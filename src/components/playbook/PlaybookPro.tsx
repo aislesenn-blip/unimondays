@@ -102,9 +102,25 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
         }, 200);
 
         try {
+            // Convert file to base64
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+
+            await new Promise((resolve) => {
+                reader.onload = resolve;
+            });
+
+            const base64File = (reader.result as string).split(',')[1];
+
             const response = await fetch('/api/format-document', {
                 method: 'POST',
-                body: file
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    file: base64File,
+                    config: config
+                })
             });
 
             if (!response.ok) throw new Error('Cloud processing failed');
