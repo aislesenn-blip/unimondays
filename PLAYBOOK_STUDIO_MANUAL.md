@@ -26,7 +26,7 @@ Playbook Studio operates on a **Hybrid Architecture** to ensure speed, privacy, 
 ### B. The Hybrid Fallback (Cloud Mode)
 *   **Heavy Duty Operation:** If a document exceeds **2MB**, the system automatically detects the load risk.
 *   **Crash Prevention:** To prevent low-end mobile devices from crashing (Out-Of-Memory errors), large files are routed to our secure **Serverless Backend**.
-*   **Capability:** The backend extracts the content and rebuilds the document from scratch, applying all your selected formatting rules (Font, Spacing, TOC) with server-grade power, then returns the file instantly.
+*   **Capability:** The backend extracts the content and rebuilds the document from scratch, **strictly applying all your selected configuration options** (Margins, Font Size, Citation Style, etc.) with server-grade power.
 
 ### C. Playbook X "Smart Simplification Layer"
 We use a deterministic rule-based engine to turn text into slides. There is no "AI Hallucination." It follows strict logic:
@@ -39,14 +39,38 @@ We use a deterministic rule-based engine to turn text into slides. There is no "
 
 ## 3. User Guide
 
+### How to Use Playbook PRO (Document Formatter)
+You have full control over the output. Configure the settings before formatting:
+
+*   **Typography:**
+    *   **Font Family:** Choose between *Times New Roman* (Academic Standard), *Arial* (Clean), or *Calibri* (Modern).
+    *   **Size:** 10pt, 11pt, or 12pt (Standard).
+    *   **Spacing:** Single (1.0), Standard (1.5), or Double (2.0).
+*   **Structure:**
+    *   **Auto-TOC:** Toggle to automatically generate a clickable Table of Contents.
+    *   **Page Numbers:** Toggle to add page numbers in the footer.
+*   **Advanced:**
+    *   **Margins:** Normal (1"), Narrow (0.5"), or Wide (2" sides).
+    *   **Citation Style:** Select APA, MLA, Harvard, or Chicago style headers.
+    *   **Orientation:** Portrait or Landscape.
+
+**Steps:**
+1.  Set your rules.
+2.  Upload your `.docx` or `.txt` file.
+3.  Click "Format Document."
+4.  Download the professional result.
+
 ### How to Use Playbook X (Text-to-Slides)
 To get the best results, structure your notes simply:
 
-1.  **Start a Slide:** Type `# Your Slide Title` and press Enter.
-2.  **Add Content:** Type your points on new lines.
-    *   *Short lines* become bullet points.
-    *   *Long paragraphs* are auto-summarized into bullets.
-3.  **Repeat:** Type `# Next Slide Title` to start a new slide.
+1.  **Configure:**
+    *   **Theme:** Select from Academic, Corporate, Creative, or Dark themes.
+    *   **Aspect Ratio:** 16:9 (Widescreen) or 4:3 (Standard).
+    *   **Extras:** Toggle Speaker Notes or Slide Numbers.
+2.  **Write Content:**
+    *   Start a Slide: Type `# Your Slide Title` and press Enter.
+    *   Add Content: Type your points on new lines.
+3.  **Generate:** Click "Generate Slides" to get a `.pptx` file.
 
 **Example Input:**
 ```markdown
@@ -60,14 +84,6 @@ Underground mining reaches deep deposits.
 Automation is changing the industry.
 ```
 
-### How to Use Playbook PRO
-1.  **Select Your Settings:** Choose your preferred Font (Arial/Times), Spacing (1.5/2.0), and toggle Auto-TOC.
-2.  **Upload:** Drop your `.docx` or `.txt` file.
-3.  **Format:** Click "Format Document."
-    *   *Small files* process instantly on your phone.
-    *   *Large files* will prompt you to "Route to Secure Cloud" for stability.
-4.  **Download:** Get your clean `.docx` file immediately.
-
 ---
 
 ## 4. Expected Outputs
@@ -76,9 +92,9 @@ We guarantee professional, standard-compliant outputs.
 
 *   **Playbook PRO Output:**
     *   **Format:** `.docx` (Microsoft Word compatible).
-    *   **State:** Perfectly aligned margins, uniform font (Times New Roman or Arial), correct line spacing (1.0, 1.5, or 2.0), and an optional, clickable Table of Contents.
+    *   **State:** Perfectly aligned margins, specified font family and size, correct line spacing, pagination, and an optional, clickable Table of Contents.
 
 *   **Playbook X Output:**
     *   **Format:** `.pptx` (PowerPoint / WPS Office compatible).
-    *   **State:** Native presentation file. **Mobile Optimized** (MIME type fixed to open directly in apps, not as a ZIP). Editable text and slides.
-    *   **Visuals:** Clean, professional themes (Academic White, Corporate Blue, Minimalist Dark).
+    *   **State:** Native presentation file. **Mobile Optimized**. Editable text and slides.
+    *   **Visuals:** Professional themes, master slides applied, correct aspect ratio, and speaker notes included.

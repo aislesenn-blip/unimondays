@@ -31,7 +31,6 @@ def test_playbook_ecosystem(page: Page):
     print("Navigated to Playbook")
 
     # 3. Verify Playbook Hub
-    # Check for the new Hub Header
     expect(page.get_by_text("Create. Automate. Done.")).to_be_visible()
 
     # Check for the two cards
@@ -39,14 +38,66 @@ def test_playbook_ecosystem(page: Page):
     expect(page.get_by_text("Playbook X", exact=False).first).to_be_visible()
     print("Hub Verified")
 
-    # 4. Click Playbook X Card
-    # We can select by text inside the card
+    # 4. Verify Playbook Pro Form
+    print("Clicking Playbook Pro...")
+    page.locator(".group").filter(has_text="Playbook Pro").click()
+    expect(page.get_by_text("Drop Document Here")).to_be_visible()
+
+    # Upload a dummy file to trigger the form
+    # Using a more specific selector for the drop zone
+    # The drop zone has the class "border-dashed"
+    with page.expect_file_chooser() as fc_info:
+        page.locator(".border-dashed").click()
+    file_chooser = fc_info.value
+    # Create a dummy file in memory or use a simple text file
+    page.evaluate("() => { const file = new File(['hello'], 'test.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }); const dt = new DataTransfer(); dt.items.add(file); window._testFile = dt.files; }")
+
+    # Actually, Playwright has set_input_files
+    # We need to target the hidden input
+    page.locator('input[type="file"]').set_input_files({
+        "name": "test.docx",
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "buffer": b"dummy content"
+    })
+
+    # Now verify the form appears
+    expect(page.get_by_text("Formatting Rules")).to_be_visible()
+
+    # Verify Dropdowns exist (Font, Size, Spacing)
+    # Note: Select elements might be hidden or styled, but playwright can usually find them if they are select tags
+    # Assuming standard selects based on code:
+    # 3 selects visible initially
+    selects = page.locator("select")
+    # Expect at least 3 visible (Font, Size, Spacing)
+    # count = selects.count() # might be flaky if animations
+
+    # Interact with Advanced Settings
+    print("Expanding Advanced Settings...")
+    page.get_by_text("Show Advanced").click()
+    expect(page.get_by_text("Margins")).to_be_visible()
+    expect(page.get_by_text("Citation Style")).to_be_visible()
+
+    print("Playbook Pro Form Verified")
+
+    # Go back to Hub (Force navigation to ensure clean state)
+    page.goto("http://localhost:5173/playbook")
+    expect(page.get_by_text("Create. Automate. Done.")).to_be_visible()
+
+    # 5. Click Playbook X Card
     print("Clicking Playbook X...")
-    # Using a more specific selector to avoid the header
     page.locator(".group").filter(has_text="Playbook X").click()
 
-    # 5. Verify Playbook X Interface
+    # 6. Verify Playbook X Interface
     expect(page.get_by_text("Text-to-PPTX")).to_be_visible()
+
+    # Verify New Config Options
+    expect(page.get_by_text("Aspect Ratio")).to_be_visible()
+    expect(page.get_by_text("Advanced Rules")).to_be_visible()
+
+    # Interact with Advanced
+    print("Expanding Advanced Rules...")
+    page.get_by_text("Configure").click()
+    expect(page.get_by_text("Speaker Notes")).to_be_visible()
 
     # Check for new placeholder text/rules
     textarea = page.locator("textarea")
@@ -57,9 +108,8 @@ def test_playbook_ecosystem(page: Page):
     else:
         print(f"Warning: Placeholder text mismatch: {placeholder}")
 
-    # 6. Generate Slides
+    # 7. Generate Slides
     print("Clicking Generate...")
-    # The button text changed to "GENERATE SLIDES"
     page.get_by_role("button", name="GENERATE SLIDES").click()
 
     # Check for Generating state
