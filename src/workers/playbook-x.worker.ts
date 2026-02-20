@@ -58,8 +58,8 @@ self.onmessage = async (e: MessageEvent) => {
                 // Assuming ~200 chars is "3 lines" visually on a slide
                 if (trimmed.length > 200) {
                      // Split by sentences to make bullets
-                     const sentences = trimmed.match(/[^.!?]+[.!?]+/g) || [trimmed];
-                     currentBullets.push(...sentences.map(s => s.trim()));
+                     const sentences: string[] = trimmed.match(/[^.!?]+[.!?]+/g) || [trimmed];
+                     currentBullets.push(...sentences.map((s: string) => s.trim()));
                 } else {
                     currentBullets.push(trimmed);
                 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, CheckCircle, Download, Loader2, FileType } from 'lucide-react';
+import { Upload, FileText, CheckCircle, Download, Loader2, FileType, AlertTriangle, CloudLightning } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 // Worker Import (Vite compatible)
@@ -11,11 +11,14 @@ interface PlaybookProProps {
 }
 
 export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
-    // State Machine: 'idle' | 'analyzing' | 'processing' | 'success' | 'error'
-    const [status, setStatus] = useState<'idle' | 'analyzing' | 'processing' | 'success' | 'error'>('idle');
+    // State Machine: 'idle' | 'analyzing' | 'processing' | 'success' | 'error' | 'large_file_warning'
+    const [status, setStatus] = useState<'idle' | 'analyzing' | 'processing' | 'success' | 'error' | 'large_file_warning'>('idle');
     const [file, setFile] = useState<File | null>(null);
     const [progress, setProgress] = useState(0);
     const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+
+    // Hybrid Fallback Config
+    const MAX_LOCAL_SIZE = 2 * 1024 * 1024; // 2MB Limit
 
     // Configuration
     const [config, setConfig] = useState({
@@ -49,12 +52,16 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
-            setFile(e.target.files[0]);
+            const selectedFile = e.target.files[0];
+            setFile(selectedFile);
             setStatus('analyzing');
 
-            // Simulate "Apple-like" seamless analysis
             setTimeout(() => {
-                setStatus('idle'); // Back to idle but with file selected
+                if (selectedFile.size > MAX_LOCAL_SIZE) {
+                    setStatus('large_file_warning');
+                } else {
+                    setStatus('idle');
+                }
             }, 800);
         }
     };
@@ -65,7 +72,7 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
         setStatus('processing');
         setProgress(0);
 
-        // Simulate progress for UX (since worker is async but might be too fast or opaque)
+        // Simulate progress for UX
         const interval = setInterval(() => {
             setProgress(prev => {
                 if (prev >= 90) {
@@ -81,6 +88,39 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
             file,
             config
         });
+    };
+
+    const handleServerProcess = async () => {
+        if (!file) return;
+
+        setStatus('processing');
+        setProgress(0);
+
+        // Simulate upload progress
+        const interval = setInterval(() => {
+            setProgress(prev => (prev < 80 ? prev + 5 : prev));
+        }, 200);
+
+        try {
+            const response = await fetch('/api/format-document', {
+                method: 'POST',
+                body: file
+            });
+
+            if (!response.ok) throw new Error('Cloud processing failed');
+
+            const blob = await response.blob();
+            clearInterval(interval);
+            setProgress(100);
+            setResultBlob(blob);
+            setStatus('success');
+
+        } catch (error) {
+            console.error(error);
+            clearInterval(interval);
+            setStatus('error');
+            alert("Cloud Processing Error: Please try a smaller file.");
+        }
     };
 
     const handleDownload = () => {
@@ -121,6 +161,38 @@ export const PlaybookPro = ({ isActive }: PlaybookProProps) => {
             <div className="flex-1 p-8 flex flex-col items-center justify-center relative">
 
                 <AnimatePresence mode="wait">
+
+                    {/* LARGE FILE WARNING MODAL (HYBRID FALLBACK) */}
+                    {status === 'large_file_warning' && (
+                        <motion.div
+                            key="warning"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center"
+                        >
+                            <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mb-6 shadow-lg shadow-amber-100 animate-pulse">
+                                <AlertTriangle className="w-10 h-10" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-2">Large Document Detected</h3>
+                            <p className="text-slate-500 text-sm mb-8 max-w-sm">
+                                To prevent device slowdown, we need to route this document to our secure high-speed servers.
+                            </p>
+
+                            <div className="space-y-3 w-full max-w-xs">
+                                <Button
+                                    onClick={handleServerProcess}
+                                    className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-xl shadow-amber-200 flex items-center justify-center gap-2"
+                                >
+                                    <CloudLightning className="w-5 h-5" />
+                                    Route to Secure Cloud
+                                </Button>
+                                <button onClick={reset} className="text-xs font-bold text-slate-400 uppercase hover:text-slate-600">
+                                    Cancel
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
 
                     {/* IDLE / FILE SELECTED STATE */}
                     {(status === 'idle' || status === 'analyzing') && (
