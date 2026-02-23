@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  role      String   // 'lecturer', 'student'
+  tier      String   @default("Lite") // 'Lite', 'Pro', 'X'
+  quota     Int      @default(100) // Script quota
+  used      Int      @default(0)   // Used scripts this month
+  createdAt DateTime @default(now())
+
+  classes   Classes[]
+  quizzes   Quiz[]
+}
+
+model Classes {
+  id        Int      @id @default(autoincrement())
+  name      String
+  lecturerId Int
+  lecturer  User     @relation(fields: [lecturerId], references: [id])
+  students  String?  // JSON list of student IDs
+  quizzes   Quiz[]
+}
+
+model Quiz {
+  id        Int      @id @default(autoincrement())
+  title     String
+  code      String   @unique
+  lecturerId Int
+  lecturer  User     @relation(fields: [lecturerId], references: [id])
+  classId   Int?
+  class     Classes? @relation(fields: [classId], references: [id])
+
+  deadline  DateTime?
+  timer     Int?     // Minutes per student
+  isUpload  Boolean  @default(true) // Upload or Online Mode
+  rubric    String?  // Grading Rubric text
+
+  submissions Submission[]
+}
+
+model Submission {
+  id        Int      @id @default(autoincrement())
+  quizId    Int
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+
+  studentRegNo String
+  studentName  String?
+  filePath     String? // Path to PDF/Image
+  status       String  @default("pending") // pending, processing, graded, flagged
+
+  submittedAt  DateTime @default(now())
+
+  score     Score?
+  audit     AuditLog[]
+  appeals   Appeals[]
+}
+
+model Score {
+  id           Int        @id @default(autoincrement())
+  submissionId Int        @unique
+  submission   Submission @relation(fields: [submissionId], references: [id])
+
+  totalMarks   Float
+  breakdown    String     // JSON string of question breakdown
+  remarks      String?
+  confidence   Float?
+}
+
+model AuditLog {
+  id           Int        @id @default(autoincrement())
+  submissionId Int
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  action       String     // 'OCR', 'Grading', 'Flag'
+  details      String?
+  timestamp    DateTime   @default(now())
+}
+
+model Appeals {
+  id           Int        @id @default(autoincrement())
+  submissionId Int
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  reason       String
+  status       String     @default("open")
+  response     String?
+}
+
+// Helper model to track used codes if needed, though Quiz.code covers most.
+model QuizCode {
+  id     Int    @id @default(autoincrement())
+  code   String @unique
+  quizId Int
+}

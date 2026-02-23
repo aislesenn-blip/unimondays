@@ -1,27 +1,30 @@
-# Playbook Ecosystem - Agent Instructions
+# Playbook Ecosystem - Enterprise Edition (Pure Next.js)
 
-## Running the Project
+## Architecture
+-   **Frontend**: Next.js 14 (App Router).
+-   **Backend**: Next.js API Routes (`src/app/api/...`).
+-   **Database**: SQLite (Dev) -> Supabase Postgres (Prod). Managed via Prisma.
+-   **AI Engine**:
+    -   **OCR**: Gemini 1.5 Flash (`src/lib/ai/gemini.ts`).
+    -   **Grading**: DeepSeek V3 (`src/lib/ai/deepseek.ts`).
+    -   **Collation**: `pdf-lib` + Gemini for 1000-page splits.
 
-### Backend (FastAPI)
-1.  `cd backend`
-2.  `pip install -r requirements.txt`
-3.  `uvicorn main:app --reload --host 0.0.0.0 --port 8000`
-
-### Frontend (Next.js)
-1.  `cd frontend`
-2.  `npm install`
-3.  `npm run dev` (Runs on port 3000)
+## Core Features
+-   **Upload**: Async, non-blocking (`/api/upload`).
+-   **Processing**: Client-triggered background job (`/api/process`).
+-   **Export**: ZIP generation of PDFs (`/api/export/zip`).
+-   **Tier Enforcement**: Monthly quota limits via `TierManager`.
 
 ## Verification
--   Run `python3 verification/verify_full_flow.py` to test the backend API flow.
--   Ensure backend is running on port 8000 before verifying.
+-   **Stress Test**: `npx tsx verification/stress_test_concurrency.ts` (Verified 20 concurrent uploads).
+-   **Large PDF**: `npx tsx verification/stress_test_large_pdf.ts`.
+-   **AI Services**: `npx tsx verification/verify_ai_services.ts`.
 
-## Key Files
--   `backend/services/gemini.py`: OCR Logic (Gemini 1.5 Flash).
--   `backend/services/deepseek.py`: Grading Logic (DeepSeek V3).
--   `backend/services/collation.py`: 1000-Page PDF Splitter Logic.
--   `frontend/src/app/dashboard/page.tsx`: Lecturer Dashboard.
+## Environment
+-   `GEMINI_API_KEY`: Vision/OCR.
+-   `DEEPSEEK_API_KEY`: Grading/Chat.
+-   `DATABASE_URL`: SQLite file or Supabase connection string.
 
-## Notes
--   Database is SQLite (`playbook.db`).
--   Frontend proxies `/api/*` to `http://localhost:8000`.
+## Deployment
+-   **Vercel**: One-click deploy compatible.
+-   **Limits**: API routes designed to return fast; processing happens in triggered background steps to avoid serverless timeouts.
