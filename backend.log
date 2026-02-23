@@ -1,0 +1,8 @@
+INFO:     Started server process [14357]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52976 - "POST /api/submit HTTP/1.1" 200 OK
+Processing submission a694e555-ec47-47df-bc11-aadd4ff2d7a3 for quiz CS101-TEST
+Gemini Error: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+INFO:     127.0.0.1:52990 - "GET /api/submission/a694e555-ec47-47df-bc11-aadd4ff2d7a3 HTTP/1.1" 200 OK
