@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { ScriptCollator } from "@/lib/pdf/collation";
+import { ScriptCollator, CollatedScript } from "@/lib/pdf/collation";
 import { DeepSeekService } from "@/lib/ai/deepseek";
 import { GeminiService } from "@/lib/ai/gemini";
+
+// Set max duration for Vercel (5 minutes)
+export const maxDuration = 300;
 
 const prisma = new PrismaClient();
 
@@ -28,9 +31,10 @@ export async function POST(req: NextRequest) {
     const deepseek = new DeepSeekService();
     const gemini = new GeminiService();
 
-    let scripts: any[] = [];
+    let scripts: CollatedScript[] = [];
     if (submission.filePath.endsWith('.pdf')) {
         try {
+            // This now splits the PDF into individual files per student
             scripts = await collator.collateScripts(submission.filePath);
         } catch (e) {
             console.warn("Collation failed:", e);
@@ -40,24 +44,28 @@ export async function POST(req: NextRequest) {
     let submissionsToProcess = [];
 
     if (scripts.length > 0) {
+        // We found multiple students/scripts in the PDF
         for (const script of scripts) {
             const newSub = await prisma.submission.create({
                 data: {
                     quizId: submission.quizId,
                     studentRegNo: script.studentId || "UNKNOWN",
                     studentName: "Extracted Student",
-                    filePath: submission.filePath,
+                    filePath: script.filePath, // Use the new split PDF path
                     status: "processing"
                 },
                 include: { quiz: true }
             });
             submissionsToProcess.push(newSub);
         }
+
+        // Archive the parent batch file so it doesn't show up as a pending script
         await prisma.submission.update({
             where: { id: submission.id },
             data: { status: "archived", studentRegNo: "BATCH_PARENT" }
         });
     } else {
+        // Single file upload or no split detected
         submissionsToProcess.push(submission);
     }
 
@@ -66,9 +74,11 @@ export async function POST(req: NextRequest) {
     for (const sub of submissionsToProcess) {
         try {
             const mimeType = sub.filePath?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
+
+            // Full OCR of the dossier (now a single student's PDF)
             const ocrResult = await gemini.extractDataFromFile(sub.filePath!, mimeType);
 
-            // Anti-Garbage
+            // Anti-Garbage Validation
             const validation = await deepseek.validateContent(ocrResult.text || "");
 
             if (validation && !validation.is_valid) {
@@ -86,11 +96,11 @@ export async function POST(req: NextRequest) {
                 continue;
             }
 
-            // Grade
+            // Grade the Submission
             const rubric = sub.quiz.rubric || "Standard Rubric";
             const grading = await deepseek.gradeSubmission(ocrResult.text || "", rubric);
 
-            // Save Score
+            // Save Score & Feedback
             await prisma.score.create({
                 data: {
                     submissionId: sub.id,
@@ -101,6 +111,18 @@ export async function POST(req: NextRequest) {
                 }
             });
 
+            // Generate Audit Log
+            if (grading.audit_trail) {
+                await prisma.auditLog.create({
+                    data: {
+                        submissionId: sub.id,
+                        action: "Grading Audit",
+                        details: grading.audit_trail
+                    }
+                });
+            }
+
+            // Update Status
             await prisma.submission.update({
                 where: { id: sub.id },
                 data: {

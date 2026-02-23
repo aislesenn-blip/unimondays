@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Upload, MessageSquare, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, Upload, MessageSquare, CheckCircle, AlertCircle, FileSpreadsheet, FileText } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface Submission {
@@ -16,6 +16,8 @@ interface Submission {
   score?: {
     totalMarks: number;
     remarks: string;
+    breakdown: string;
+    confidence: number;
   };
   submittedAt: string;
 }
@@ -24,17 +26,49 @@ export default function Dashboard() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [summary, setSummary] = useState<string>("");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatQuery, setChatQuery] = useState("");
   const [chatResponse, setChatResponse] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [processing, setProcessing] = useState<number[]>([]);
+  const [questionColumns, setQuestionColumns] = useState<string[]>([]);
 
   useEffect(() => {
     fetchSubmissions();
+    fetchSummary();
     const interval = setInterval(fetchSubmissions, 5000); // Poll every 5s
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (submissions.length > 0) {
+        const questions = new Set<string>();
+        submissions.forEach(s => {
+            if (s.score?.breakdown) {
+                try {
+                    const bd = JSON.parse(s.score.breakdown);
+                    if (Array.isArray(bd)) {
+                        bd.forEach((q: any) => questions.add(q.question));
+                    }
+                } catch (e) {}
+            }
+        });
+        setQuestionColumns(Array.from(questions).sort());
+    }
+  }, [submissions]);
+
+  const fetchSummary = async () => {
+    try {
+      const res = await fetch("/api/analytics/summary");
+      if (res.ok) {
+        const data = await res.json();
+        setSummary(data.summary);
+      }
+    } catch (e) {
+      console.error("Failed to fetch summary", e);
+    }
+  };
 
   const fetchSubmissions = async () => {
     try {
@@ -43,7 +77,6 @@ export default function Dashboard() {
         const data = await res.json();
         setSubmissions(data);
         // Identify pending items and trigger process if needed (Client-driven queue)
-        // Ideally backend does this, but per Vercel constraints, we can trigger here.
         data.forEach((sub: Submission) => {
              if (sub.status === 'pending' && !processing.includes(sub.id)) {
                  triggerProcessing(sub.id);
@@ -122,16 +155,43 @@ export default function Dashboard() {
   };
 
   const downloadExcel = () => {
-      const ws = XLSX.utils.json_to_sheet(submissions.map(s => ({
-          ID: s.studentRegNo,
-          Status: s.status,
-          Marks: s.score?.totalMarks || 0,
-          Remarks: s.score?.remarks || "",
-          Date: s.submittedAt
-      })));
+      const ws = XLSX.utils.json_to_sheet(submissions.map(s => {
+          const row: any = {
+              "Reg No": s.studentRegNo,
+              "Status": s.status,
+              "Total Marks": s.score?.totalMarks || 0,
+              "Confidence": s.score?.confidence || 0,
+              "Remarks": s.score?.remarks || "",
+          };
+          if (s.score?.breakdown) {
+              try {
+                  const bd = JSON.parse(s.score.breakdown);
+                  if (Array.isArray(bd)) {
+                      bd.forEach((q: any) => row[q.question] = q.marks);
+                  }
+              } catch (e) {}
+          }
+          return row;
+      }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Results");
       XLSX.writeFile(wb, "Playbook_Results.xlsx");
+  }
+
+  const downloadPDF = async () => {
+      window.open("/api/export/table-pdf", "_blank");
+  }
+
+  const getQuestionScore = (sub: Submission, qKey: string) => {
+      if (!sub.score?.breakdown) return "-";
+      try {
+          const bd = JSON.parse(sub.score.breakdown);
+          if (Array.isArray(bd)) {
+              const q = bd.find((item: any) => item.question === qKey);
+              return q ? q.marks : "-";
+          }
+      } catch (e) {}
+      return "-";
   }
 
   return (
@@ -143,13 +203,32 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
             <Button variant="outline" onClick={downloadExcel}>
-                Download Excel
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
+            </Button>
+            <Button variant="outline" onClick={downloadPDF}>
+                <FileText className="mr-2 h-4 w-4" /> PDF Report
             </Button>
             <Button variant="outline" onClick={() => setChatOpen(!chatOpen)}>
             <MessageSquare className="mr-2 h-4 w-4" /> AI Assistant
             </Button>
         </div>
       </header>
+
+      {/* HOD Summary Section */}
+      <Card className="mb-8 bg-slate-900 text-white shadow-lg border-none">
+        <CardHeader>
+            <CardTitle className="text-sm font-bold tracking-widest text-slate-400">HOD EXECUTIVE SUMMARY</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="text-sm leading-7 whitespace-pre-line font-light">
+                {summary ? summary : (
+                    <div className="flex items-center gap-2 text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin"/> Generating analysis from latest data...
+                    </div>
+                )}
+            </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-3 mb-8">
         <Card>
@@ -182,40 +261,49 @@ export default function Dashboard() {
         <div className="md:col-span-2 space-y-6">
             <Card className="glass">
                 <CardHeader>
-                    <CardTitle>Recent Submissions</CardTitle>
-                    <CardDescription>Real-time tracking of processed scripts.</CardDescription>
+                    <CardTitle>Detailed Result Sheet</CardTitle>
+                    <CardDescription>Excel-style view of student performance.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Reg No</TableHead>
+                                <TableHead className="w-[100px]">Reg No</TableHead>
+                                {questionColumns.map(q => (
+                                    <TableHead key={q} className="w-[50px]">{q}</TableHead>
+                                ))}
+                                <TableHead className="w-[80px]">Total</TableHead>
+                                <TableHead className="w-[80px]">Conf %</TableHead>
                                 <TableHead>Status</TableHead>
-                                <TableHead>Score</TableHead>
-                                <TableHead>Actions</TableHead>
+                                <TableHead>Remarks</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {submissions.map((sub) => (
                                 <TableRow key={sub.id}>
                                     <TableCell className="font-medium">{sub.studentRegNo}</TableCell>
+                                    {questionColumns.map(q => (
+                                        <TableCell key={q}>{getQuestionScore(sub, q)}</TableCell>
+                                    ))}
+                                    <TableCell className="font-bold">{sub.score?.totalMarks || '-'}</TableCell>
+                                    <TableCell>{sub.score?.confidence || '-'}</TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
                                             {sub.status === 'graded' ? <CheckCircle className="h-4 w-4 text-green-500"/> :
                                              sub.status === 'error' ? <AlertCircle className="h-4 w-4 text-red-500"/> :
+                                             sub.status === 'flagged' ? <AlertCircle className="h-4 w-4 text-yellow-500"/> :
                                              <Loader2 className="h-4 w-4 animate-spin text-blue-500"/>}
-                                            <span className="capitalize">{sub.status}</span>
+                                            <span className="capitalize text-xs">{sub.status}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell>{sub.score?.totalMarks || '-'}</TableCell>
-                                    <TableCell>
-                                        <Button size="sm" variant="ghost">View</Button>
+                                    <TableCell className="max-w-[200px] truncate" title={sub.score?.remarks || ""}>
+                                        {sub.score?.remarks || '-'}
                                     </TableCell>
                                 </TableRow>
                             ))}
                             {submissions.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center text-muted-foreground">No submissions yet.</TableCell>
+                                    <TableCell colSpan={5 + questionColumns.length} className="text-center text-muted-foreground">No submissions yet.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>

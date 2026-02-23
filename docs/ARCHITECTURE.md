@@ -1,42 +1,41 @@
-# Playbook Ecosystem Architecture
+# System Architecture
 
 ## Overview
-Playbook Ecosystem is a dual-interface platform for academic assessment:
-1.  **Student Account**: Freemium access for students to take quizzes/upload scripts.
-2.  **Playbook (Lecturer)**: Paid tier for lecturers to manage assessments, grade with AI, and view analytics.
+The "Playbook Ecosystem" is a high-performance, AI-powered assessment infrastructure designed for the Tanzanian and African education sector. It features a Dual-AI architecture (Gemini + DeepSeek) and is built on a pure Next.js stack optimized for Vercel Serverless deployment.
 
-## Tech Stack
--   **Frontend**: Next.js 14+ (App Router), Tailwind CSS v4, Lucide React.
--   **Backend**: Python FastAPI (Async), SQLAlchemy (SQLite/Postgres).
--   **AI Engine**:
-    -   **Vision/OCR**: Google Gemini 1.5 Flash (via `google-generativeai`).
-    -   **Reasoning/Grading**: DeepSeek V3 (via OpenAI client).
--   **Database**: SQLite (Dev) -> Supabase (Prod).
+## Components
 
-## Core Modules
+### 1. Frontend Layer
+- **Framework**: Next.js 14 (App Router)
+- **Styling**: Tailwind CSS + Shadcn UI ("Luxury Minimal" Theme)
+- **Key Pages**:
+  - `src/app/page.tsx`: Landing Page
+  - `src/app/dashboard/page.tsx`: Lecturer Interface (Upload, Analytics, HOD Summary)
+  - `src/app/quiz/page.tsx`: Student Interface (Code Entry, Upload)
 
-### 1. Hybrid AI Engine
--   **Gemini Service**: Handles OCR and "Smart Collation" of 1000-page PDFs.
--   **DeepSeek Service**: Handles semantic grading, "Anti-Garbage" validation, and Omniscient Chat.
+### 2. Backend Layer (Serverless)
+- **API Routes**: `src/app/api/*`
+- **Database**: SQLite (Dev) -> Supabase Postgres (Prod) via Prisma ORM.
+- **File Handling**: `os.tmpdir()` for ephemeral processing; planned S3 integration for persistence.
 
-### 2. Backend Services
--   `ScriptCollator`: Orchestrates PDF splitting and student ID detection.
--   `DeepSeekService`: Grades submission against rubric and validates content.
+### 3. AI Engine (Dual-Core)
+- **The Eyes (OCR)**: Google Gemini 1.5 Flash (`src/lib/ai/gemini.ts`)
+  - Handles handwritten text extraction, math formulas, and student ID detection.
+- **The Brain (Reasoning)**: DeepSeek V3 (`src/lib/ai/deepseek.ts`)
+  - Handles semantic grading, rubric application, anti-garbage validation, audit trails, and HOD summaries.
 
-### 3. Frontend Architecture
--   **Dashboard**: Real-time analytics and script management.
--   **Quiz Portal**: Student entry point for code validation and upload.
--   **Components**: Reusable UI components (Shadcn-like) in `src/components/ui`.
+### 4. PDF Processing Engine
+- **Library**: `pdf-lib` + `jszip`
+- **Smart Collation**: `src/lib/pdf/collation.ts` splits bulk uploads into individual student dossiers based on detected IDs.
+- **Reporting**: Generates PDF reports embedding original scripts and AI feedback.
 
-## Data Flow
-1.  **Upload**: Lecturer/Student uploads PDF/Image -> Backend (`/api/upload`).
-2.  **Collation**: `ScriptCollator` splits PDF by student ID using Gemini.
-3.  **Storage**: Submissions stored in DB with status "processing".
-4.  **Grading**: Asynchronous job (triggered via API for now) calls DeepSeek to grade text.
-5.  **Analytics**: Dashboard fetches results via `/api/results`.
-6.  **Chat**: Lecturer queries system via `/api/chat`, context-injected with recent grades.
-
-## File Structure
--   `frontend/`: Next.js application.
--   `backend/`: FastAPI application.
--   `docs/`: Documentation.
+## Infrastructure Diagram (Conceptual)
+[Client (Web/Mobile)] -> [Vercel Edge Network] -> [Next.js API Routes]
+                                      |
+                                      v
+                             [Prisma ORM] <-> [SQLite/Supabase]
+                                      |
+                                      v
+                             [AI Service Layer]
+                            /                  \
+                    [Gemini 1.5]          [DeepSeek V3]
