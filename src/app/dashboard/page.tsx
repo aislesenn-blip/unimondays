@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Upload, MessageSquare, CheckCircle, AlertCircle } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Keep for simple view if needed
+import { Loader2, Upload, MessageSquare, CheckCircle, AlertCircle, FileText, Download } from "lucide-react";
 import * as XLSX from "xlsx";
+import DataTable from "react-data-table-component";
 
 interface Submission {
   id: number;
@@ -16,6 +17,7 @@ interface Submission {
   score?: {
     totalMarks: number;
     remarks: string;
+    confidence: number;
   };
   submittedAt: string;
 }
@@ -29,6 +31,8 @@ export default function Dashboard() {
   const [chatResponse, setChatResponse] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [processing, setProcessing] = useState<number[]>([]);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   useEffect(() => {
     fetchSubmissions();
@@ -43,7 +47,6 @@ export default function Dashboard() {
         const data = await res.json();
         setSubmissions(data);
         // Identify pending items and trigger process if needed (Client-driven queue)
-        // Ideally backend does this, but per Vercel constraints, we can trigger here.
         data.forEach((sub: Submission) => {
              if (sub.status === 'pending' && !processing.includes(sub.id)) {
                  triggerProcessing(sub.id);
@@ -132,7 +135,81 @@ export default function Dashboard() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Results");
       XLSX.writeFile(wb, "Playbook_Results.xlsx");
-  }
+  };
+
+  const generateSummary = async () => {
+      setSummaryLoading(true);
+      try {
+          const res = await fetch("/api/summary", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ quizId: 1 }) // Hardcoded for now
+          });
+          const data = await res.json();
+          setSummary(data.summary);
+      } catch (e) {
+          console.error("Summary error", e);
+      } finally {
+          setSummaryLoading(false);
+      }
+  };
+
+  const exportZip = async () => {
+      try {
+          const res = await fetch("/api/export/zip", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ quizId: 1 })
+          });
+          if (res.ok) {
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "Quiz_1_Results.zip";
+              a.click();
+          }
+      } catch (e) {
+          console.error("ZIP Export error", e);
+      }
+  };
+
+  const exportTablePdf = async () => {
+      try {
+          const res = await fetch("/api/export/pdf", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ quizId: 1 })
+          });
+          if (res.ok) {
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "Quiz_1_Table.pdf";
+              a.click();
+          }
+      } catch (e) {
+          console.error("PDF Export error", e);
+      }
+  };
+
+  const columns = [
+      { name: "Reg No", selector: (row: Submission) => row.studentRegNo, sortable: true },
+      { name: "Name", selector: (row: Submission) => row.studentName || "-", sortable: true },
+      { name: "Status", selector: (row: Submission) => row.status, sortable: true, cell: (row: Submission) => (
+          <div className={`flex items-center gap-2 ${
+              row.status === 'graded' ? 'text-green-600' :
+              row.status === 'flagged' ? 'text-red-600' :
+              row.status === 'error' ? 'text-red-600' : 'text-blue-600'
+          }`}>
+              {row.status}
+          </div>
+      )},
+      { name: "Score", selector: (row: Submission) => row.score?.totalMarks || 0, sortable: true },
+      { name: "Confidence", selector: (row: Submission) => (row.score?.confidence || 0) + "%", sortable: true },
+      { name: "Remarks", selector: (row: Submission) => row.score?.remarks || "-", wrap: true },
+  ];
 
   return (
     <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -142,15 +219,22 @@ export default function Dashboard() {
           <p className="text-muted-foreground text-sm uppercase tracking-wider">Lecturer Interface (Next.js Pure)</p>
         </div>
         <div className="flex gap-2">
+            <Button variant="outline" onClick={exportTablePdf}>
+                <FileText className="mr-2 h-4 w-4" /> PDF Report
+            </Button>
+            <Button variant="outline" onClick={exportZip}>
+                <Download className="mr-2 h-4 w-4" /> Batch ZIP
+            </Button>
             <Button variant="outline" onClick={downloadExcel}>
-                Download Excel
+                Excel
             </Button>
             <Button variant="outline" onClick={() => setChatOpen(!chatOpen)}>
-            <MessageSquare className="mr-2 h-4 w-4" /> AI Assistant
+                <MessageSquare className="mr-2 h-4 w-4" /> AI Assistant
             </Button>
         </div>
       </header>
 
+      {/* Stats Cards */}
       <div className="grid gap-6 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="pb-2">
@@ -178,52 +262,61 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* HOD Summary */}
+      <div className="mb-8">
+          <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>HOD Executive Summary</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={generateSummary} disabled={summaryLoading}>
+                      {summaryLoading ? <Loader2 className="h-4 w-4 animate-spin"/> : "Generate"}
+                  </Button>
+              </CardHeader>
+              <CardContent>
+                  {summary ? (
+                      <p className="text-sm text-muted-foreground">{summary}</p>
+                  ) : (
+                      <p className="text-xs text-muted-foreground">Click generate to analyze failing trends.</p>
+                  )}
+              </CardContent>
+          </Card>
+      </div>
+
       <div className="grid gap-8 md:grid-cols-3">
+        {/* Main Table */}
         <div className="md:col-span-2 space-y-6">
             <Card className="glass">
                 <CardHeader>
-                    <CardTitle>Recent Submissions</CardTitle>
+                    <CardTitle>Results Table</CardTitle>
                     <CardDescription>Real-time tracking of processed scripts.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Reg No</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Score</TableHead>
-                                <TableHead>Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {submissions.map((sub) => (
-                                <TableRow key={sub.id}>
-                                    <TableCell className="font-medium">{sub.studentRegNo}</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            {sub.status === 'graded' ? <CheckCircle className="h-4 w-4 text-green-500"/> :
-                                             sub.status === 'error' ? <AlertCircle className="h-4 w-4 text-red-500"/> :
-                                             <Loader2 className="h-4 w-4 animate-spin text-blue-500"/>}
-                                            <span className="capitalize">{sub.status}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{sub.score?.totalMarks || '-'}</TableCell>
-                                    <TableCell>
-                                        <Button size="sm" variant="ghost">View</Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {submissions.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="text-center text-muted-foreground">No submissions yet.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                    <DataTable
+                        columns={columns}
+                        data={submissions}
+                        pagination
+                        responsive
+                        highlightOnHover
+                        pointerOnHover
+                        customStyles={{
+                            headCells: {
+                                style: {
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    color: '#666',
+                                },
+                            },
+                            cells: {
+                                style: {
+                                    fontSize: '13px',
+                                },
+                            },
+                        }}
+                    />
                 </CardContent>
             </Card>
         </div>
 
+        {/* Sidebar: Upload & Chat */}
         <div className="space-y-6">
             <Card>
                 <CardHeader>

@@ -18,9 +18,11 @@ export class ScriptCollator {
 
     let currentStudentId = "UNKNOWN_START";
     let currentScriptPages: number[] = [];
-    let scripts = [];
+    let scripts: { studentId: string; filePath: string }[] = [];
 
-    // Iterate pages (Simulating processing. In real world, this needs queue/batching)
+    console.log(`Starting collation for ${filePath} with ${numPages} pages.`);
+
+    // Iterate pages (Sequential processing as required)
     for (let i = 0; i < numPages; i++) {
       // Create single page PDF for OCR
       const subDoc = await PDFDocument.create();
@@ -32,41 +34,76 @@ export class ScriptCollator {
       await fs.writeFile(tmpPath, subPdfBytes);
 
       // OCR
-      const result = await this.gemini.extractDataFromFile(tmpPath, "application/pdf");
+      let result;
+      try {
+          result = await this.gemini.extractDataFromFile(tmpPath, "application/pdf");
+      } catch (e) {
+          console.error(`Error OCR processing page ${i}:`, e);
+          result = { detected_id: false };
+      }
 
-      // Cleanup
-      await fs.unlink(tmpPath);
+      // Cleanup temp page file
+      try {
+        await fs.unlink(tmpPath);
+      } catch (e) {
+          console.warn("Failed to delete temp file:", tmpPath);
+      }
 
       const detectedId = result.detected_id;
       const studentId = result.reg_no || result.student_name;
 
+      console.log(`Page ${i}: Detected ID: ${detectedId}, ID: ${studentId}`);
+
       if (detectedId && studentId) {
         if (currentStudentId === "UNKNOWN_START") {
+          // First detected ID, start dossier
           currentStudentId = studentId;
           currentScriptPages.push(i);
         } else if (studentId !== currentStudentId) {
-          // New student
-          scripts.push({
-            studentId: currentStudentId,
-            pages: [...currentScriptPages],
-          });
+          // New student detected, close previous dossier
+          if (currentScriptPages.length > 0) {
+            const scriptPath = await this.createStudentPdf(pdfDoc, currentScriptPages, currentStudentId);
+            scripts.push({
+              studentId: currentStudentId,
+              filePath: scriptPath,
+            });
+          }
+          // Start new dossier
           currentStudentId = studentId;
           currentScriptPages = [i];
         } else {
+          // Same student ID detected again (maybe on page 2 header), continue
           currentScriptPages.push(i);
         }
       } else {
+        // No ID detected, append to current dossier
         currentScriptPages.push(i);
       }
     }
 
+    // Close final dossier
     if (currentScriptPages.length > 0) {
+      const scriptPath = await this.createStudentPdf(pdfDoc, currentScriptPages, currentStudentId);
       scripts.push({
         studentId: currentStudentId,
-        pages: currentScriptPages,
+        filePath: scriptPath,
       });
     }
 
     return scripts;
+  }
+
+  private async createStudentPdf(originalDoc: PDFDocument, pageIndices: number[], studentId: string): Promise<string> {
+    const newDoc = await PDFDocument.create();
+    const copiedPages = await newDoc.copyPages(originalDoc, pageIndices);
+    copiedPages.forEach((page) => newDoc.addPage(page));
+
+    const pdfBytes = await newDoc.save();
+    const safeId = studentId.replace(/[^a-zA-Z0-9]/g, "_");
+    const fileName = `script_${safeId}_${Date.now()}.pdf`;
+    const filePath = path.join(os.tmpdir(), fileName);
+
+    await fs.writeFile(filePath, pdfBytes);
+    return filePath;
   }
 }
