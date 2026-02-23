@@ -4,28 +4,40 @@ export class DeepSeekService {
   private client: OpenAI;
   private model: string = "deepseek-chat";
 
-  constructor() {
-    if (!process.env.DEEPSEEK_API_KEY) {
-      throw new Error("DEEPSEEK_API_KEY not found in environment");
+  constructor(client?: OpenAI) {
+    if (!client) {
+        if (!process.env.DEEPSEEK_API_KEY) {
+          throw new Error("DEEPSEEK_API_KEY not found in environment");
+        }
+        this.client = new OpenAI({
+          apiKey: process.env.DEEPSEEK_API_KEY,
+          baseURL: "https://api.deepseek.com",
+        });
+    } else {
+        this.client = client;
     }
-    this.client = new OpenAI({
-      apiKey: process.env.DEEPSEEK_API_KEY,
-      baseURL: "https://api.deepseek.com",
-    });
   }
 
   async validateContent(ocrText: string) {
     const prompt = `
-      Analyze this OCR text. Determine if it is a valid academic student script/answer sheet or GARBAGE (e.g., National ID, Birth Certificate, random newspaper, unrelated text).
+      Analyze this OCR text.
+      STRICTLY Determine if it is a valid academic student script/answer sheet.
 
-      Text Start:
-      ${ocrText.slice(0, 500)}...
-      Text End.
+      IMMEDIATELY REJECT if it appears to be:
+      - A National ID card (NIDA, Nin, etc.)
+      - A Birth Certificate
+      - A Driver's License
+      - A Random Newspaper or Magazine
+      - A Medical Report
+      - Any document NOT related to an academic assessment.
+
+      Text Sample (First 2000 chars):
+      ${ocrText.slice(0, 2000)}...
 
       Return ONLY valid JSON:
       {
           "is_valid": true/false,
-          "reason": "If invalid, explain why (e.g., 'Document appears to be a National ID card')."
+          "reason": "If invalid, EXPLICITLY state what the document appears to be (e.g., 'Rejected: Found NIDA keywords')."
       }
     `;
 
@@ -33,7 +45,7 @@ export class DeepSeekService {
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
-          { role: "system", content: "You are a document validation engine." },
+          { role: "system", content: "You are a strict document validation firewall." },
           { role: "user", content: prompt },
         ],
         response_format: { type: "json_object" },
@@ -47,7 +59,7 @@ export class DeepSeekService {
 
   async gradeSubmission(ocrText: string, rubric: string) {
     const prompt = `
-      You are a strict academic grader.
+      You are a strict academic grader (HOD Level).
 
       RUBRIC:
       ${rubric}
@@ -60,7 +72,8 @@ export class DeepSeekService {
       2. Provide marks for each question.
       3. Provide detailed remarks.
       4. Calculate total score.
-      5. Provide a confidence score (0-100) on your grading accuracy based on text clarity.
+      5. Provide a CONFIDENCE SCORE (0-100) based on text legibility and answer clarity.
+      6. GENERATE AN AUDIT TRAIL: A step-by-step logical reasoning for why marks were awarded or deducted.
 
       OUTPUT FORMAT (JSON ONLY):
       {
@@ -70,7 +83,7 @@ export class DeepSeekService {
           ],
           "general_remarks": "...",
           "confidence_score": 95.0,
-          "audit_trail": "Step-by-step reasoning for the grade..."
+          "audit_trail": "Q1: Deducted 2 marks because... Q2: Full marks awarded because..."
       }
     `;
 
@@ -115,6 +128,34 @@ export class DeepSeekService {
       return response.choices[0].message.content;
     } catch (e: any) {
       return `Error connecting to AI Chat: ${e.message}`;
+    }
+  }
+
+  async generateHODSummary(statsContext: string) {
+    const prompt = `
+      You are the Head of Department (HOD) Assistant.
+      Based on the following class performance statistics and failure reasons:
+
+      ${statsContext}
+
+      Generate a 3-sentence EXECUTIVE SUMMARY.
+      Identify the key concept students are struggling with.
+      Provide one actionable recommendation for the lecturer.
+
+      Format: Plain Text.
+    `;
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+            { role: "system", content: "You are an educational analyst." },
+            { role: "user", content: prompt }
+        ]
+      });
+      return response.choices[0].message.content;
+    } catch (e: any) {
+      return `Unable to generate summary: ${e.message}`;
     }
   }
 }
