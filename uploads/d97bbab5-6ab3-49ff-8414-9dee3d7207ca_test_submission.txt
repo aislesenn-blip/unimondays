@@ -1,0 +1,1 @@
+This is a test submission for CS101. Answer to Q1: Algorithms are steps to solve a problem. Answer to Q2: Big O notation describes complexity.

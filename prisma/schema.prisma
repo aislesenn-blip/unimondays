@@ -1,0 +1,84 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("LECTURER")
+  quizzes   Quiz[]
+  createdAt DateTime @default(now())
+}
+
+model Student {
+  id          String       @id @default(uuid())
+  regNo       String       @unique
+  name        String?
+  submissions Submission[]
+  createdAt   DateTime     @default(now())
+}
+
+model Quiz {
+  id            String       @id @default(uuid())
+  title         String
+  code          String       @unique
+  lecturerId    String
+  lecturer      User         @relation(fields: [lecturerId], references: [id])
+  className     String
+  totalMarks    Int          @default(100)
+  startTime     DateTime     @default(now())
+  endTime       DateTime     @default(now())
+  timeLimit     Int          @default(60) // in minutes
+  mode          String       @default("ONLINE") // ONLINE, UPLOAD
+  status        String       @default("DRAFT") // DRAFT, ACTIVE, COMPLETED
+  release       Boolean      @default(false)
+  markingScheme String?
+  submissions   Submission[]
+  createdAt     DateTime     @default(now())
+}
+
+model Submission {
+  id          String   @id @default(uuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  studentId   String?
+  student     Student? @relation(fields: [studentId], references: [id])
+  regNo       String
+  fileUrl     String?
+  textContent String?
+  score       Float?
+  status      String   @default("PENDING") // PENDING, MARKING, COMPLETED, FLAGGED
+  confidence  Float?
+  result      Result?
+  appeals     Appeal[]
+  createdAt   DateTime @default(now())
+}
+
+model Result {
+  id           String     @id @default(uuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  totalScore   Float
+  breakdown    String // JSON
+  remarks      String?
+  auditLog     String? // AI reasoning
+  createdAt    DateTime   @default(now())
+}
+
+model Appeal {
+  id           String     @id @default(uuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  question     String
+  reason       String
+  status       String     @default("OPEN")
+  response     String?
+  createdAt    DateTime   @default(now())
+}
