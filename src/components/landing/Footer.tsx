@@ -13,10 +13,10 @@ export function Footer() {
         <div>
           <h4 className="font-semibold mb-4 text-foreground">Platform</h4>
           <ul className="space-y-3 text-sm text-muted-foreground">
-            <li><a href="#" className="hover:text-foreground transition-colors">Lecturer Portal</a></li>
-            <li><a href="#" className="hover:text-foreground transition-colors">Student Portal</a></li>
-            <li><a href="#" className="hover:text-foreground transition-colors">Institution Admin</a></li>
-            <li><a href="#" className="hover:text-foreground transition-colors">Pricing</a></li>
+            <li><a href="/login" className="hover:text-foreground transition-colors">Lecturer Portal</a></li>
+            <li><a href="/student/login" className="hover:text-foreground transition-colors">Student Portal</a></li>
+            <li><a href="/admin/login" className="hover:text-foreground transition-colors">Institution Admin</a></li>
+            <li><a href="#partnerships" className="hover:text-foreground transition-colors">Partnerships</a></li>
           </ul>
         </div>
 
@@ -24,8 +24,8 @@ export function Footer() {
           <h4 className="font-semibold mb-4 text-foreground">Legal</h4>
           <ul className="space-y-3 text-sm text-muted-foreground">
             <li><a href="#" className="hover:text-foreground transition-colors">Terms of Service</a></li>
-            <li><a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a></li>
-            <li><a href="#" className="hover:text-foreground transition-colors">Data Protection</a></li>
+            <li><a href="#privacy" className="hover:text-foreground transition-colors">Privacy Policy</a></li>
+            <li><a href="#privacy" className="hover:text-foreground transition-colors">Data Protection</a></li>
             <li><a href="#" className="hover:text-foreground transition-colors">Cookie Policy</a></li>
           </ul>
         </div>
@@ -33,8 +33,7 @@ export function Footer() {
         <div>
           <h4 className="font-semibold mb-4 text-foreground">Contact</h4>
           <ul className="space-y-3 text-sm text-muted-foreground">
-            <li>support@playbook.edu.tz</li>
-            <li>+255 765 123 456</li>
+            <li>+255 745 780 988</li>
             <li>Dar es Salaam, Tanzania</li>
           </ul>
         </div>
