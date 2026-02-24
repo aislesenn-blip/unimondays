@@ -15,7 +15,10 @@ import {
   AlertCircle,
   FileText,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Upload,
+  FileDigit,
+  BrainCircuit
 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -25,6 +28,7 @@ import { AuditTrailSheet } from "@/components/dashboard/AuditTrailSheet";
 import { BulkActionsBar } from "@/components/dashboard/BulkActionsBar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 
 export default function WorkDetailsPage() {
   const params = useParams();
@@ -40,6 +44,9 @@ export default function WorkDetailsPage() {
   // State for enhancements
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [auditStudentName, setAuditStudentName] = useState<string | null>(null);
+
+  // Mock Offline Mode State
+  const isOfflineMode = work.mode === "UPLOAD" || work.mode === "physical"; // Assuming 'physical' or UPLOAD implies offline script handling
 
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -71,11 +78,14 @@ export default function WorkDetailsPage() {
         <div>
            <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">{work.title}</h1>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-              work.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'
-            }`}>
+            <Badge variant="outline" className="text-xs font-semibold">
               {work.status}
-            </span>
+            </Badge>
+            {isOfflineMode && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200">
+                <FileDigit className="mr-1 h-3 w-3" /> Offline / Scanned
+              </Badge>
+            )}
           </div>
           <p className="text-muted-foreground">{session?.courseCode} • {work.type} • {work.submissionsCount} Submissions</p>
         </div>
@@ -90,6 +100,40 @@ export default function WorkDetailsPage() {
            </Button>
         </div>
       </div>
+
+      {/* OFFLINE WORKFLOW: Bulk Upload & Mapping Status */}
+      {isOfflineMode && (
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card className="bg-secondary/20 border-dashed border-2 border-secondary">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Upload className="h-4 w-4" /> Bulk Script Upload
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-4">
+              <Button size="sm">Select PDF Files</Button>
+              <span className="text-xs text-muted-foreground">Drag & drop scanned scripts here.</span>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-emerald-50/50 border-emerald-100">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-emerald-800">
+                <BrainCircuit className="h-4 w-4" /> Auto-Mapping Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between items-center text-sm">
+                <span>Matched <span className="font-bold">142</span> / 145 students</span>
+                <Button variant="link" className="text-xs h-auto p-0 text-emerald-700">Resolve 3 Unmatched</Button>
+              </div>
+              <div className="w-full bg-emerald-200 h-1.5 rounded-full mt-2">
+                <div className="bg-emerald-600 h-1.5 rounded-full w-[98%]" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ENHANCEMENT 1: Result Control Panel */}
       <ResultControlPanel />

@@ -22,7 +22,7 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">Overview of your academic sessions and grading performance.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/dashboard/sessions" className={cn(buttonVariants())}>View Sessions</Link>
+          <Link href="/dashboard/sessions/create" className={cn(buttonVariants())}>Create Session</Link>
         </div>
       </div>
 
@@ -104,28 +104,32 @@ export default function DashboardPage() {
                   user: "Dr. Sarah Manzi",
                   action: "published grades for",
                   target: "Mid-Semester Quiz 1",
-                  time: "2 hours ago"
+                  time: "2 hours ago",
+                  link: "/dashboard/sessions/sess_1/work/work_1"
                 },
                 {
                   user: "System AI",
                   action: "completed grading for",
                   target: "Assignment 1 Batch A",
-                  time: "4 hours ago"
+                  time: "4 hours ago",
+                  link: "/dashboard/sessions/sess_1/work/work_2"
                 },
                 {
                   user: "Dr. Sarah Manzi",
                   action: "created new session",
                   target: "CS 101 - Intro to CS",
-                  time: "Yesterday"
+                  time: "Yesterday",
+                  link: "/dashboard/sessions/sess_1"
                 },
                 {
                   user: "System AI",
                   action: "flagged 3 submissions in",
                   target: "Final Exam Prep",
-                  time: "Yesterday"
+                  time: "Yesterday",
+                  link: "/dashboard/sessions/sess_1/work/work_3"
                 }
               ].map((item, i) => (
-                <div key={i} className="flex items-center">
+                <Link key={i} href={item.link} className="flex items-center hover:bg-muted/50 p-2 rounded-lg transition-colors -mx-2">
                   <div className="space-y-1">
                     <p className="text-sm font-medium leading-none">
                       {item.user} <span className="text-muted-foreground font-normal">{item.action}</span> {item.target}
@@ -137,7 +141,7 @@ export default function DashboardPage() {
                   <div className="ml-auto font-medium">
                     <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>
