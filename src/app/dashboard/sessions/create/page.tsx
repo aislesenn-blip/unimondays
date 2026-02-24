@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, Loader2, BookOpen, Wifi, FileDigit } from "lucide-react";
+import { ArrowLeft, Loader2, BookOpen, Wifi, FileDigit, Layers } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export default function CreateSessionPage() {
             <CardDescription>Choose how you will primarily assess students in this session.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <RadioGroup defaultValue="online" onValueChange={setSessionMode} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <RadioGroup defaultValue="online" onValueChange={setSessionMode} className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <RadioGroupItem value="online" id="mode-online" className="peer sr-only" />
                 <Label
@@ -78,8 +78,8 @@ export default function CreateSessionPage() {
                 >
                   <Wifi className="mb-3 h-6 w-6" />
                   <div className="text-center">
-                    <span className="font-semibold">Online Assessment</span>
-                    <p className="text-xs text-muted-foreground mt-1">Digital quizzes, uploads, and automated grading.</p>
+                    <span className="font-semibold">Online</span>
+                    <p className="text-xs text-muted-foreground mt-1">Digital quizzes & uploads.</p>
                   </div>
                 </Label>
               </div>
@@ -91,8 +91,21 @@ export default function CreateSessionPage() {
                 >
                   <FileDigit className="mb-3 h-6 w-6" />
                   <div className="text-center">
-                    <span className="font-semibold">Offline / Physical</span>
-                    <p className="text-xs text-muted-foreground mt-1">Scan and upload physical scripts for AI marking.</p>
+                    <span className="font-semibold">Offline</span>
+                    <p className="text-xs text-muted-foreground mt-1">Scan & grade physical scripts.</p>
+                  </div>
+                </Label>
+              </div>
+              <div>
+                <RadioGroupItem value="hybrid" id="mode-hybrid" className="peer sr-only" />
+                <Label
+                  htmlFor="mode-hybrid"
+                  className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer h-full"
+                >
+                  <Layers className="mb-3 h-6 w-6" />
+                  <div className="text-center">
+                    <span className="font-semibold">Hybrid</span>
+                    <p className="text-xs text-muted-foreground mt-1">Mix of digital and physical.</p>
                   </div>
                 </Label>
               </div>

@@ -11,7 +11,6 @@ import {
   Clock,
   ArrowRight,
   Sparkles,
-  Lock,
   FileText
 } from "lucide-react";
 import Link from "next/link";
@@ -48,16 +47,16 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-3">
+      <div className="grid gap-8 md:grid-cols-1">
         {/* Main Content */}
-        <div className="md:col-span-2 space-y-8">
+        <div className="space-y-8">
 
           {/* Active Works Section */}
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold tracking-tight">Active Works</h2>
             </div>
-            <div className="grid gap-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[WORKS[0]].map((work) => (
                 <Card key={work.id} className="border-l-4 border-l-primary hover:shadow-md transition-all duration-300 group">
                   <CardHeader className="pb-3">
@@ -75,7 +74,7 @@ export default function StudentDashboard() {
                       <span className="flex items-center gap-2"><FileText className="h-4 w-4" /> {work.questionsCount} Questions</span>
                       <span className="flex items-center gap-2 text-emerald-600 font-medium"><CheckCircle2 className="h-4 w-4" /> Open for submission</span>
                     </div>
-                    <Button className="w-full md:w-auto" size="lg" onClick={() => router.push(`/student/assessment/WK-${work.id}`)}>
+                    <Button className="w-full" size="lg" onClick={() => router.push(`/student/assessment/WK-${work.id}`)}>
                       Continue Assessment <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </CardContent>
@@ -106,7 +105,8 @@ export default function StudentDashboard() {
                          </div>
                        </div>
                        <div className="flex gap-3 mt-4">
-                         <Button variant="outline" size="sm" className="h-9">View Script</Button>
+                         {/* Linked to the new Result page which we will create later */}
+                         <Button variant="outline" size="sm" className="h-9" onClick={() => router.push(`/student/assessment/WK-${sub.workId}/result`)}>View Script</Button>
                          <Button variant="ghost" size="sm" className="h-9 text-muted-foreground hover:text-primary">
                            <Sparkles className="mr-1 h-3 w-3" /> AI Insights
                          </Button>
@@ -121,62 +121,6 @@ export default function StudentDashboard() {
                ))}
             </div>
           </section>
-        </div>
-
-        {/* Sidebar / Upsell */}
-        <div className="space-y-6">
-           <Card className="bg-primary text-primary-foreground border-0 shadow-xl relative overflow-hidden">
-             <div className="absolute -top-12 -right-12 p-4 opacity-10">
-               <Sparkles className="h-48 w-48 text-white animate-pulse" />
-             </div>
-             <CardHeader className="relative z-10 pb-2">
-               <div className="h-10 w-10 bg-white/20 rounded-lg flex items-center justify-center mb-4 backdrop-blur-sm">
-                 <Sparkles className="h-6 w-6 text-yellow-300" />
-               </div>
-               <CardTitle className="text-xl">Student Pro</CardTitle>
-               <CardDescription className="text-primary-foreground/80">
-                 Unlock AI study insights and instant appeals.
-               </CardDescription>
-             </CardHeader>
-             <CardContent className="space-y-6 relative z-10">
-               <ul className="space-y-3 text-sm">
-                 <li className="flex items-center gap-3">
-                   <div className="h-5 w-5 rounded-full bg-emerald-500/20 flex items-center justify-center"><CheckCircle2 className="h-3 w-3 text-emerald-300" /></div>
-                   AI Performance Analysis
-                 </li>
-                 <li className="flex items-center gap-3">
-                   <div className="h-5 w-5 rounded-full bg-emerald-500/20 flex items-center justify-center"><CheckCircle2 className="h-3 w-3 text-emerald-300" /></div>
-                   Priority Appeal Handling
-                 </li>
-                 <li className="flex items-center gap-3">
-                   <div className="h-5 w-5 rounded-full bg-emerald-500/20 flex items-center justify-center"><CheckCircle2 className="h-3 w-3 text-emerald-300" /></div>
-                   Unlimited Storage
-                 </li>
-               </ul>
-               <div className="pt-2">
-                 <div className="text-3xl font-bold">3,500<span className="text-sm font-normal opacity-70 ml-1">TZS/mo</span></div>
-               </div>
-               <Button className="w-full bg-white text-primary hover:bg-gray-100 font-bold h-11 border-0">
-                 Upgrade Now
-               </Button>
-             </CardContent>
-           </Card>
-
-           <Card>
-             <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Storage Usage</CardTitle>
-             </CardHeader>
-             <CardContent>
-               <div className="w-full bg-secondary h-2 rounded-full mb-2 overflow-hidden">
-                 <div className="bg-primary h-2 rounded-full w-[75%]" />
-               </div>
-               <div className="flex justify-between text-xs text-muted-foreground">
-                 <span>750MB used</span>
-                 <span>1GB Limit</span>
-               </div>
-               <Button variant="link" className="px-0 text-xs h-auto mt-2 text-primary">Manage Files</Button>
-             </CardContent>
-           </Card>
         </div>
       </div>
     </div>
