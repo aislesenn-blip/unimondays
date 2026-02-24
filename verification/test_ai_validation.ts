@@ -74,7 +74,7 @@ async function run() {
     console.log("\nTesting HOD Summary...");
     const summary = await service.generateHODSummary("Stats...");
     console.log("Result:", summary);
-    if (!summary.includes("Students are struggling")) throw new Error("HOD Summary Failed");
+    if (!summary || !summary.includes("Students are struggling")) throw new Error("HOD Summary Failed");
 
     console.log("\nSUCCESS: All AI Logic Tests Passed.");
 
