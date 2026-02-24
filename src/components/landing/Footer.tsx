@@ -33,7 +33,7 @@ export function Footer() {
         <div>
           <h4 className="font-semibold mb-4 text-foreground">Contact</h4>
           <ul className="space-y-3 text-sm text-muted-foreground">
-            <li>+255 745 780 988</li>
+            <li>0745780988</li>
             <li>Dar es Salaam, Tanzania</li>
           </ul>
         </div>
