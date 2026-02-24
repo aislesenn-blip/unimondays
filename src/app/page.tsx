@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Navbar } from "@/components/landing/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { TIERS } from "@/lib/mock-data";
 import {
   Code,
   FileText,
@@ -106,59 +105,6 @@ export default function LandingPage() {
                   </div>
                   <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
                   <p className="text-muted-foreground leading-relaxed">{feature.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Tiers Section */}
-        <section id="partnerships" className="py-24">
-          <div className="max-w-7xl mx-auto px-6 md:px-12">
-            <div className="text-center mb-16 space-y-4">
-              <h2 className="text-3xl font-bold tracking-tight">Flexible Institutional Pricing</h2>
-              <p className="text-muted-foreground text-lg">
-                Scalable solutions for individual lecturers, departments, and entire campuses.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-              {TIERS.map((tier, idx) => (
-                <div
-                  key={idx}
-                  className={`relative rounded-2xl border p-8 transition-all duration-300 ${tier.recommended ? 'bg-primary text-primary-foreground shadow-xl scale-105 z-10' : 'bg-card text-card-foreground hover:shadow-lg'}`}
-                >
-                  {tier.recommended && (
-                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-emerald-500 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
-                      Recommended
-                    </div>
-                  )}
-                  <h3 className="text-lg font-bold mb-2">{tier.name}</h3>
-                  <div className="text-3xl font-extrabold mb-6">{tier.price}<span className="text-sm font-normal opacity-80">/mo</span></div>
-
-                  <ul className="space-y-4 mb-8">
-                    <li className="flex items-center text-sm">
-                      <CheckCircle2 className="h-4 w-4 mr-3 shrink-0 opacity-70" />
-                      {tier.scripts} Scripts / Month
-                    </li>
-                    <li className="flex items-center text-sm">
-                      <CheckCircle2 className="h-4 w-4 mr-3 shrink-0 opacity-70" />
-                      {tier.pagesPerScript} Pages Max
-                    </li>
-                    {tier.features.map((feat, fIdx) => (
-                      <li key={fIdx} className="flex items-center text-sm">
-                        <CheckCircle2 className="h-4 w-4 mr-3 shrink-0 opacity-70" />
-                        {feat}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href="/signup"
-                    className={cn(buttonVariants({ variant: tier.recommended ? "default" : "outline" }), `w-full rounded-full h-12 font-medium ${tier.recommended ? 'bg-white text-primary hover:bg-white/90' : ''}`)}
-                  >
-                    {tier.cta}
-                  </Link>
                 </div>
               ))}
             </div>
