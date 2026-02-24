@@ -10,7 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Copy, FileText, Calendar, Clock, Lock, Users, Upload, PenTool, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, FileText, Calendar, Clock, Lock, Users, Upload, PenTool, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { SESSIONS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,9 @@ export default function CreateWorkPage() {
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [workMode, setWorkMode] = useState("upload");
   const [isGroupWork, setIsGroupWork] = useState(false);
+
+  // Calibration State
+  const [languageStrictness, setLanguageStrictness] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +144,7 @@ export default function CreateWorkPage() {
                   </div>
                   <h3 className="font-medium text-lg">Drag & drop files here</h3>
                   <p className="text-sm text-muted-foreground mt-1">PDF, DOCX, or Images up to 10MB</p>
-                  <Button variant="secondary" className="mt-4">Select Files</Button>
+                  <Button variant="secondary" className="mt-4" onClick={() => alert('File picker mock')}>Select Files</Button>
                 </div>
 
                 <div className="grid gap-4">
@@ -184,7 +187,7 @@ export default function CreateWorkPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label>Questions</Label>
-                    <Button size="sm" variant="outline"><Plus className="mr-2 h-3 w-3" /> Add Question</Button>
+                    <Button size="sm" variant="outline" onClick={() => alert('Add question mock')}><Plus className="mr-2 h-3 w-3" /> Add Question</Button>
                   </div>
 
                   {/* Mock Question Item */}
@@ -199,9 +202,9 @@ export default function CreateWorkPage() {
                         <div className="flex gap-4">
                            <Input type="number" placeholder="Marks" className="w-24" />
                            <Select>
-                             <option>Essay</option>
-                             <option>Short Answer</option>
-                             <option>Multiple Choice</option>
+                               <option value="essay">Essay</option>
+                               <option value="short">Short Answer</option>
+                               <option value="mcq">Multiple Choice</option>
                            </Select>
                         </div>
                       </div>
@@ -213,7 +216,34 @@ export default function CreateWorkPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Common Settings */}
+        {/* Rubric Builder Section */}
+        <Card className="border-l-4 border-l-blue-500">
+           <CardHeader>
+             <CardTitle className="flex items-center gap-2">
+               <FileText className="h-5 w-5 text-blue-600" />
+               Marking Scheme / Rubric
+             </CardTitle>
+             <CardDescription>Provide the correct answers or grading guide for DeepSeek to use.</CardDescription>
+           </CardHeader>
+           <CardContent className="space-y-4">
+             <div className="grid w-full gap-2">
+               <Label htmlFor="rubric-text">Rubric Content</Label>
+               <Textarea
+                 id="rubric-text"
+                 placeholder="Paste your marking scheme, key facts, or model answers here..."
+                 className="min-h-[150px] font-mono text-sm"
+               />
+             </div>
+             <div className="flex items-center gap-4">
+               <div className="text-xs text-muted-foreground uppercase font-bold">OR</div>
+               <Button variant="outline" size="sm" onClick={() => alert('Rubric upload mock')}>
+                 <Upload className="mr-2 h-3 w-3" /> Upload Rubric Document
+               </Button>
+             </div>
+           </CardContent>
+        </Card>
+
+        {/* Common Settings & Calibration */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
@@ -241,42 +271,74 @@ export default function CreateWorkPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-l-4 border-l-purple-500">
             <CardHeader>
               <CardTitle>Settings & Calibration</CardTitle>
+              <CardDescription>Fine-tune how the AI grades this work.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {isGroupWork && (
-                <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 space-y-3 mb-4">
-                  <Label className="text-primary font-semibold flex items-center gap-2">
-                    <Users className="h-4 w-4" /> Group Assignment Logic
-                  </Label>
-                  <RadioGroup defaultValue="shared">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="shared" id="g-shared" />
-                      <Label htmlFor="g-shared">Same document for all groups</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="unique" id="g-unique" />
-                      <Label htmlFor="g-unique">Unique document per group</Label>
-                    </div>
-                  </RadioGroup>
+            <CardContent className="space-y-6">
+              {/* Methodology & Steps */}
+              <div className="space-y-2">
+                <Label>Methodology & Steps</Label>
+                <Select defaultValue="partial">
+                    <option value="partial">Award partial marks for correct steps (Lenient)</option>
+                    <option value="strict">Strict final answer only (0 if wrong)</option>
+                </Select>
+              </div>
+
+              {/* Grammar & Language Focus */}
+               <div className="space-y-2">
+                <Label>Grammar & Language Focus</Label>
+                <Select defaultValue="ignore">
+                    <option value="ignore">Ignore grammar; focus on facts</option>
+                    <option value="deduct">Deduct marks for poor grammar</option>
+                </Select>
+              </div>
+
+              {/* Verbosity */}
+               <div className="space-y-2">
+                <Label>Verbosity & Rambling</Label>
+                <Select defaultValue="core">
+                    <option value="core">Find core fact, ignore noise</option>
+                    <option value="penalize">Penalize excessive rambling</option>
+                </Select>
+              </div>
+
+              {/* Language Strictness */}
+              <div className="flex flex-col gap-2 border p-3 rounded-lg bg-secondary/20">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="lang-strict" className="cursor-pointer font-medium">Enforce Strict Language</Label>
+                  <Switch
+                    id="lang-strict"
+                    checked={languageStrictness}
+                    onCheckedChange={setLanguageStrictness}
+                  />
                 </div>
-              )}
-
-              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
-                <Label htmlFor="timer">Timer (Minutes)</Label>
-                <Input id="timer" type="number" placeholder="60" className="w-20 h-8" />
+                {languageStrictness && (
+                   <Input placeholder="Penalty (e.g. -2 marks or 0)" className="mt-2 h-8 text-sm" />
+                )}
+                <p className="text-xs text-muted-foreground">If ON, penalizes use of Swahili/Vernacular in English exams.</p>
               </div>
 
-              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
-                <Label htmlFor="auto-release" className="cursor-pointer">Auto Release Grades</Label>
-                <Switch id="auto-release" />
-              </div>
+               {/* Custom Prompt */}
+               <div className="space-y-2">
+                 <Label>Custom AI Grading Instructions (Optional)</Label>
+                 <Textarea
+                   placeholder="e.g. The student MUST explicitly mention 'E=mc^2'..."
+                   className="h-20 text-sm"
+                 />
+               </div>
 
-              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
-                <Label htmlFor="lock-browser" className="cursor-pointer">Lock Browser (Online)</Label>
-                <Switch id="lock-browser" defaultChecked />
+              {/* Existing Settings */}
+              <div className="pt-4 border-t space-y-4">
+                 <div className="flex items-center justify-between space-x-2">
+                   <Label htmlFor="timer" className="text-sm text-muted-foreground">Timer (Minutes)</Label>
+                   <Input id="timer" type="number" placeholder="60" className="w-20 h-8" />
+                 </div>
+                 <div className="flex items-center justify-between space-x-2">
+                   <Label htmlFor="auto-release" className="cursor-pointer text-sm text-muted-foreground">Auto Release Grades</Label>
+                   <Switch id="auto-release" />
+                 </div>
               </div>
             </CardContent>
           </Card>
@@ -301,5 +363,3 @@ export default function CreateWorkPage() {
     </div>
   );
 }
-
-import { Plus, Trash2 } from "lucide-react";

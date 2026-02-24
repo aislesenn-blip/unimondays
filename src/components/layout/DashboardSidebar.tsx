@@ -7,9 +7,7 @@ import {
   BookOpen,
   BarChart2,
   FileText,
-  Settings,
   LogOut,
-  Download,
   MessageSquare,
   Menu,
   ChevronLeft
@@ -25,8 +23,6 @@ const NAV_ITEMS = [
   { name: "Sessions", href: "/dashboard/sessions", icon: BookOpen },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
   { name: "Appeals", href: "/dashboard/appeals", icon: MessageSquare },
-  { name: "Exports", href: "/dashboard/exports", icon: Download },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 interface DashboardSidebarProps {

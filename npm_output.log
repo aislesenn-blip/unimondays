@@ -1,0 +1,241 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+
+✓ Starting...
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+✓ Ready in 1223ms
+○ Compiling /dashboard ...
+ GET /dashboard 200 in 6.1s (compile: 5.1s, render: 960ms)
+○ Compiling /dashboard/sessions/[id] ...
+ GET /dashboard/sessions/sess_1 200 in 6.0s (compile: 5.8s, render: 249ms)
+ GET /dashboard/sessions/create 200 in 1280ms (compile: 1124ms, render: 157ms)
+⨯ ReferenceError: Label is not defined
+    at <unknown> (src/app/dashboard/sessions/[id]/work/[workId]/page.tsx:286:25)
+    at Array.map (<anonymous>)
+    at WorkDetailsPage (src/app/dashboard/sessions/[id]/work/[workId]/page.tsx:275:31)
+  284 |                    <CardContent className="p-4 space-y-4">
+  285 |                      <div className="space-y-2">
+> 286 |                        <Label className="text-xs font-bold uppercase text-muted-foreground">Manual Identification</Label>
+      |                         ^
+  287 |                        <div className="flex gap-2">
+  288 |                          <Input placeholder="Enter Reg No (e.g. 2024-04...)" className="font-mono uppercase" />
+  289 |                          <Button size="icon" variant="secondary"> {
+  digest: '3292832185'
+}
+ GET /dashboard/sessions/sess_1/work/work_1 500 in 2.2s (compile: 1773ms, render: 473ms)
+⨯ ./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectContent doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectContent was not found in module [project]/src/components/ui/select.tsx [app-client] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+
+./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectContent doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectContent was not found in module [project]/src/components/ui/select.tsx [app-ssr] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+
+./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectItem doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectItem was not found in module [project]/src/components/ui/select.tsx [app-client] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+
+./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectItem doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectItem was not found in module [project]/src/components/ui/select.tsx [app-ssr] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+
+./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectTrigger doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectTrigger was not found in module [project]/src/components/ui/select.tsx [app-client] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+
+./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectTrigger doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectTrigger was not found in module [project]/src/components/ui/select.tsx [app-ssr] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+
+./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectValue doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectValue was not found in module [project]/src/components/ui/select.tsx [app-client] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+
+./src/app/dashboard/sessions/[id]/work/create/page.tsx:9:1
+Export SelectValue doesn't exist in target module
+[0m [90m  7 |[39m [36mimport[39m { [33mCard[39m[33m,[39m [33mCardContent[39m[33m,[39m [33mCardDescription[39m[33m,[39m [33mCardFooter[39m[33m,[39m [33mCardHeader[39m[33m,[39m [33mCardTitle[39m } [36mfrom[39m [32m"@/components/ui/card"[39m[33m;[39m
+ [90m  8 |[39m [36mimport[39m { [33mLabel[39m } [36mfrom[39m [32m"@/components/ui/label"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  9 |[39m [36mimport[39m { [33mSelect[39m[33m,[39m [33mSelectContent[39m[33m,[39m [33mSelectItem[39m[33m,[39m [33mSelectTrigger[39m[33m,[39m [33mSelectValue[39m } [36mfrom[39m [32m"@/components/ui/select"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { [33mSwitch[39m } [36mfrom[39m [32m"@/components/ui/switch"[39m[33m;[39m
+ [90m 11 |[39m [36mimport[39m { [33mCheckbox[39m } [36mfrom[39m [32m"@/components/ui/checkbox"[39m[33m;[39m
+ [90m 12 |[39m [36mimport[39m { [33mTextarea[39m } [36mfrom[39m [32m"@/components/ui/textarea"[39m[33m;[39m[0m
+
+The export SelectValue was not found in module [project]/src/components/ui/select.tsx [app-ssr] (ecmascript).
+Did you mean to import Select?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component Browser]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Client Component SSR]
+    ./src/app/dashboard/sessions/[id]/work/create/page.tsx [Server Component]
+
+
+ GET /dashboard/sessions/sess_1/work/create 500 in 2.4s (compile: 2.2s, render: 201ms)
+ GET /dashboard 200 in 277ms (compile: 7ms, render: 270ms)
+ GET /dashboard/sessions/sess_1 200 in 177ms (compile: 38ms, render: 139ms)
+✓ Compiled in 182ms
+ GET /dashboard 200 in 298ms (compile: 6ms, render: 292ms)
+ GET /dashboard/sessions/sess_1 200 in 190ms (compile: 53ms, render: 137ms)
+ GET /dashboard/sessions/create 200 in 93ms (compile: 5ms, render: 87ms)
+ GET /dashboard/sessions/sess_1/work/create 200 in 954ms (compile: 720ms, render: 233ms)

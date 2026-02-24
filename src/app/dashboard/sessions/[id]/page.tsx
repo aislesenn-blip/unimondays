@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SESSIONS, WORKS } from "@/lib/mock-data";
-import { Plus, FileText, BarChart2, Users, Download, ArrowRight, BookOpen, Clock, Activity, Grip, ArrowLeft } from "lucide-react";
+import { Plus, FileText, BarChart2, Users, Download, ArrowRight, BookOpen, Clock, Activity, Grip, ArrowLeft, PenTool, Upload, FileDigit, Settings } from "lucide-react";
 import Link from "next/link";
 import {
   Table,
@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import { ContinuousAssessmentTable } from "@/components/dashboard/ContinuousAssessmentTable";
 import { GroupManagement } from "@/components/dashboard/GroupManagement";
 
@@ -37,11 +38,11 @@ export default function SessionDetailsPage() {
             <p className="text-muted-foreground">{session.courseName} • {session.semester}</p>
           </div>
           <div className="flex items-center gap-2">
-             <Button variant="outline">
+             <Button variant="outline" onClick={() => alert('Report exported successfully!')}>
                <Download className="mr-2 h-4 w-4" />
                Export Report
              </Button>
-             <Button variant="destructive">
+             <Button variant="destructive" onClick={() => alert('Session archiving feature coming soon')}>
                Archive Session
              </Button>
           </div>
@@ -53,6 +54,9 @@ export default function SessionDetailsPage() {
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="works">Works</TabsTrigger>
+            <TabsTrigger value="mark-exam" className="border-l border-r border-primary/20 bg-primary/5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+               <PenTool className="mr-2 h-3 w-3" /> Mark Exam
+            </TabsTrigger>
             <TabsTrigger value="students">Students</TabsTrigger>
             <TabsTrigger value="groups">
               <Users className="mr-2 h-3 w-3" /> Groups
@@ -156,6 +160,108 @@ export default function SessionDetailsPage() {
            </div>
         </TabsContent>
 
+        <TabsContent value="mark-exam" className="space-y-6">
+           <div className="flex justify-between items-center mb-6">
+             <div>
+               <h3 className="text-xl font-bold tracking-tight">Direct Exam Marking Workspace</h3>
+               <p className="text-muted-foreground">Operational workflow for grading physical exams without full assignment setup.</p>
+             </div>
+             <Button>
+               <Plus className="mr-2 h-4 w-4" /> Start New Marking Session
+             </Button>
+           </div>
+
+           <div className="grid md:grid-cols-3 gap-6">
+             {/* Step 1: Upload */}
+             <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-all">
+               <CardHeader>
+                 <CardTitle className="flex items-center gap-2">
+                   <Upload className="h-5 w-5 text-blue-500" /> 1. Upload Scripts
+                 </CardTitle>
+                 <CardDescription>Drag & drop scanned PDF bundles.</CardDescription>
+               </CardHeader>
+               <CardContent className="h-40 flex flex-col items-center justify-center border-2 border-dashed rounded-lg bg-blue-50/50">
+                 <FileDigit className="h-10 w-10 text-blue-300 mb-2" />
+                 <p className="text-sm text-muted-foreground font-medium">Drop files or click to browse</p>
+               </CardContent>
+             </Card>
+
+             {/* Step 2: Calibration */}
+             <Card className="border-l-4 border-l-purple-500 hover:shadow-lg transition-all">
+               <CardHeader>
+                 <CardTitle className="flex items-center gap-2">
+                   <Settings className="h-5 w-5 text-purple-500" /> 2. Calibration
+                 </CardTitle>
+                 <CardDescription>Upload marking scheme & gold standards.</CardDescription>
+               </CardHeader>
+               <CardContent className="space-y-3">
+                 <Button variant="outline" className="w-full justify-start" onClick={() => alert('Rubric upload modal')}>
+                   <FileText className="mr-2 h-4 w-4" /> Upload Rubric
+                 </Button>
+                 <Button variant="outline" className="w-full justify-start" onClick={() => alert('Gold standards upload')}>
+                   <Activity className="mr-2 h-4 w-4" /> Add Gold Standard Scripts (3)
+                 </Button>
+               </CardContent>
+             </Card>
+
+             {/* Step 3: Grading */}
+             <Card className="border-l-4 border-l-emerald-500 hover:shadow-lg transition-all">
+               <CardHeader>
+                 <CardTitle className="flex items-center gap-2">
+                   <PenTool className="h-5 w-5 text-emerald-500" /> 3. AI Grading
+                 </CardTitle>
+                 <CardDescription>Process scripts and verify results.</CardDescription>
+               </CardHeader>
+               <CardContent className="space-y-3">
+                 <div className="flex items-center justify-between text-sm text-muted-foreground border p-2 rounded">
+                   <span>Auto-Save to DB</span>
+                   <Switch />
+                 </div>
+                 <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => alert('Starting AI grading process...')}>
+                   Start Grading Process
+                 </Button>
+               </CardContent>
+             </Card>
+           </div>
+
+           <div className="mt-8">
+             <h4 className="font-semibold mb-4">Recent Marking Sessions</h4>
+             <div className="rounded-md border">
+               <Table>
+                 <TableHeader>
+                   <TableRow>
+                     <TableHead>Date</TableHead>
+                     <TableHead>Batch Name</TableHead>
+                     <TableHead>Scripts</TableHead>
+                     <TableHead>Status</TableHead>
+                     <TableHead className="text-right">Actions</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   <TableRow>
+                     <TableCell>Today, 10:23 AM</TableCell>
+                     <TableCell className="font-medium">Batch_A_MidTerms.pdf</TableCell>
+                     <TableCell>45</TableCell>
+                     <TableCell><span className="text-emerald-600 font-bold text-xs bg-emerald-100 px-2 py-1 rounded-full">COMPLETED</span></TableCell>
+                     <TableCell className="text-right">
+                       <Button variant="ghost" size="sm">Review</Button>
+                     </TableCell>
+                   </TableRow>
+                   <TableRow>
+                     <TableCell>Yesterday</TableCell>
+                     <TableCell className="font-medium">Supplimentary_Exams.pdf</TableCell>
+                     <TableCell>12</TableCell>
+                     <TableCell><span className="text-blue-600 font-bold text-xs bg-blue-100 px-2 py-1 rounded-full">PROCESSING</span></TableCell>
+                     <TableCell className="text-right">
+                       <Button variant="ghost" size="sm" disabled>Review</Button>
+                     </TableCell>
+                   </TableRow>
+                 </TableBody>
+               </Table>
+             </div>
+           </div>
+        </TabsContent>
+
         <TabsContent value="students">
           <Card>
             <CardHeader>
@@ -210,10 +316,10 @@ export default function SessionDetailsPage() {
                   <CardDescription>Live overview of student progress across the semester.</CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => alert('Column reordering coming soon')}>
                     <Grip className="mr-2 h-4 w-4" /> Reorder Columns
                   </Button>
-                  <Button variant="outline" size="sm">Export CSV</Button>
+                  <Button variant="outline" size="sm" onClick={() => alert('Exporting CSV...')}>Export CSV</Button>
                 </div>
               </div>
             </CardHeader>
