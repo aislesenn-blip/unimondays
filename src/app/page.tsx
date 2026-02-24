@@ -111,6 +111,53 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Partnerships Section */}
+        <section id="partnerships" className="py-24">
+          <div className="max-w-7xl mx-auto px-6 md:px-12 text-center">
+            <h2 className="text-3xl font-bold tracking-tight mb-8">Trusted by Leading Institutions</h2>
+            <div className="flex flex-wrap justify-center gap-12 opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
+               {/* Placeholders for logos */}
+               <div className="text-2xl font-bold text-muted-foreground">University of Dar es Salaam</div>
+               <div className="text-2xl font-bold text-muted-foreground">Ardhi University</div>
+               <div className="text-2xl font-bold text-muted-foreground">IFM</div>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQs Section */}
+        <section id="faqs" className="py-24 bg-secondary/30">
+          <div className="max-w-3xl mx-auto px-6 md:px-12">
+            <h2 className="text-3xl font-bold tracking-tight mb-12 text-center">Frequently Asked Questions</h2>
+            <div className="space-y-6">
+              {[
+                { q: "How does the AI grading work?", a: "We use a dual-layer approach. Gemini 1.5 Flash handles OCR and structure recognition, while DeepSeek V3 provides semantic analysis and grading based on your specific rubric." },
+                { q: "Is student data secure?", a: "Yes. All data is encrypted at rest and in transit. We adhere to strict data protection policies and do not use student data to train public models." },
+                { q: "Can I override the AI grades?", a: "Absolutely. The AI acts as a co-pilot. You have full control to review, edit, and override any grade before releasing it to students." }
+              ].map((faq, i) => (
+                <div key={i} className="bg-card p-6 rounded-xl border">
+                  <h3 className="font-semibold text-lg mb-2">{faq.q}</h3>
+                  <p className="text-muted-foreground">{faq.a}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Privacy Section */}
+        <section id="privacy" className="py-24">
+          <div className="max-w-4xl mx-auto px-6 md:px-12 text-center space-y-6">
+             <ShieldCheck className="h-12 w-12 text-primary mx-auto" />
+             <h2 className="text-3xl font-bold tracking-tight">Privacy & Compliance</h2>
+             <p className="text-lg text-muted-foreground">
+               We are committed to protecting the privacy of students and educators. Our platform is designed to comply with local and international data protection regulations.
+             </p>
+             <div className="flex justify-center gap-4 pt-4">
+               <Button variant="outline">Read Full Policy</Button>
+               <Button variant="ghost">Data Processing Agreement</Button>
+             </div>
+          </div>
+        </section>
+
       </main>
 
       <Footer />

@@ -32,6 +32,14 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Mock Unmatched Scripts
 const MOCK_UNMATCHED = [
@@ -248,9 +256,26 @@ export default function WorkDetailsPage() {
                           >
                              <Eye className="h-4 w-4 text-muted-foreground hover:text-primary" />
                           </Button>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Student Action</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => alert(`Viewing submission for ${submission.studentName}`)}>
+                                View Submission
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => alert(`Flagging ${submission.studentName}`)}>
+                                Flag for Review
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => alert(`Reset grade for ${submission.studentName}`)}>
+                                Reset Grade
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
