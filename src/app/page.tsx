@@ -1,46 +1,173 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Navbar } from "@/components/landing/Navbar";
+import { Footer } from "@/components/landing/Footer";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { TIERS } from "@/lib/mock-data";
+import {
+  Code,
+  FileText,
+  BarChart2,
+  ShieldCheck,
+  Download,
+  MessageSquare,
+  CheckCircle2,
+  ArrowRight,
+  BrainCircuit
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export default function Home() {
+export default function LandingPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 animate-in">
-      <div className="absolute inset-0 -z-10 h-full w-full bg-white [background:radial-gradient(125%_125%_at_50%_10%,#fff_40%,#63e_100%)] dark:bg-slate-950 dark:[background:radial-gradient(125%_125%_at_50%_10%,#000_40%,#63e_100%)] opacity-20" />
+    <div className="min-h-screen bg-background flex flex-col font-sans text-foreground">
+      <Navbar />
 
-      <div className="text-center mb-8 space-y-2">
-        <h1 className="text-4xl font-light tracking-tight lg:text-5xl">
-          PLAYBOOK
-        </h1>
-        <p className="text-muted-foreground tracking-widest uppercase text-xs">
-          Global Assessment Infrastructure
-        </p>
-      </div>
+      <main className="flex-1 pt-20">
+        {/* Hero Section */}
+        <section className="relative overflow-hidden py-20 md:py-32 lg:py-40 px-6 md:px-12 max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+              <div className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium bg-secondary text-secondary-foreground">
+                <span className="flex h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
+                Now available for Enterprise
+              </div>
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
+                The Institutional Standard for <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Academic Assessment.</span>
+              </h1>
+              <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
+                Playbook Ecosystem integrates precision grading, secure exam management, and AI-driven analytics into one unified platform for modern universities.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Link href="/signup" className={cn(buttonVariants({ size: "lg" }), "h-12 px-8 text-base rounded-full")}>
+                  Start as Lecturer <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+                <Link href="/student/login" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-12 px-8 text-base rounded-full")}>
+                  Student Access
+                </Link>
+              </div>
+            </div>
 
-      <div className="grid gap-4 md:grid-cols-2 w-full max-w-md">
-        <Card className="glass hover:scale-[1.02] transition-transform cursor-pointer">
-          <CardHeader>
-            <CardTitle>Lecturer Access</CardTitle>
-            <CardDescription>Manage quizzes, grade scripts, and view analytics.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/dashboard">
-              <Button className="w-full" variant="default">Enter Playbook</Button>
-            </Link>
-          </CardContent>
-        </Card>
+            <div className="relative lg:h-[600px] w-full rounded-2xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-right-8 duration-1000 delay-200">
+              <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent z-10"></div>
+              <img
+                src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=2000"
+                alt="University Collaboration"
+                className="object-cover w-full h-full transform hover:scale-105 transition-transform duration-700"
+              />
+            </div>
+          </div>
+        </section>
 
-        <Card className="glass hover:scale-[1.02] transition-transform cursor-pointer">
-          <CardHeader>
-            <CardTitle>Student Account</CardTitle>
-            <CardDescription>Enter quiz code, take assessments, view results.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/quiz">
-              <Button className="w-full" variant="secondary">Enter Code</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Feature Section */}
+        <section id="outcomes" className="py-24 bg-secondary/30">
+          <div className="max-w-7xl mx-auto px-6 md:px-12">
+            <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
+              <h2 className="text-3xl font-bold tracking-tight">Institutional-Grade Capabilities</h2>
+              <p className="text-muted-foreground text-lg">
+                Designed for high-stakes environments where accuracy, speed, and integrity are non-negotiable.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[
+                {
+                  icon: Code,
+                  title: "Quiz Code Engine",
+                  desc: "Secure, randomized assessment generation with instant code distribution for students."
+                },
+                {
+                  icon: BrainCircuit,
+                  title: "AI Grading & Audit",
+                  desc: "Dual-layer AI architecture provides human-level grading accuracy with full audit trails."
+                },
+                {
+                  icon: BarChart2,
+                  title: "Analytics & Performance",
+                  desc: "Real-time insights into student performance, question difficulty, and class trends."
+                },
+                {
+                  icon: FileText,
+                  title: "Executive Summaries",
+                  desc: "Automated qualitative reports for HODs and Deans generated from grading data."
+                },
+                {
+                  icon: MessageSquare,
+                  title: "Appeals System",
+                  desc: "Streamlined dispute resolution workflow connecting students directly to markers."
+                },
+                {
+                  icon: Download,
+                  title: "Export & Reports",
+                  desc: "One-click generation of Excel gradebooks and formatted PDF reports."
+                }
+              ].map((feature, idx) => (
+                <div key={idx} className="bg-card border rounded-2xl p-8 hover:shadow-lg transition-all duration-300 group">
+                  <div className="h-12 w-12 rounded-xl bg-primary/5 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                    <feature.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
+                  <p className="text-muted-foreground leading-relaxed">{feature.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Tiers Section */}
+        <section id="partnerships" className="py-24">
+          <div className="max-w-7xl mx-auto px-6 md:px-12">
+            <div className="text-center mb-16 space-y-4">
+              <h2 className="text-3xl font-bold tracking-tight">Flexible Institutional Pricing</h2>
+              <p className="text-muted-foreground text-lg">
+                Scalable solutions for individual lecturers, departments, and entire campuses.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+              {TIERS.map((tier, idx) => (
+                <div
+                  key={idx}
+                  className={`relative rounded-2xl border p-8 transition-all duration-300 ${tier.recommended ? 'bg-primary text-primary-foreground shadow-xl scale-105 z-10' : 'bg-card text-card-foreground hover:shadow-lg'}`}
+                >
+                  {tier.recommended && (
+                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-emerald-500 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                      Recommended
+                    </div>
+                  )}
+                  <h3 className="text-lg font-bold mb-2">{tier.name}</h3>
+                  <div className="text-3xl font-extrabold mb-6">{tier.price}<span className="text-sm font-normal opacity-80">/mo</span></div>
+
+                  <ul className="space-y-4 mb-8">
+                    <li className="flex items-center text-sm">
+                      <CheckCircle2 className="h-4 w-4 mr-3 shrink-0 opacity-70" />
+                      {tier.scripts} Scripts / Month
+                    </li>
+                    <li className="flex items-center text-sm">
+                      <CheckCircle2 className="h-4 w-4 mr-3 shrink-0 opacity-70" />
+                      {tier.pagesPerScript} Pages Max
+                    </li>
+                    {tier.features.map((feat, fIdx) => (
+                      <li key={fIdx} className="flex items-center text-sm">
+                        <CheckCircle2 className="h-4 w-4 mr-3 shrink-0 opacity-70" />
+                        {feat}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/signup"
+                    className={cn(buttonVariants({ variant: tier.recommended ? "default" : "outline" }), `w-full rounded-full h-12 font-medium ${tier.recommended ? 'bg-white text-primary hover:bg-white/90' : ''}`)}
+                  >
+                    {tier.cta}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <Footer />
     </div>
   );
 }

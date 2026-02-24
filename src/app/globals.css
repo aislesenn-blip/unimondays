@@ -5,45 +5,64 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Luxury Minimal - Light Mode Default */
   --background: #ffffff;
-  --foreground: #0f172a;
+  --foreground: #0f172a; /* Slate 900 */
+
   --card: #ffffff;
   --card-foreground: #0f172a;
+
   --popover: #ffffff;
   --popover-foreground: #0f172a;
+
   --primary: #0f172a;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
+
+  --secondary: #f8fafc; /* Slate 50 */
   --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+
+  --muted: #f1f5f9; /* Slate 100 */
+  --muted-foreground: #64748b; /* Slate 500 */
+
   --accent: #f1f5f9;
   --accent-foreground: #0f172a;
+
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
+
+  --border: #e2e8f0; /* Slate 200 */
   --input: #e2e8f0;
   --ring: #0f172a;
-  --radius: 0.5rem;
+
+  --radius: 1rem; /* 2xl radius equivalent roughly */
 }
 
 .dark {
-  --background: #0f172a;
+  /* Luxury Minimal - Dark Mode (if activated, though prompt implies White aesthetic) */
+  --background: #020617; /* Slate 950 */
   --foreground: #f8fafc;
-  --card: #1e293b;
+
+  --card: #0f172a;
   --card-foreground: #f8fafc;
+
   --popover: #0f172a;
   --popover-foreground: #f8fafc;
+
   --primary: #f8fafc;
   --primary-foreground: #0f172a;
+
   --secondary: #1e293b;
   --secondary-foreground: #f8fafc;
+
   --muted: #1e293b;
   --muted-foreground: #94a3b8;
+
   --accent: #1e293b;
   --accent-foreground: #f8fafc;
+
   --destructive: #7f1d1d;
   --destructive-foreground: #f8fafc;
+
   --border: #1e293b;
   --input: #1e293b;
   --ring: #cbd5e1;
@@ -76,14 +95,33 @@
 
 /* Luxury Utilities */
 .glass {
-  @apply bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl;
+  @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-sm;
 }
 
 .animate-in {
-  animation: fadeIn 0.5s ease-out;
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+body {
+  @apply font-sans antialiased bg-background text-foreground;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/20 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/40;
 }
