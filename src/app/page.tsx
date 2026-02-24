@@ -120,6 +120,9 @@ export default function LandingPage() {
                <div className="text-2xl font-bold text-muted-foreground">University of Dar es Salaam</div>
                <div className="text-2xl font-bold text-muted-foreground">Ardhi University</div>
                <div className="text-2xl font-bold text-muted-foreground">IFM</div>
+               <div className="text-2xl font-bold text-muted-foreground">Mzumbe University</div>
+               <div className="text-2xl font-bold text-muted-foreground">SUA</div>
+               <div className="text-2xl font-bold text-muted-foreground">UDOM</div>
             </div>
           </div>
         </section>
@@ -132,7 +135,9 @@ export default function LandingPage() {
               {[
                 { q: "How does the AI grading work?", a: "We use a dual-layer approach. Gemini 1.5 Flash handles OCR and structure recognition, while DeepSeek V3 provides semantic analysis and grading based on your specific rubric." },
                 { q: "Is student data secure?", a: "Yes. All data is encrypted at rest and in transit. We adhere to strict data protection policies and do not use student data to train public models." },
-                { q: "Can I override the AI grades?", a: "Absolutely. The AI acts as a co-pilot. You have full control to review, edit, and override any grade before releasing it to students." }
+                { q: "Can I override the AI grades?", a: "Absolutely. The AI acts as a co-pilot. You have full control to review, edit, and override any grade before releasing it to students." },
+                { q: "How are group assignments handled?", a: "We support random, manual, and smart grouping based on performance. Lecturers can easily manage groups via a drag-and-drop interface." },
+                { q: "Can I export grades to Excel?", a: "Yes, you can export full gradebooks to Excel or generate formatted PDF report cards for each student with a single click." }
               ].map((faq, i) => (
                 <div key={i} className="bg-card p-6 rounded-xl border">
                   <h3 className="font-semibold text-lg mb-2">{faq.q}</h3>
@@ -152,7 +157,7 @@ export default function LandingPage() {
                We are committed to protecting the privacy of students and educators. Our platform is designed to comply with local and international data protection regulations.
              </p>
              <div className="flex justify-center gap-4 pt-4">
-               <Button variant="outline">Read Full Policy</Button>
+               <Link href="/privacy" className={cn(buttonVariants({ variant: "outline" }))}>Read Full Policy</Link>
                <Button variant="ghost">Data Processing Agreement</Button>
              </div>
           </div>
