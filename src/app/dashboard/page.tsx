@@ -28,54 +28,65 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Scripts Graded</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{ANALYTICS.scriptsUsed} / {ANALYTICS.scriptsLimit}</div>
-            <p className="text-xs text-muted-foreground">
-              {Math.round((ANALYTICS.scriptsUsed / ANALYTICS.scriptsLimit) * 100)}% of monthly quota used
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{ANALYTICS.activeSessions}</div>
-            <p className="text-xs text-muted-foreground">
-              Across 2 semesters
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Reviews</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{ANALYTICS.pendingReviews}</div>
-            <p className="text-xs text-muted-foreground">
-              Requires manual attention
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">At Risk Students</CardTitle>
-            <AlertCircle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{ANALYTICS.studentRiskCount}</div>
-            <p className="text-xs text-muted-foreground">
-              Scored below 40% average
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/dashboard/analytics">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full border-l-4 border-l-primary">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Scripts Graded</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{ANALYTICS.scriptsUsed} / {ANALYTICS.scriptsLimit}</div>
+              <p className="text-xs text-muted-foreground">
+                {Math.round((ANALYTICS.scriptsUsed / ANALYTICS.scriptsLimit) * 100)}% of monthly quota used
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/sessions">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full border-l-4 border-l-emerald-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{ANALYTICS.activeSessions}</div>
+              <p className="text-xs text-muted-foreground">
+                Across 2 semesters
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/sessions?filter=pending">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full border-l-4 border-l-yellow-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Reviews</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{ANALYTICS.pendingReviews}</div>
+              <p className="text-xs text-muted-foreground">
+                Requires manual attention
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/analytics?view=risk">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full border-l-4 border-l-destructive">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">At Risk Students</CardTitle>
+              <AlertCircle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{ANALYTICS.studentRiskCount}</div>
+              <p className="text-xs text-muted-foreground">
+                Scored below 40% average
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">

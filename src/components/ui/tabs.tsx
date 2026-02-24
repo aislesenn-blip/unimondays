@@ -8,11 +8,23 @@ const TabsContext = React.createContext<{
   setActiveTab: (tab: string) => void;
 }>({ activeTab: "", setActiveTab: () => {} });
 
-export function Tabs({ defaultValue, children, className }: { defaultValue: string, children: React.ReactNode, className?: string }) {
+interface TabsProps {
+  defaultValue: string;
+  children: React.ReactNode;
+  className?: string;
+  onValueChange?: (value: string) => void;
+}
+
+export function Tabs({ defaultValue, children, className, onValueChange }: TabsProps) {
   const [activeTab, setActiveTab] = React.useState(defaultValue);
 
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    onValueChange?.(tab);
+  };
+
   return (
-    <TabsContext.Provider value={{ activeTab, setActiveTab }}>
+    <TabsContext.Provider value={{ activeTab, setActiveTab: handleTabChange }}>
       <div className={className}>{children}</div>
     </TabsContext.Provider>
   );
@@ -32,6 +44,7 @@ export function TabsTrigger({ value, children, className }: { value: string, chi
 
   return (
     <button
+      type="button" // Important to prevent form submission if inside a form
       onClick={() => setActiveTab(value)}
       className={cn(
         "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",

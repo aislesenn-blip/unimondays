@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SESSIONS, WORKS, SUBMISSIONS } from "@/lib/mock-data";
 import {
@@ -16,7 +18,15 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function StudentDashboard() {
+  const router = useRouter();
+  const [code, setCode] = useState("");
   const studentSubmissions = SUBMISSIONS.filter(s => s.studentId === "student_1");
+
+  const handleStart = () => {
+    if (code.trim()) {
+      router.push(`/student/assessment/${code.toUpperCase()}`);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -27,8 +37,14 @@ export default function StudentDashboard() {
           <p className="text-muted-foreground text-lg">Ready to take an assessment?</p>
         </div>
         <div className="flex w-full md:w-auto items-center gap-3">
-           <Input placeholder="Enter Work Code (e.g. WK-X92B)" className="md:w-72 font-mono uppercase h-12 text-lg tracking-widest placeholder:tracking-normal" />
-           <Button size="lg" className="h-12 px-8">Start</Button>
+           <Input
+             placeholder="Enter Work Code (e.g. WK-X92B)"
+             className="md:w-72 font-mono uppercase h-12 text-lg tracking-widest placeholder:tracking-normal"
+             value={code}
+             onChange={(e) => setCode(e.target.value)}
+             onKeyDown={(e) => e.key === "Enter" && handleStart()}
+           />
+           <Button size="lg" className="h-12 px-8" onClick={handleStart}>Start</Button>
         </div>
       </div>
 
@@ -59,7 +75,9 @@ export default function StudentDashboard() {
                       <span className="flex items-center gap-2"><FileText className="h-4 w-4" /> {work.questionsCount} Questions</span>
                       <span className="flex items-center gap-2 text-emerald-600 font-medium"><CheckCircle2 className="h-4 w-4" /> Open for submission</span>
                     </div>
-                    <Button className="w-full md:w-auto" size="lg">Continue Assessment <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                    <Button className="w-full md:w-auto" size="lg" onClick={() => router.push(`/student/assessment/WK-${work.id}`)}>
+                      Continue Assessment <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   </CardContent>
                 </Card>
               ))}

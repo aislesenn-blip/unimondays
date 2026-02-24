@@ -10,10 +10,12 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Copy, FileText, Calendar, Clock, Lock, Users } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, FileText, Calendar, Clock, Lock, Users, Upload, PenTool, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import { SESSIONS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export default function CreateWorkPage() {
   const router = useRouter();
@@ -23,6 +25,8 @@ export default function CreateWorkPage() {
 
   const [loading, setLoading] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [workMode, setWorkMode] = useState("upload");
+  const [isGroupWork, setIsGroupWork] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +93,7 @@ export default function CreateWorkPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 pb-24">
       <div className="flex items-center gap-4 mb-8">
         <Link href={`/dashboard/sessions/${sessionId}`} className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}>
           <ArrowLeft className="h-4 w-4" />
@@ -101,50 +105,125 @@ export default function CreateWorkPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>Define the core details of the assessment.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Work Title</Label>
-              <Input id="title" placeholder="e.g. Mid-Semester Quiz 1" required />
-            </div>
+        <Tabs defaultValue="upload" className="space-y-6" onValueChange={setWorkMode}>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+             <TabsList className="grid w-full md:w-[400px] grid-cols-2">
+              <TabsTrigger value="upload">
+                <Upload className="mr-2 h-4 w-4" /> Upload / Physical
+              </TabsTrigger>
+              <TabsTrigger value="digital">
+                <PenTool className="mr-2 h-4 w-4" /> Digital Creation
+              </TabsTrigger>
+            </TabsList>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="type">Type</Label>
-                <Select id="type">
-                  <option value="quiz">Quiz</option>
-                  <option value="exam">Examination</option>
-                  <option value="assignment">Assignment</option>
-                  <option value="group">Group Work</option>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="mode">Submission Mode</Label>
-                <Select id="mode">
-                  <option value="online">Online (In-Browser)</option>
-                  <option value="upload">File Upload (PDF)</option>
-                  <option value="physical">Physical Script Scan</option>
-                </Select>
-              </div>
+            <div className="flex items-center space-x-2 border px-3 py-1.5 rounded-lg bg-background">
+               <Switch
+                 id="group-mode"
+                 checked={isGroupWork}
+                 onCheckedChange={setIsGroupWork}
+               />
+               <Label htmlFor="group-mode" className="cursor-pointer flex items-center gap-2 font-medium">
+                 <Users className="h-4 w-4 text-muted-foreground" /> Group Work
+               </Label>
             </div>
+          </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="instructions">Instructions</Label>
-              <Textarea id="instructions" placeholder="Enter specific instructions for students..." />
-            </div>
-          </CardContent>
-        </Card>
+          <TabsContent value="upload" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upload Assessment Materials</CardTitle>
+                <CardDescription>Upload PDF question papers or scanned scripts for students to reference.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="border-2 border-dashed rounded-lg p-12 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer">
+                  <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <h3 className="font-medium text-lg">Drag & drop files here</h3>
+                  <p className="text-sm text-muted-foreground mt-1">PDF, DOCX, or Images up to 10MB</p>
+                  <Button variant="secondary" className="mt-4">Select Files</Button>
+                </div>
 
+                <div className="grid gap-4">
+                  <Label>Label As</Label>
+                  <RadioGroup defaultValue="quiz" className="flex gap-4">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="quiz" id="u-quiz" />
+                      <Label htmlFor="u-quiz">Quiz</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="exam" id="u-exam" />
+                      <Label htmlFor="u-exam">Exam</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="assignment" id="u-assignment" />
+                      <Label htmlFor="u-assignment">Assignment</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="digital" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Digital Editor</CardTitle>
+                <CardDescription>Compose your assessment directly in the platform.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-2">
+                  <Label>Instructions / Preamble</Label>
+                  <div className="min-h-[150px] border rounded-md p-4 bg-muted/10 font-mono text-sm text-muted-foreground">
+                    [Rich Text Editor Placeholder]
+                    <br/><br/>
+                    • Bold, Italic, Lists support...
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Questions</Label>
+                    <Button size="sm" variant="outline"><Plus className="mr-2 h-3 w-3" /> Add Question</Button>
+                  </div>
+
+                  {/* Mock Question Item */}
+                  <div className="border rounded-lg p-4 space-y-3 relative group">
+                    <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
+                    </div>
+                    <div className="flex gap-4">
+                      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center font-bold text-sm shrink-0">1</div>
+                      <div className="flex-1 space-y-2">
+                        <Input placeholder="Enter question text..." defaultValue="Explain the significance of the 1964 Union." />
+                        <div className="flex gap-4">
+                           <Input type="number" placeholder="Marks" className="w-24" />
+                           <Select>
+                             <option>Essay</option>
+                             <option>Short Answer</option>
+                             <option>Multiple Choice</option>
+                           </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Common Settings */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Scheduling & Access</CardTitle>
+              <CardTitle>Basic Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="title">Work Title</Label>
+                <Input id="title" placeholder="e.g. Mid-Semester Quiz 1" required />
+              </div>
               <div className="grid gap-2">
                 <Label>Start Date & Time</Label>
                 <div className="flex gap-2">
@@ -159,58 +238,45 @@ export default function CreateWorkPage() {
                   <Input type="time" className="w-32" />
                 </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="timer">Timer (Minutes)</Label>
-                <Input id="timer" type="number" placeholder="60" />
-              </div>
-
-              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
-                <Label htmlFor="auto-release" className="flex flex-col space-y-1 cursor-pointer">
-                  <span>Auto Release Grades</span>
-                  <span className="font-normal text-xs text-muted-foreground">Publish scores immediately after grading.</span>
-                </Label>
-                <Switch id="auto-release" />
-              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Calibration & Proctoring</CardTitle>
+              <CardTitle>Settings & Calibration</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
-                <Label htmlFor="lock-browser" className="flex flex-col space-y-1 cursor-pointer">
-                  <span>Lock Browser</span>
-                  <span className="font-normal text-xs text-muted-foreground">Prevent tab switching (Online mode only).</span>
-                </Label>
-                <Switch id="lock-browser" defaultChecked />
-              </div>
-               <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
-                <Label htmlFor="swahili-penalty" className="flex flex-col space-y-1 cursor-pointer">
-                  <span>Swahili Penalty</span>
-                  <span className="font-normal text-xs text-muted-foreground">Deduct points for using Swahili in English exams.</span>
-                </Label>
-                <Switch id="swahili-penalty" />
-              </div>
-
-              <div className="grid gap-2 pt-2">
-                <Label>AI Strictness Level</Label>
-                <Select defaultValue="balanced">
-                  <option value="lenient">Lenient (Focus on key concepts)</option>
-                  <option value="balanced">Balanced (Standard academic)</option>
-                  <option value="strict">Strict (Exact keywords required)</option>
-                </Select>
-              </div>
-
-               <div className="grid gap-2 pt-2">
-                <Label>Required Format</Label>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="pdf" defaultChecked disabled />
-                  <Label htmlFor="pdf">PDF</Label>
-                  <Checkbox id="docx" className="ml-4" />
-                  <Label htmlFor="docx">DOCX</Label>
+              {isGroupWork && (
+                <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 space-y-3 mb-4">
+                  <Label className="text-primary font-semibold flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Group Assignment Logic
+                  </Label>
+                  <RadioGroup defaultValue="shared">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="shared" id="g-shared" />
+                      <Label htmlFor="g-shared">Same document for all groups</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="unique" id="g-unique" />
+                      <Label htmlFor="g-unique">Unique document per group</Label>
+                    </div>
+                  </RadioGroup>
                 </div>
+              )}
+
+              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
+                <Label htmlFor="timer">Timer (Minutes)</Label>
+                <Input id="timer" type="number" placeholder="60" className="w-20 h-8" />
+              </div>
+
+              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
+                <Label htmlFor="auto-release" className="cursor-pointer">Auto Release Grades</Label>
+                <Switch id="auto-release" />
+              </div>
+
+              <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
+                <Label htmlFor="lock-browser" className="cursor-pointer">Lock Browser (Online)</Label>
+                <Switch id="lock-browser" defaultChecked />
               </div>
             </CardContent>
           </Card>
@@ -235,3 +301,5 @@ export default function CreateWorkPage() {
     </div>
   );
 }
+
+import { Plus, Trash2 } from "lucide-react";
