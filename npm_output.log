@@ -239,3 +239,7 @@ Import traces:
  GET /dashboard/sessions/sess_1 200 in 190ms (compile: 53ms, render: 137ms)
  GET /dashboard/sessions/create 200 in 93ms (compile: 5ms, render: 87ms)
  GET /dashboard/sessions/sess_1/work/create 200 in 954ms (compile: 720ms, render: 233ms)
+ GET /dashboard 200 in 1452ms (compile: 118ms, render: 1334ms)
+ GET /dashboard/sessions/sess_1 200 in 2.6s (compile: 1446ms, render: 1134ms)
+ GET /dashboard/sessions/create 200 in 116ms (compile: 7ms, render: 109ms)
+ GET /dashboard/sessions/sess_1/work/create 200 in 452ms (compile: 203ms, render: 250ms)
