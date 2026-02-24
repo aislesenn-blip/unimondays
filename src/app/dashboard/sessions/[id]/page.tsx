@@ -17,6 +17,20 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from "@/components/ui/sheet";
 import { ContinuousAssessmentTable } from "@/components/dashboard/ContinuousAssessmentTable";
 import { GroupManagement } from "@/components/dashboard/GroupManagement";
 
@@ -195,12 +209,88 @@ export default function SessionDetailsPage() {
                  <CardDescription>Upload marking scheme & gold standards.</CardDescription>
                </CardHeader>
                <CardContent className="space-y-3">
-                 <Button variant="outline" className="w-full justify-start" onClick={() => alert('Rubric upload modal')}>
-                   <FileText className="mr-2 h-4 w-4" /> Upload Rubric
-                 </Button>
-                 <Button variant="outline" className="w-full justify-start" onClick={() => alert('Gold standards upload')}>
-                   <Activity className="mr-2 h-4 w-4" /> Add Gold Standard Scripts (3)
-                 </Button>
+                 <Sheet>
+                   <SheetTrigger asChild>
+                     <Button variant="outline" className="w-full justify-start">
+                       <Settings className="mr-2 h-4 w-4" /> Configure Grading Rules
+                     </Button>
+                   </SheetTrigger>
+                   <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+                     <SheetHeader>
+                       <SheetTitle>Calibration & Grading Rules</SheetTitle>
+                       <SheetDescription>
+                         Fine-tune how the AI grades this exam batch.
+                       </SheetDescription>
+                     </SheetHeader>
+
+                     <div className="py-6 space-y-6">
+                        {/* Rubric Upload Section */}
+                        <div className="space-y-2">
+                          <Label>Marking Scheme / Rubric</Label>
+                          <div className="flex gap-2">
+                            <Button variant="outline" className="w-full" onClick={() => alert('Rubric upload')}>
+                              <FileText className="mr-2 h-4 w-4" /> Upload PDF
+                            </Button>
+                             <Button variant="outline" className="w-full" onClick={() => alert('Gold standards upload')}>
+                              <Activity className="mr-2 h-4 w-4" /> Gold Standard (3)
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Methodology & Steps */}
+                        <div className="space-y-2">
+                          <Label>Methodology & Steps</Label>
+                          <Select defaultValue="partial">
+                              <option value="partial">Award partial marks for correct steps/working (Lenient)</option>
+                              <option value="strict">Strict final answer only (Give 0 if the final answer is wrong, regardless of steps)</option>
+                          </Select>
+                        </div>
+
+                        {/* Grammar & Language Focus */}
+                         <div className="space-y-2">
+                          <Label>Grammar & Language Focus</Label>
+                          <Select defaultValue="ignore">
+                              <option value="ignore">Ignore grammar and spelling mistakes; focus purely on facts and concepts.</option>
+                              <option value="deduct">Deduct marks for poor grammar, spelling, and sentence structure.</option>
+                          </Select>
+                        </div>
+
+                        {/* Language Strictness */}
+                        <div className="flex flex-col gap-2 border p-3 rounded-lg bg-secondary/20">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="sheet-lang-strict" className="cursor-pointer font-medium">Enforce strict examination language (No Swahili/Vernacular)</Label>
+                            <Switch id="sheet-lang-strict" />
+                          </div>
+                          <Input placeholder="Penalty (e.g. -2 marks or 0)" className="mt-2 h-8 text-sm" />
+                          <p className="text-xs text-muted-foreground">If ON, the AI will automatically award 0 marks (or deduct a specific penalty) if the student answers an English exam using Swahili or mixed language (Swanglish).</p>
+                        </div>
+
+                        {/* Verbosity */}
+                         <div className="space-y-2">
+                          <Label>Verbosity & Rambling</Label>
+                          <Select defaultValue="core">
+                              <option value="core">Search for the core fact and award marks, ignore surrounding noise/length.</option>
+                              <option value="penalize">Penalize excessive rambling or off-topic information even if the correct fact is hidden inside.</option>
+                          </Select>
+                        </div>
+
+                         {/* Custom Prompt */}
+                         <div className="space-y-2">
+                           <Label>Custom AI Grading Instructions (Optional Override)</Label>
+                           <Textarea
+                             placeholder="e.g., The student MUST explicitly mention the formula 'E=mc^2' to get any marks for question 3. Do not accept paraphrasing."
+                             className="h-20 text-sm"
+                           />
+                         </div>
+                     </div>
+
+                     <SheetFooter>
+                       <SheetClose asChild>
+                         <Button type="submit">Save Configuration</Button>
+                       </SheetClose>
+                     </SheetFooter>
+                   </SheetContent>
+                 </Sheet>
                </CardContent>
              </Card>
 
