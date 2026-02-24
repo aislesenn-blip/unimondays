@@ -147,7 +147,7 @@ The UI currently mocks this. The backend flow must be:
 *   [ ] **No AI Trigger Duplication:** Rate limiter + Idempotency keys active.
 *   [ ] **No Enrollment Duplication:** DB Constraint `(user, session)`.
 *   [ ] **No Performance Bottlenecks:** Indexes on FKs (AssessmentId, SessionId).
-*   [ ] **No Orphan Records:** Cascade Delete set on `Session -> Assessment -> Submission`.
-*   [ ] **Group Logic Sealed:** Manual selection maps to `GroupMember` table; Students can query their group.
+*   **No Orphan Records:** Soft Delete (`deletedAt`) set on `Session -> Assessment -> Submission`.
+*   **Group Logic Sealed:** Manual selection maps to `GroupMember` table; Students can query their group. Group Memberships are locked at Assessment Publish.
 
 This document serves as the final architectural sign-off.
