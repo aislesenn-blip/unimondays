@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SESSIONS, WORKS } from "@/lib/mock-data";
-import { Plus, FileText, BarChart2, Users, Download, ArrowRight, BookOpen, Clock } from "lucide-react";
+import { Plus, FileText, BarChart2, Users, Download, ArrowRight, BookOpen, Clock, Activity, Grip, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import {
   Table,
@@ -16,6 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { ContinuousAssessmentTable } from "@/components/dashboard/ContinuousAssessmentTable";
+import { GroupManagement } from "@/components/dashboard/GroupManagement";
 
 export default function SessionDetailsPage() {
   const params = useParams();
@@ -25,29 +27,42 @@ export default function SessionDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{session.courseCode}</h2>
-          <p className="text-muted-foreground">{session.courseName} • {session.semester}</p>
-        </div>
-        <div className="flex items-center gap-2">
-           <Button variant="outline">
-             <Download className="mr-2 h-4 w-4" />
-             Export Report
-           </Button>
-           <Button variant="destructive">
-             Archive Session
-           </Button>
+      <div className="flex items-center gap-4 mb-2">
+        <Link href="/dashboard/sessions" className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}>
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full border-b pb-6">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">{session.courseCode}</h2>
+            <p className="text-muted-foreground">{session.courseName} • {session.semester}</p>
+          </div>
+          <div className="flex items-center gap-2">
+             <Button variant="outline">
+               <Download className="mr-2 h-4 w-4" />
+               Export Report
+             </Button>
+             <Button variant="destructive">
+               Archive Session
+             </Button>
+          </div>
         </div>
       </div>
 
       <Tabs defaultValue="works" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="works">Works</TabsTrigger>
-          <TabsTrigger value="students">Students</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="works">Works</TabsTrigger>
+            <TabsTrigger value="students">Students</TabsTrigger>
+            <TabsTrigger value="groups">
+              <Users className="mr-2 h-3 w-3" /> Groups
+            </TabsTrigger>
+            <TabsTrigger value="ca">
+              <Activity className="mr-2 h-3 w-3" /> Continuous Assessment
+            </TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="overview" className="space-y-4">
            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -178,6 +193,32 @@ export default function SessionDetailsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="groups">
+          <GroupManagement />
+        </TabsContent>
+
+        <TabsContent value="ca">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between">
+                <div>
+                  <CardTitle>Continuous Assessment Tracker</CardTitle>
+                  <CardDescription>Live overview of student progress across the semester.</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    <Grip className="mr-2 h-4 w-4" /> Reorder Columns
+                  </Button>
+                  <Button variant="outline" size="sm">Export CSV</Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ContinuousAssessmentTable />
             </CardContent>
           </Card>
         </TabsContent>
