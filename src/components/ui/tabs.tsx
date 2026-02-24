@@ -17,14 +17,14 @@ interface TabsProps {
 }
 
 export function Tabs({ defaultValue, value, children, className, onValueChange }: TabsProps) {
-  const [internalActiveTab, setInternalActiveTab] = React.useState(defaultValue);
+  const [internalTab, setInternalTab] = React.useState(defaultValue);
 
   const isControlled = value !== undefined;
-  const activeTab = isControlled ? value : internalActiveTab;
+  const activeTab = isControlled ? value : internalTab;
 
   const handleTabChange = (tab: string) => {
     if (!isControlled) {
-      setInternalActiveTab(tab);
+      setInternalTab(tab);
     }
     onValueChange?.(tab);
   };

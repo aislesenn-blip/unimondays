@@ -281,8 +281,8 @@ export default function CreateWorkPage() {
               <div className="space-y-2">
                 <Label>Methodology & Steps</Label>
                 <Select defaultValue="partial">
-                    <option value="partial">Award partial marks for correct steps (Lenient)</option>
-                    <option value="strict">Strict final answer only (0 if wrong)</option>
+                    <option value="partial">Award partial marks for correct steps/working (Lenient)</option>
+                    <option value="strict">Strict final answer only (Give 0 if the final answer is wrong, regardless of steps)</option>
                 </Select>
               </div>
 
@@ -290,24 +290,15 @@ export default function CreateWorkPage() {
                <div className="space-y-2">
                 <Label>Grammar & Language Focus</Label>
                 <Select defaultValue="ignore">
-                    <option value="ignore">Ignore grammar; focus on facts</option>
-                    <option value="deduct">Deduct marks for poor grammar</option>
-                </Select>
-              </div>
-
-              {/* Verbosity */}
-               <div className="space-y-2">
-                <Label>Verbosity & Rambling</Label>
-                <Select defaultValue="core">
-                    <option value="core">Find core fact, ignore noise</option>
-                    <option value="penalize">Penalize excessive rambling</option>
+                    <option value="ignore">Ignore grammar and spelling mistakes; focus purely on facts and concepts.</option>
+                    <option value="deduct">Deduct marks for poor grammar, spelling, and sentence structure.</option>
                 </Select>
               </div>
 
               {/* Language Strictness */}
               <div className="flex flex-col gap-2 border p-3 rounded-lg bg-secondary/20">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="lang-strict" className="cursor-pointer font-medium">Enforce Strict Language</Label>
+                  <Label htmlFor="lang-strict" className="cursor-pointer font-medium">Enforce strict examination language (No Swahili/Vernacular)</Label>
                   <Switch
                     id="lang-strict"
                     checked={languageStrictness}
@@ -317,14 +308,23 @@ export default function CreateWorkPage() {
                 {languageStrictness && (
                    <Input placeholder="Penalty (e.g. -2 marks or 0)" className="mt-2 h-8 text-sm" />
                 )}
-                <p className="text-xs text-muted-foreground">If ON, penalizes use of Swahili/Vernacular in English exams.</p>
+                <p className="text-xs text-muted-foreground">If ON, the AI will automatically award 0 marks (or deduct a specific penalty) if the student answers an English exam using Swahili or mixed language (Swanglish).</p>
+              </div>
+
+              {/* Verbosity */}
+               <div className="space-y-2">
+                <Label>Verbosity & Rambling</Label>
+                <Select defaultValue="core">
+                    <option value="core">Search for the core fact and award marks, ignore surrounding noise/length.</option>
+                    <option value="penalize">Penalize excessive rambling or off-topic information even if the correct fact is hidden inside.</option>
+                </Select>
               </div>
 
                {/* Custom Prompt */}
                <div className="space-y-2">
-                 <Label>Custom AI Grading Instructions (Optional)</Label>
+                 <Label>Custom AI Grading Instructions (Optional Override)</Label>
                  <Textarea
-                   placeholder="e.g. The student MUST explicitly mention 'E=mc^2'..."
+                   placeholder="e.g., The student MUST explicitly mention the formula 'E=mc^2' to get any marks for question 3. Do not accept paraphrasing."
                    className="h-20 text-sm"
                  />
                </div>

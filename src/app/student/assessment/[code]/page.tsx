@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Clock, AlertTriangle, FileText, Upload, CheckCircle2 } from "lucide-react";
+import { Clock, AlertTriangle, FileText, Upload, CheckCircle2, Play, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AssessmentPage() {
@@ -15,12 +15,13 @@ export default function AssessmentPage() {
   const router = useRouter();
   const code = params.code as string;
 
+  const [started, setStarted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(3600); // 1 hour in seconds
   const [submitted, setSubmitted] = useState(false);
 
   // Timer logic
   useEffect(() => {
-    if (submitted) return;
+    if (!started || submitted) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -31,7 +32,7 @@ export default function AssessmentPage() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [submitted]);
+  }, [started, submitted]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -46,6 +47,54 @@ export default function AssessmentPage() {
       router.push("/student/dashboard");
     }, 3000);
   };
+
+  if (!started && !submitted) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-muted/20 p-4">
+            <Card className="max-w-xl w-full border-t-4 border-t-primary shadow-lg">
+                <CardHeader>
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                        <FileText className="h-4 w-4" />
+                        <span className="text-xs font-mono tracking-widest uppercase">{code}</span>
+                    </div>
+                    <CardTitle className="text-2xl">Mid-Semester Quiz 1</CardTitle>
+                    <CardDescription>CS 101 • Introduction to Computer Science</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="border p-4 rounded-lg bg-secondary/10">
+                            <span className="text-xs text-muted-foreground uppercase font-bold block mb-1">Duration</span>
+                            <span className="text-xl font-bold flex items-center gap-2">
+                                <Clock className="h-5 w-5 text-primary" /> 60 Mins
+                            </span>
+                        </div>
+                        <div className="border p-4 rounded-lg bg-secondary/10">
+                            <span className="text-xs text-muted-foreground uppercase font-bold block mb-1">Questions</span>
+                            <span className="text-xl font-bold flex items-center gap-2">
+                                <Info className="h-5 w-5 text-primary" /> 2 Items
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h4 className="font-semibold text-sm">Instructions</h4>
+                        <ul className="text-sm text-muted-foreground space-y-2 list-disc pl-4">
+                            <li>Ensure you have a stable internet connection.</li>
+                            <li>Do not refresh the page once the assessment starts.</li>
+                            <li>You can save your progress as a draft.</li>
+                            <li>Upload diagrams where requested.</li>
+                        </ul>
+                    </div>
+                </CardContent>
+                <CardFooter>
+                    <Button size="lg" className="w-full text-lg h-12" onClick={() => setStarted(true)}>
+                        <Play className="mr-2 h-5 w-5" /> Start Assessment
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
+      );
+  }
 
   if (submitted) {
     return (
