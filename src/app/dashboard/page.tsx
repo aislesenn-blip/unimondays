@@ -1,375 +1,161 @@
-"use client";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Users,
+  BookOpen,
+  FileText,
+  Activity,
+  AlertCircle,
+  Clock,
+  ArrowUpRight
+} from "lucide-react";
+import Link from "next/link";
+import { ANALYTICS, SESSIONS } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Upload, MessageSquare, CheckCircle, AlertCircle, FileSpreadsheet, FileText } from "lucide-react";
-import * as XLSX from "xlsx";
-
-interface Submission {
-  id: number;
-  studentRegNo: string;
-  studentName: string | null;
-  status: string;
-  score?: {
-    totalMarks: number;
-    remarks: string;
-    breakdown: string;
-    confidence: number;
-  };
-  submittedAt: string;
-}
-
-export default function Dashboard() {
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [summary, setSummary] = useState<string>("");
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatQuery, setChatQuery] = useState("");
-  const [chatResponse, setChatResponse] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [processing, setProcessing] = useState<number[]>([]);
-  const [questionColumns, setQuestionColumns] = useState<string[]>([]);
-
-  useEffect(() => {
-    fetchSubmissions();
-    fetchSummary();
-    const interval = setInterval(fetchSubmissions, 5000); // Poll every 5s
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (submissions.length > 0) {
-        const questions = new Set<string>();
-        submissions.forEach(s => {
-            if (s.score?.breakdown) {
-                try {
-                    const bd = JSON.parse(s.score.breakdown);
-                    if (Array.isArray(bd)) {
-                        bd.forEach((q: any) => questions.add(q.question));
-                    }
-                } catch (e) {}
-            }
-        });
-        setQuestionColumns(Array.from(questions).sort());
-    }
-  }, [submissions]);
-
-  const fetchSummary = async () => {
-    try {
-      const res = await fetch("/api/analytics/summary");
-      if (res.ok) {
-        const data = await res.json();
-        setSummary(data.summary);
-      }
-    } catch (e) {
-      console.error("Failed to fetch summary", e);
-    }
-  };
-
-  const fetchSubmissions = async () => {
-    try {
-      const res = await fetch("/api/results");
-      if (res.ok) {
-        const data = await res.json();
-        setSubmissions(data);
-        // Identify pending items and trigger process if needed (Client-driven queue)
-        data.forEach((sub: Submission) => {
-             if (sub.status === 'pending' && !processing.includes(sub.id)) {
-                 triggerProcessing(sub.id);
-             }
-        });
-      }
-    } catch (e) {
-      console.error("Failed to fetch results", e);
-    }
-  };
-
-  const triggerProcessing = async (id: number) => {
-      if (processing.includes(id)) return;
-      setProcessing(prev => [...prev, id]);
-      try {
-          await fetch("/api/process", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ submissionId: id })
-          });
-      } catch (e) {
-          console.error("Trigger error", e);
-      } finally {
-          setProcessing(prev => prev.filter(pid => pid !== id));
-          fetchSubmissions();
-      }
-  }
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        alert("Upload Successful. Processing started.");
-        triggerProcessing(data.submissionId);
-        fetchSubmissions();
-      } else {
-        alert("Upload Failed");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Error uploading");
-    } finally {
-      setUploading(false);
-      setFile(null);
-    }
-  };
-
-  const handleChat = async () => {
-    if (!chatQuery) return;
-    setChatLoading(true);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: chatQuery }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setChatResponse(data.response);
-      }
-    } catch (e) {
-      setChatResponse("Error connecting to AI.");
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const downloadExcel = () => {
-      const ws = XLSX.utils.json_to_sheet(submissions.map(s => {
-          const row: any = {
-              "Reg No": s.studentRegNo,
-              "Status": s.status,
-              "Total Marks": s.score?.totalMarks || 0,
-              "Confidence": s.score?.confidence || 0,
-              "Remarks": s.score?.remarks || "",
-          };
-          if (s.score?.breakdown) {
-              try {
-                  const bd = JSON.parse(s.score.breakdown);
-                  if (Array.isArray(bd)) {
-                      bd.forEach((q: any) => row[q.question] = q.marks);
-                  }
-              } catch (e) {}
-          }
-          return row;
-      }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Results");
-      XLSX.writeFile(wb, "Playbook_Results.xlsx");
-  }
-
-  const downloadPDF = async () => {
-      window.open("/api/export/table-pdf", "_blank");
-  }
-
-  const getQuestionScore = (sub: Submission, qKey: string) => {
-      if (!sub.score?.breakdown) return "-";
-      try {
-          const bd = JSON.parse(sub.score.breakdown);
-          if (Array.isArray(bd)) {
-              const q = bd.find((item: any) => item.question === qKey);
-              return q ? q.marks : "-";
-          }
-      } catch (e) {}
-      return "-";
-  }
-
+export default function DashboardPage() {
   return (
-    <div className="min-h-screen bg-background p-8 font-sans text-foreground">
-      <header className="mb-8 flex justify-between items-center">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-light tracking-tight">Playbook Dashboard</h1>
-          <p className="text-muted-foreground text-sm uppercase tracking-wider">Lecturer Interface (Next.js Pure)</p>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">Overview of your academic sessions and grading performance.</p>
         </div>
-        <div className="flex gap-2">
-            <Button variant="outline" onClick={downloadExcel}>
-                <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
-            </Button>
-            <Button variant="outline" onClick={downloadPDF}>
-                <FileText className="mr-2 h-4 w-4" /> PDF Report
-            </Button>
-            <Button variant="outline" onClick={() => setChatOpen(!chatOpen)}>
-            <MessageSquare className="mr-2 h-4 w-4" /> AI Assistant
-            </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/sessions" className={cn(buttonVariants())}>View Sessions</Link>
         </div>
-      </header>
+      </div>
 
-      {/* HOD Summary Section */}
-      <Card className="mb-8 bg-slate-900 text-white shadow-lg border-none">
-        <CardHeader>
-            <CardTitle className="text-sm font-bold tracking-widest text-slate-400">HOD EXECUTIVE SUMMARY</CardTitle>
-        </CardHeader>
-        <CardContent>
-            <div className="text-sm leading-7 whitespace-pre-line font-light">
-                {summary ? summary : (
-                    <div className="flex items-center gap-2 text-slate-400">
-                        <Loader2 className="h-4 w-4 animate-spin"/> Generating analysis from latest data...
-                    </div>
-                )}
-            </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 md:grid-cols-3 mb-8">
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Scripts</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Scripts Graded</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{submissions.length}</div>
+            <div className="text-2xl font-bold">{ANALYTICS.scriptsUsed} / {ANALYTICS.scriptsLimit}</div>
+            <p className="text-xs text-muted-foreground">
+              {Math.round((ANALYTICS.scriptsUsed / ANALYTICS.scriptsLimit) * 100)}% of monthly quota used
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending / Processing</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{submissions.filter(s => s.status === 'processing' || s.status === 'pending').length}</div>
+            <div className="text-2xl font-bold">{ANALYTICS.activeSessions}</div>
+            <p className="text-xs text-muted-foreground">
+              Across 2 semesters
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Graded</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Reviews</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{submissions.filter(s => s.status === 'graded').length}</div>
+            <div className="text-2xl font-bold">{ANALYTICS.pendingReviews}</div>
+            <p className="text-xs text-muted-foreground">
+              Requires manual attention
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">At Risk Students</CardTitle>
+            <AlertCircle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{ANALYTICS.studentRiskCount}</div>
+            <p className="text-xs text-muted-foreground">
+              Scored below 40% average
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-3">
-        <div className="md:col-span-2 space-y-6">
-            <Card className="glass">
-                <CardHeader>
-                    <CardTitle>Detailed Result Sheet</CardTitle>
-                    <CardDescription>Excel-style view of student performance.</CardDescription>
-                </CardHeader>
-                <CardContent className="overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[100px]">Reg No</TableHead>
-                                {questionColumns.map(q => (
-                                    <TableHead key={q} className="w-[50px]">{q}</TableHead>
-                                ))}
-                                <TableHead className="w-[80px]">Total</TableHead>
-                                <TableHead className="w-[80px]">Conf %</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Remarks</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {submissions.map((sub) => (
-                                <TableRow key={sub.id}>
-                                    <TableCell className="font-medium">{sub.studentRegNo}</TableCell>
-                                    {questionColumns.map(q => (
-                                        <TableCell key={q}>{getQuestionScore(sub, q)}</TableCell>
-                                    ))}
-                                    <TableCell className="font-bold">{sub.score?.totalMarks || '-'}</TableCell>
-                                    <TableCell>{sub.score?.confidence || '-'}</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            {sub.status === 'graded' ? <CheckCircle className="h-4 w-4 text-green-500"/> :
-                                             sub.status === 'error' ? <AlertCircle className="h-4 w-4 text-red-500"/> :
-                                             sub.status === 'flagged' ? <AlertCircle className="h-4 w-4 text-yellow-500"/> :
-                                             <Loader2 className="h-4 w-4 animate-spin text-blue-500"/>}
-                                            <span className="capitalize text-xs">{sub.status}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="max-w-[200px] truncate" title={sub.score?.remarks || ""}>
-                                        {sub.score?.remarks || '-'}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {submissions.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={5 + questionColumns.length} className="text-center text-muted-foreground">No submissions yet.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-        </div>
-
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Upload Scripts</CardTitle>
-                    <CardDescription>Upload PDF batches or images.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors">
-                        <Upload className="h-8 w-8 text-muted-foreground mb-4" />
-                        <Input
-                            type="file"
-                            accept=".pdf,image/*"
-                            onChange={(e) => setFile(e.target.files?.[0] || null)}
-                            className="hidden"
-                            id="file-upload"
-                        />
-                        <label htmlFor="file-upload" className="cursor-pointer text-sm font-medium text-primary hover:underline">
-                            {file ? file.name : "Select File"}
-                        </label>
-                        <p className="text-xs text-muted-foreground mt-2">PDF (Multipage) or Images</p>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+            <CardDescription>
+              Latest grading actions and session updates.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-8">
+              {[
+                {
+                  user: "Dr. Sarah Manzi",
+                  action: "published grades for",
+                  target: "Mid-Semester Quiz 1",
+                  time: "2 hours ago"
+                },
+                {
+                  user: "System AI",
+                  action: "completed grading for",
+                  target: "Assignment 1 Batch A",
+                  time: "4 hours ago"
+                },
+                {
+                  user: "Dr. Sarah Manzi",
+                  action: "created new session",
+                  target: "CS 101 - Intro to CS",
+                  time: "Yesterday"
+                },
+                {
+                  user: "System AI",
+                  action: "flagged 3 submissions in",
+                  target: "Final Exam Prep",
+                  time: "Yesterday"
+                }
+              ].map((item, i) => (
+                <div key={i} className="flex items-center">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {item.user} <span className="text-muted-foreground font-normal">{item.action}</span> {item.target}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.time}
+                    </p>
+                  </div>
+                  <div className="ml-auto font-medium">
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle>Active Sessions</CardTitle>
+            <CardDescription>
+              Quick access to your ongoing courses.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {SESSIONS.slice(0, 3).map((session) => (
+                <Link key={session.id} href={`/dashboard/sessions/${session.id}`}>
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer mb-2">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium leading-none">{session.courseCode}</p>
+                      <p className="text-sm text-muted-foreground">{session.courseName}</p>
                     </div>
-                    <Button className="w-full" onClick={handleUpload} disabled={!file || uploading}>
-                        {uploading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processing...</> : "Start Processing"}
-                    </Button>
-                </CardContent>
-            </Card>
-
-            {chatOpen && (
-                <Card className="fixed bottom-8 right-8 w-80 shadow-2xl animate-in slide-in-from-bottom-10 z-50">
-                    <CardHeader className="bg-primary text-primary-foreground rounded-t-xl py-3">
-                        <CardTitle className="text-sm flex justify-between items-center">
-                            Playbook AI
-                            <Button variant="ghost" size="sm" onClick={() => setChatOpen(false)} className="h-6 w-6 p-0 text-white hover:bg-white/20">x</Button>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 h-64 flex flex-col">
-                        <div className="flex-1 overflow-auto text-sm space-y-2 mb-4">
-                            {chatResponse ? (
-                                <div className="bg-muted p-2 rounded-lg">{chatResponse}</div>
-                            ) : (
-                                <p className="text-muted-foreground text-xs text-center">Ask about student performance...</p>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                            <Input
-                                placeholder="Ask query..."
-                                value={chatQuery}
-                                onChange={(e) => setChatQuery(e.target.value)}
-                                className="h-8 text-xs"
-                            />
-                            <Button size="sm" className="h-8 w-8 p-0" onClick={handleChat} disabled={chatLoading}>
-                                {chatLoading ? <Loader2 className="h-3 w-3 animate-spin"/> : "→"}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-        </div>
+                    <div className="text-sm text-muted-foreground">
+                      {session.studentsCount} Students
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
