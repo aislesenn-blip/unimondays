@@ -11,26 +11,26 @@ export default async function StudentDashboard() {
   const user = await getAuthenticatedUser();
   if (!user || user.role.toUpperCase() !== 'STUDENT') redirect("/login");
 
-  // Fetch Enrolled Sessions
-  const enrollments = await prisma.studentEnrollment.findMany({
-    where: { userId: user.id, status: 'ACTIVE' },
-    select: { classId: true }
-  });
-  const classIds = enrollments.map(e => e.classId);
-
-  // Active Works (Published, Not deleted)
-  const activeWorks = await prisma.quiz.findMany({
+  // Active Works: Based on User's Submissions (Pending/Processing)
+  // Logic: Show Quizzes where the student has started a submission or has been assigned.
+  // Since there is no explicit enrollment, we rely on existing Submissions.
+  const activeSubmissions = await prisma.submission.findMany({
     where: {
-      classId: { in: classIds },
-      status: 'PUBLISHED',
-      deletedAt: null
+      userId: user.id,
+      status: { not: 'GRADED' }, // Pending, Processing, Flagged
+      quiz: { deletedAt: null }
     },
-    orderBy: { deadline: 'asc' },
+    orderBy: { quiz: { deadline: 'asc' } },
     take: 6,
     include: {
-        class: true
+      quiz: {
+        include: { class: true }
+      }
     }
   });
+
+  // Extract unique quizzes from submissions
+  const activeWorks = activeSubmissions.map(s => s.quiz);
 
   // Recent Results
   const recentResults = await prisma.submission.findMany({
@@ -111,7 +111,7 @@ export default async function StudentDashboard() {
                        <div className="flex justify-between items-start mb-2">
                          <div>
                            <h3 className="font-semibold text-lg">{sub.quiz.title}</h3>
-                           <p className="text-sm text-muted-foreground">Submitted {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                           <p className="text-sm text-muted-foreground">Submitted {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : 'N/A'}</p>
                          </div>
                          <div className="text-right md:hidden">
                            <div className="text-2xl font-bold text-primary">{sub.score?.totalMarks || 0}%</div>

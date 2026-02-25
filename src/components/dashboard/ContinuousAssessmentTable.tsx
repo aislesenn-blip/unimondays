@@ -4,12 +4,28 @@ import { AlertCircle, CheckCircle2, AlertTriangle, Settings2 } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 
-export async function ContinuousAssessmentTable({ sessionId }: { sessionId: number }) {
-  // Fetch Data
-  const students = await prisma.studentEnrollment.findMany({
-    where: { classId: sessionId, status: "ACTIVE" },
-    include: { user: true },
-    orderBy: { user: { fullName: "asc" } }
+export async function ContinuousAssessmentTable({ sessionId }: { sessionId: string }) {
+  // Fetch Data: Get all submissions for this session to identify students
+  const submissions = await prisma.submission.findMany({
+    where: { quiz: { classId: sessionId } },
+    include: { score: true, user: true }
+  });
+
+  // Identify unique students from submissions
+  const uniqueStudentIds = new Set(submissions.map(s => s.userId).filter(Boolean));
+
+  // Fetch user details for these students (if strict relation needed, else use submission.user)
+  // Since we included user in submission query, we can map from there.
+  // Group submissions by user.
+  const studentMap = new Map<string, { user: any, submissions: typeof submissions }>();
+
+  submissions.forEach(sub => {
+    if (sub.userId && sub.user) {
+        if (!studentMap.has(sub.userId)) {
+            studentMap.set(sub.userId, { user: sub.user, submissions: [] });
+        }
+        studentMap.get(sub.userId)?.submissions.push(sub);
+    }
   });
 
   const works = await prisma.quiz.findMany({
@@ -17,19 +33,13 @@ export async function ContinuousAssessmentTable({ sessionId }: { sessionId: numb
     orderBy: { createdAt: "asc" }
   });
 
-  const submissions = await prisma.submission.findMany({
-    where: { quiz: { classId: sessionId } },
-    include: { score: true }
-  });
-
   // Aggregation Logic
-  const data = students.map(enrollment => {
-    const student = enrollment.user;
-    const studentSubmissions = submissions.filter(s => s.userId === student.id);
+  const data = Array.from(studentMap.values()).map(({ user, submissions: studentSubmissions }) => {
+    const student = user;
 
     let totalWeightedScore = 0;
 
-    const scores: Record<number, { score: number, max: number, status: string } | null> = {};
+    const scores: Record<string, { score: number, max: number, status: string } | null> = {};
 
     works.forEach(work => {
       const sub = studentSubmissions.find(s => s.quizId === work.id);

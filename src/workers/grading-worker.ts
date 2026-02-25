@@ -6,11 +6,11 @@ import { gradeSubmission, GradeConfig } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 
 export async function handleAiGrade(job: Job) {
-  const data = JSON.parse(job.data);
+  const data = job.payload as any;
   const { submissionId } = data;
 
   if (!submissionId) {
-    throw new Error("Missing submissionId in job data.");
+    throw new Error("Missing submissionId in job payload.");
   }
 
   const submission = await prisma.submission.findUnique({
@@ -18,11 +18,7 @@ export async function handleAiGrade(job: Job) {
     include: {
       quiz: {
         include: {
-          lecturer: {
-            include: {
-              calibration: true
-            }
-          }
+          lecturer: true
         }
       }
     }
@@ -58,11 +54,18 @@ export async function handleAiGrade(job: Job) {
   }
 
   // 2. Prepare Grading Config
-  const lecturerCalibration = submission.quiz.lecturer.calibration;
+  // Map strictness ENUM to number multiplier
+  const strictnessMap: Record<string, number> = {
+    'LENIENT': 0.8,
+    'MODERATE': 1.0,
+    'STRICT': 1.2
+  };
+  const strictnessVal = strictnessMap[submission.quiz.strictness || 'MODERATE'] || 1.0;
+
   const config: GradeConfig = {
-    strictness: lecturerCalibration?.strictness || 1.0,
+    strictness: strictnessVal,
     markingScheme: submission.quiz.markingScheme || undefined,
-    lecturerNotes: lecturerCalibration?.notes || undefined
+    lecturerNotes: undefined // Removed from schema
   };
 
   // 3. Grade
@@ -100,17 +103,15 @@ export async function handleAiGrade(job: Job) {
     where: { submissionId: submission.id },
     update: {
       totalMarks: result.totalScore,
-      breakdown: JSON.stringify(result.breakdown),
+      breakdown: result.breakdown,
       remarks: result.aiReasoning,
-      confidence: result.confidence,
       gradedAt: new Date()
     },
     create: {
       submissionId: submission.id,
       totalMarks: result.totalScore,
-      breakdown: JSON.stringify(result.breakdown),
-      remarks: result.aiReasoning,
-      confidence: result.confidence
+      breakdown: result.breakdown,
+      remarks: result.aiReasoning
     }
   });
 
@@ -123,12 +124,23 @@ export async function handleAiGrade(job: Job) {
     data: {
       status,
       confidenceScore: result.confidence,
-      calibrationId: lecturerCalibration?.id,
-      feedback: JSON.stringify({
+      // calibrationId removed from schema
+      feedback: { // Prisma handles Json
         strengths: result.strengths,
         weaknesses: result.weaknesses,
         improvement: result.improvement
-      })
+      }
+    }
+  });
+
+  // Create Audit Log for Notification
+  await prisma.auditLog.create({
+    data: {
+      userId: submission.userId, // Notify the student
+      universityId: submission.universityId,
+      action: 'GRADED',
+      details: `Submission for ${submission.quiz.title} has been graded.`,
+      severity: 'INFO'
     }
   });
 

@@ -59,7 +59,7 @@ export default async function AdminPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{user.institution || "-"}</TableCell>
+                    <TableCell>{(user as any).university?.name || "-"}</TableCell>
                     <TableCell>{user.role}</TableCell>
                     <TableCell>{user.tier}</TableCell>
                     <TableCell>

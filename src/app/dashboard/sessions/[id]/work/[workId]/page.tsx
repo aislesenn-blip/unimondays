@@ -8,9 +8,8 @@ export default async function WorkDetailsPage({ params }: { params: Promise<{ id
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login");
 
-  const sessionId = parseInt(id);
-  const quizId = parseInt(workId);
-  if (isNaN(sessionId) || isNaN(quizId)) return <div>Invalid IDs</div>;
+  const sessionId = id;
+  const quizId = workId;
 
   const session = await prisma.classes.findUnique({ where: { id: sessionId } });
   if (!session) return <div>Session not found</div>;
@@ -47,7 +46,7 @@ export default async function WorkDetailsPage({ params }: { params: Promise<{ id
       studentName,
       regNo,
       status: s.status,
-      submittedAt: s.submittedAt,
+      submittedAt: s.submittedAt || new Date(),
       score: s.score?.totalMarks || 0,
       maxScore: work.totalMarks || 100,
       confidence: s.score?.confidence || null,

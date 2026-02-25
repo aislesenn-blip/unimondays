@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'lecturer' && user.role !== 'admin') {
+    if (user.role !== 'LECTURER' && user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden: Lecturers only' }, { status: 403 });
     }
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing file or quizId' }, { status: 400 });
     }
 
-    const quizId = parseInt(quizIdStr);
+    const quizId = quizIdStr;
 
     // Tenant Isolation Check
     // Ensure the quiz belongs to the user or their university
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         action: 'BULK_UPLOAD',
         details: `Bulk upload started for Quiz ${quizId}, Job ${job.id}`,
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent'),
+        // userAgent: request.headers.get('user-agent'),
         severity: 'INFO'
       }
     });

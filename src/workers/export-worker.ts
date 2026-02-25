@@ -5,10 +5,10 @@ import { createFeedbackPage, createAnnotatedPdf, generateMasterExcel } from '@/l
 import { saveBuffer, readFile } from '@/lib/storage';
 
 export async function handleExportZip(job: Job) {
-  const data = JSON.parse(job.data);
+  const data = job.payload as any;
   const { quizId } = data;
 
-  if (!quizId) throw new Error("Missing quizId");
+  if (!quizId) throw new Error("Missing quizId in job payload.");
 
   const submissions = await prisma.submission.findMany({
     where: { quizId },

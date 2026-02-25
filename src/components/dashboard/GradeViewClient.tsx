@@ -23,7 +23,7 @@ interface GradeViewClientProps {
   sessionId: string;
   workId: string;
   submission: {
-    id: number;
+    id: string;
     studentName: string;
     regNo: string;
     score: number;

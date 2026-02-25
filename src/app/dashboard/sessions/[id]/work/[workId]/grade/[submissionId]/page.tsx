@@ -8,10 +8,8 @@ export default async function GradePage({ params }: { params: Promise<{ id: stri
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login");
 
-  const subId = parseInt(submissionId);
-  const quizId = parseInt(workId);
-
-  if (isNaN(subId) || isNaN(quizId)) return <div>Invalid IDs</div>;
+  const subId = submissionId;
+  const quizId = workId;
 
   const submission = await prisma.submission.findUnique({
     where: { id: subId },
@@ -32,11 +30,10 @@ export default async function GradePage({ params }: { params: Promise<{ id: stri
 
   // Parse breakdown
   let breakdown = [];
-  try {
-    if (submission.score?.breakdown) {
-      breakdown = JSON.parse(submission.score.breakdown);
-    }
-  } catch (e) {}
+  if (submission.score?.breakdown) {
+    // Prisma returns Json type as object/array directly
+    breakdown = submission.score.breakdown as any[];
+  }
 
   return (
     <GradeViewClient

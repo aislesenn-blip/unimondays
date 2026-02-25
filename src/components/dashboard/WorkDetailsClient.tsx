@@ -40,8 +40,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface SubmissionWithScore {
-  id: number;
-  studentId: number | null;
+  id: string;
+  studentId: string | null;
   studentName: string;
   regNo: string;
   status: string;
@@ -57,7 +57,7 @@ interface WorkDetailsClientProps {
   workId: string;
   sessionCode: string;
   work: {
-    id: number;
+    id: string;
     title: string;
     status: string;
     type: string;
@@ -72,7 +72,7 @@ const MOCK_UNMATCHED = [
 ];
 
 export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submissions }: WorkDetailsClientProps) {
-  const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [auditStudentName, setAuditStudentName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("graded");
 
@@ -86,7 +86,7 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
     }
   };
 
-  const toggleStudent = (subId: number, checked: boolean) => {
+  const toggleStudent = (subId: string, checked: boolean) => {
     if (checked) {
       setSelectedStudents(prev => [...prev, subId]);
     } else {

@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'lecturer' && user.role !== 'admin') {
+    if (user.role !== 'LECTURER' && user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       'EXPORT_ZIP',
       { quizId },
       5,
-      quizId,
+      undefined,
       user.universityId || undefined
     );
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         action: 'EXPORT',
         details: `Export initiated for Quiz ${quizId}, Job ${job.id}`,
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent'),
+        // userAgent: request.headers.get('user-agent'),
         severity: 'INFO'
       }
     });

@@ -38,8 +38,7 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login");
 
-  const sessionId = parseInt(id);
-  if (isNaN(sessionId)) return <div>Invalid Session ID</div>;
+  const sessionId = id;
 
   const session = await prisma.classes.findUnique({
     where: { id: sessionId },
@@ -58,10 +57,8 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
   }
 
   if (user.role.toUpperCase() === 'STUDENT') {
-    const enrollment = await prisma.studentEnrollment.findUnique({
-      where: { userId_classId: { userId: user.id, classId: sessionId } }
-    });
-    if (!enrollment) return <div>Access Denied</div>;
+    // Check if student has any submissions in this session to allow access?
+    // Or just redirect to dashboard as student shouldn't be here (this is lecturer view)
     return redirect(`/student/dashboard`);
   }
 
@@ -161,7 +158,7 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
         </TabsContent>
 
         <TabsContent value="groups">
-          <GroupManagement sessionId={sessionId.toString()} />
+          <GroupManagement sessionId={sessionId} />
         </TabsContent>
       </Tabs>
     </div>

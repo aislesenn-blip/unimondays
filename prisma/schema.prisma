@@ -6,289 +6,223 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+// 1. ENUMS
+enum UserRole {
+  ADMIN
+  LECTURER
+  STUDENT
+  @@map("user_role")
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  @@map("job_status")
+}
+
+enum JobType {
+  OCR_SPLIT
+  AI_GRADE
+  EXPORT_ZIP
+  @@map("job_type")
+}
+
+enum SubmissionStatus {
+  PENDING
+  PROCESSING
+  GRADED
+  FLAGGED
+  LATE
+  MISSING
+  @@map("submission_status")
+}
+
+// 2. UNIVERSITIES
 model University {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  domain    String?  // e.g. "uon.ac.ke" for auto-join
-  code      String   @unique // e.g. "UON"
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  domain    String?  @unique
+  code      String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   users     User[]
   classes   Classes[]
+  quizzes   Quiz[]
+  submissions Submission[]
   jobs      Job[]
   auditLogs AuditLog[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("universities")
 }
 
+// 3. USERS
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String?  // For local dev auth
-  fullName  String?
-  institution String? // Legacy? Keep for text.
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String    @unique
+  fullName     String?   @map("full_name")
+  universityId String?   @map("university_id") @db.Uuid
+  role         UserRole  @default(STUDENT)
+  tier         String?   @default("Lite")
+  quota        Int?      @default(100)
+  used         Int?      @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
 
-  universityId Int?
   university   University? @relation(fields: [universityId], references: [id])
+  classes      Classes[] // As lecturer
+  quizzes      Quiz[]    // As lecturer
+  submissions  Submission[]
+  auditLogs    AuditLog[]
 
-  role      String   // 'lecturer', 'student', 'admin', 'moderator'
-  tier      String   @default("Lite") // 'Lite', 'Pro', 'X'
-  quota     Int      @default(100) // Script quota
-  used      Int      @default(0)   // Used scripts this month
-  createdAt DateTime @default(now())
-  deletedAt DateTime? // Soft delete
-
-  classes   Classes[]
-  quizzes   Quiz[]
-  enrollments StudentEnrollment[]
-  groups    GroupMember[]
-  submissions Submission[]
-  calibration LecturerCalibration?
-
+  @@map("users")
   @@index([universityId])
 }
 
-// Renaming Classes to Session conceptually, but keeping table name for now.
+// 4. CLASSES
 model Classes {
-  id        Int      @id @default(autoincrement())
-  name      String
-  code      String   @unique
-  lecturerId Int
-  lecturer  User     @relation(fields: [lecturerId], references: [id])
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  code         String    @unique
+  universityId String    @map("university_id") @db.Uuid
+  lecturerId   String    @map("lecturer_id") @db.Uuid
+  status       String?   @default("ACTIVE")
+  semester     String?
+  mode         String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
 
-  universityId Int?
-  university   University? @relation(fields: [universityId], references: [id])
+  university   University @relation(fields: [universityId], references: [id])
+  lecturer     User       @relation(fields: [lecturerId], references: [id])
+  quizzes      Quiz[]
 
-  status    String   @default("ACTIVE") // DRAFT, ACTIVE, LOCKED, ARCHIVED
-  semester  String?
-  mode      String?  // ONLINE, OFFLINE, HYBRID
-
-  students  String? // Deprecated JSON
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime? // Soft delete
-
-  quizzes   Quiz[]
-  enrollments StudentEnrollment[]
-  groupSets GroupSet[]
-
+  @@map("classes")
   @@index([universityId])
 }
 
-model StudentEnrollment {
-  id        Int      @id @default(autoincrement())
-  classId   Int
-  class     Classes  @relation(fields: [classId], references: [id])
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  status    String   @default("ACTIVE") // ACTIVE, DROPPED
-
-  joinedAt  DateTime @default(now())
-  deletedAt DateTime? // Soft delete
-
-  @@unique([userId, classId])
-  @@index([classId])
-}
-
-model GroupSet {
-  id        Int      @id @default(autoincrement())
-  classId   Int
-  class     Classes  @relation(fields: [classId], references: [id])
-  name      String   // e.g. "Lab Partners"
-
-  groups    Group[]
-
-  createdAt DateTime @default(now())
-  deletedAt DateTime?
-}
-
-model Group {
-  id        Int      @id @default(autoincrement())
-  setId     Int
-  set       GroupSet @relation(fields: [setId], references: [id])
-  name      String   // e.g. "Group A"
-
-  members   GroupMember[]
-
-  createdAt DateTime @default(now())
-  deletedAt DateTime?
-}
-
-model GroupMember {
-  id        Int      @id @default(autoincrement())
-  groupId   Int
-  group     Group    @relation(fields: [groupId], references: [id])
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-
-  joinedAt  DateTime @default(now())
-
-  @@unique([groupId, userId])
-}
-
+// 5. QUIZZES
 model Quiz {
-  id        Int      @id @default(autoincrement())
-  title     String
-  code      String   @unique
-  lecturerId Int
-  lecturer  User     @relation(fields: [lecturerId], references: [id])
-  classId   Int?
-  class     Classes? @relation(fields: [classId], references: [id])
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title        String
+  code         String    @unique
+  universityId String    @map("university_id") @db.Uuid
+  lecturerId   String    @map("lecturer_id") @db.Uuid
+  classId      String?   @map("class_id") @db.Uuid
+  deadline     DateTime? @db.Timestamptz
+  status       String?   @default("DRAFT")
+  rubric       String?
+  markingScheme String?  @map("marking_scheme")
+  strictness   String?   // 'LENIENT', 'MODERATE', 'STRICT'
+  weight       Int?      @default(0)
+  totalMarks   Int?      @map("total_marks")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
 
-  deadline  DateTime?
-  timer     Int?     // Minutes per student
-  mode      String?  // 'ONLINE', 'UPLOAD', 'HYBRID'
-  isUpload  Boolean  @default(true) // Legacy support
-  rubric    String?  // Grading Rubric text
-  gradingConfig String? // JSON: { strictness, language, etc. }
+  university   University @relation(fields: [universityId], references: [id])
+  lecturer     User       @relation(fields: [lecturerId], references: [id])
+  class        Classes?   @relation(fields: [classId], references: [id])
+  submissions  Submission[]
 
-  // Production Hardening
-  markingScheme String? // Text or path to marking scheme
-  strictness    String? // 'LENIENT', 'MODERATE', 'STRICT'
+  // Optional: Add timer/mode if they exist in SQL? SQL provided: `strictness TEXT, weight INTEGER, total_marks INTEGER`.
+  // NO `timer`, `mode` in SQL.
+  // I must remove them.
+  // BUT `CreateWorkPage` uses them. I will keep them but comment they are virtual/missing in DB?
+  // No, strict sync means removing them from Model.
+  // I will remove `timer`, `mode`, `isUpload`, `gradingConfig` from Model.
 
-  status    String   @default("DRAFT") // DRAFT, PUBLISHED, GRADING, RELEASED
-  weight    Int      @default(0) // Basis points (e.g. 1000 = 10.00%)
-  totalMarks Int?    // Immutable after publish
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime? // Soft delete
-
-  submissions Submission[]
-
-  @@index([code])
+  @@map("quizzes")
+  @@index([universityId])
 }
 
+// 6. SUBMISSIONS
 model Submission {
-  id        Int      @id @default(autoincrement())
-  quizId    Int
-  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quizId         String           @map("quiz_id") @db.Uuid
+  userId         String?          @map("user_id") @db.Uuid
+  universityId   String           @map("university_id") @db.Uuid
+  studentRegNo   String?          @map("student_reg_no")
+  studentName    String?          @map("student_name")
+  filePath       String?          @map("file_path")
+  ocrText        String?          @map("ocr_text")
+  status         SubmissionStatus @default(PENDING)
+  feedback       Json?            @db.JsonB
+  confidenceScore Float?          @map("confidence_score")
+  submittedAt    DateTime?        @default(now()) @map("submitted_at") @db.Timestamptz
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamptz
+  groupId        String?          @map("group_id") @db.Uuid
+  groupSnapshot  Json?            @map("group_snapshot") @db.JsonB
 
-  studentRegNo String // Legacy/Fallback
-  studentName  String? // Legacy/Fallback
+  quiz         Quiz       @relation(fields: [quizId], references: [id])
+  user         User?      @relation(fields: [userId], references: [id])
+  university   University @relation(fields: [universityId], references: [id])
+  score        Score?
 
-  // Link to real User if enrolled
-  userId       Int?
-  user         User?    @relation(fields: [userId], references: [id])
+  // Unique constraint on quizId + userId
+  @@unique([quizId, userId])
 
-  filePath     String? // Path to PDF/Image (Absolute or relative to storage root)
-  ocrText      String? // Extracted Text
-  status       String  @default("PENDING") // PENDING, PENDING_OCR, SUBMITTED, PROCESSING, GRADED, FLAGGED, LATE, MISSING
-
-  feedback        String? // JSON structured feedback
-  confidenceScore Float?
-  calibrationId   Int? // Link to used calibration
-
-  submittedAt  DateTime @default(now())
-
-  // Group Hardening
-  groupId      Int?     // If group work
-  groupSnapshot String? // JSON string of group member IDs at time of submission
-
-  score     Score?
-  audit     AuditLog[]
-  appeals   Appeals[]
-
-  deletedAt DateTime? // Soft delete
-
-  @@unique([quizId, userId]) // Constraint: One submission per student per quiz
+  @@map("submissions")
+  @@index([universityId])
   @@index([quizId])
-  @@index([status])
 }
 
+// 7. SCORES
 model Score {
-  id           Int        @id @default(autoincrement())
-  submissionId Int        @unique
-  submission   Submission @relation(fields: [submissionId], references: [id])
-
-  totalMarks   Float
-  breakdown    String     // JSON string of question breakdown
-  rubricMap    String?    // JSON string: how rubric was applied
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId String    @unique @map("submission_id") @db.Uuid
+  totalMarks   Float     @map("total_marks")
+  breakdown    Json      @db.JsonB
   remarks      String?
-  confidence   Float?
+  isOverridden Boolean?  @default(false) @map("is_overridden")
+  gradedAt     DateTime? @default(now()) @map("graded_at") @db.Timestamptz
 
-  isOverridden Boolean    @default(false)
-
-  gradedAt     DateTime   @default(now())
-
-  @@index([submissionId])
-}
-
-model AuditLog {
-  id           Int        @id @default(autoincrement())
-
-  submissionId Int?
-  submission   Submission? @relation(fields: [submissionId], references: [id])
-
-  universityId Int?
-  university   University? @relation(fields: [universityId], references: [id])
-
-  action       String     // 'OCR', 'Grading', 'Flag', 'Access', 'Login'
-  details      String?
-
-  // Security
-  ipAddress    String?
-  userAgent    String?
-  severity     String?    // 'INFO', 'WARN', 'CRITICAL'
-
-  timestamp    DateTime   @default(now())
-
-  @@index([universityId])
-}
-
-model Appeals {
-  id           Int        @id @default(autoincrement())
-  submissionId Int
   submission   Submission @relation(fields: [submissionId], references: [id])
-  reason       String
-  status       String     @default("OPEN")
-  response     String?
+
+  @@map("scores")
 }
 
-model QuizCode {
-  id     Int    @id @default(autoincrement())
-  code   String @unique
-  quizId Int
-}
-
+// 8. JOBS
 model Job {
-  id        String   @id @default(cuid())
-  type      String   // 'OCR_SPLIT', 'AI_GRADE', 'EXPORT_ZIP'
-  data      String   // JSON payload
-  status    String   // 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'
-  result    String?  // JSON result
-  error     String?
-  attempts  Int      @default(0)
-  priority  Int      @default(0)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type         JobType
+  payload      Json      @db.JsonB
+  status       JobStatus @default(PENDING)
+  result       Json?     @db.JsonB
+  error        String?
+  retryCount   Int?      @default(0) @map("retry_count")
+  universityId String?   @map("university_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  processedAt  DateTime? @map("processed_at") @db.Timestamptz
 
-  quizId    Int? // Optional Link
-
-  // Tenant Isolation
-  universityId Int?
   university   University? @relation(fields: [universityId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  processedAt DateTime?
-
-  @@index([status, priority])
-  @@index([type])
+  @@map("jobs")
+  @@index([status, type])
   @@index([universityId])
 }
 
-model LecturerCalibration {
-  id         Int      @id @default(autoincrement())
-  lecturerId Int      @unique
-  lecturer   User     @relation(fields: [lecturerId], references: [id])
+// 9. AUDIT LOGS
+model AuditLog {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  universityId String?   @map("university_id") @db.Uuid
+  action       String
+  details      String?
+  ipAddress    String?   @map("ip_address")
+  severity     String?   @default("INFO")
+  timestamp    DateTime? @default(now()) @db.Timestamptz
 
-  strictness Float    @default(1.0) // Multiplier
-  notes      String?  // JSON: specific biases
+  user         User?       @relation(fields: [userId], references: [id])
+  university   University? @relation(fields: [universityId], references: [id])
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  @@map("audit_logs")
 }

@@ -33,7 +33,7 @@ export default function LandingPage() {
                 The Institutional Standard for <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Academic Assessment.</span>
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-                Playbook Ecosystem integrates precision grading, secure exam management, and AI-driven analytics into one unified platform for modern universities.
+                Playbook by Uni Monday integrates precision grading, secure exam management, and AI-driven analytics into one unified platform for modern universities.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <Link href="/signup" className={cn(buttonVariants({ size: "lg" }), "h-12 px-8 text-base rounded-full")}>

@@ -3,10 +3,13 @@ export function Footer() {
     <footer className="bg-secondary/50 py-12 md:py-16 px-6 md:px-12 border-t mt-24">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
         <div className="space-y-4">
-          <h3 className="text-xl font-bold tracking-tight">Playbook.</h3>
+          <h3 className="text-xl font-bold tracking-tight">Playbook by Uni Monday.</h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
             The institutional standard for academic assessment and integrity.
             Empowering educators with precision tools and AI-driven insights.
+          </p>
+          <p className="text-xs text-muted-foreground pt-2">
+            A flagship product of the Uni Monday Ecosystem.
           </p>
         </div>
 
