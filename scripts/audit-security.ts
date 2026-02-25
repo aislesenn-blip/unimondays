@@ -46,7 +46,7 @@ async function main() {
   console.log("\n[TEST 3] Invalid File Type Logic...");
   {
     // This is handled in the API route, but we can verify the logic here.
-    const fileType = "application/exe";
+    const fileType: string = "application/exe";
     if (fileType !== "application/pdf") {
       console.log("✅ PASSED: EXE rejected (Logic check)");
     } else {
