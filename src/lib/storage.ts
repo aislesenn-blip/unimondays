@@ -3,53 +3,89 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 
-const IS_PROD = process.env.NODE_ENV === 'production';
-const UPLOAD_ROOT = IS_PROD ? os.tmpdir() : path.join(process.cwd(), 'public/uploads');
+/**
+ * Storage Interface for dependency injection.
+ * In Phase 4, we will add 'S3StorageService' or 'SupabaseStorageService'.
+ */
+export interface StorageService {
+  uploadFile(file: File, folder: string): Promise<string>;
+  saveBuffer(buffer: Buffer, originalName: string, folder: string): Promise<string>;
+  readFile(filePath: string): Promise<Buffer>;
+  deleteFile(filePath: string): Promise<void>;
+}
 
-const ensureDir = async (dir: string) => {
-  try {
-    await fs.mkdir(dir, { recursive: true });
-  } catch (e: any) {
-    if (e.code !== 'EEXIST') throw e;
+/**
+ * Temporary Storage Service using OS temp directory.
+ * This is compliant with Vercel Serverless (for single invocation) and persistent environments (for workers).
+ *
+ * WARNING: On Vercel, files in /tmp are ephemeral and not shared between invocations.
+ * This means the API that uploads the file must process it immediately OR pass the content to a shared store.
+ * For this phase, we assume the Worker is running in a persistent environment (e.g., VPS, Railway, Render)
+ * OR we accept that Vercel functions will process small batches synchronously if needed.
+ *
+ * Ideally, use S3/Supabase for production.
+ */
+class TmpStorageService implements StorageService {
+  private rootDir: string;
+
+  constructor() {
+    this.rootDir = os.tmpdir();
+    console.log(`[Storage] Initialized TmpStorageService at ${this.rootDir}`);
   }
-};
 
-export async function saveBuffer(buffer: Buffer, originalName: string, folder: string = 'submissions'): Promise<string> {
-  const ext = path.extname(originalName) || '.pdf'; // Default to .pdf if missing
-  const uuid = crypto.randomUUID();
-  const filename = `${uuid}${ext}`;
+  private async ensureDir(dir: string) {
+    try {
+      await fs.mkdir(dir, { recursive: true });
+    } catch (e: any) {
+      if (e.code !== 'EEXIST') throw e;
+    }
+  }
 
-  const targetDir = path.join(UPLOAD_ROOT, folder);
-  await ensureDir(targetDir);
+  async uploadFile(file: File, folder: string = 'submissions'): Promise<string> {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    return this.saveBuffer(buffer, file.name, folder);
+  }
 
-  const filepath = path.join(targetDir, filename);
-  await fs.writeFile(filepath, buffer);
+  async saveBuffer(buffer: Buffer, originalName: string, folder: string = 'submissions'): Promise<string> {
+    const ext = path.extname(originalName) || '.bin';
+    const uuid = crypto.randomUUID();
+    const filename = `${uuid}${ext}`;
 
-  if (IS_PROD) {
+    const targetDir = path.join(this.rootDir, 'playbook_uploads', folder);
+    await this.ensureDir(targetDir);
+
+    const filepath = path.join(targetDir, filename);
+    await fs.writeFile(filepath, buffer);
+
+    // Return absolute path for internal use
     return filepath;
-  } else {
-    return `/uploads/${folder}/${filename}`;
+  }
+
+  async readFile(filePath: string): Promise<Buffer> {
+    // Security check: ensure path is within tmpdir?
+    // For now, trust the path if it's absolute.
+    try {
+      return await fs.readFile(filePath);
+    } catch (error) {
+      console.error(`[Storage] Error reading file: ${filePath}`, error);
+      throw new Error(`File not found or unreadable: ${filePath}`);
+    }
+  }
+
+  async deleteFile(filePath: string): Promise<void> {
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      console.warn(`[Storage] Failed to delete file: ${filePath}`, error);
+    }
   }
 }
 
-export async function uploadFile(file: File, folder: string = 'submissions'): Promise<string> {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  return saveBuffer(buffer, file.name, folder);
-}
+// Singleton instance
+export const storage: StorageService = new TmpStorageService();
 
-export async function readFile(fileUrl: string): Promise<Buffer> {
-  let filepath = fileUrl;
-
-  if (fileUrl.startsWith('/uploads/')) {
-    filepath = path.join(process.cwd(), 'public', fileUrl);
-  } else if (!path.isAbsolute(fileUrl)) {
-    filepath = path.join(UPLOAD_ROOT, fileUrl);
-  }
-
-  try {
-    return await fs.readFile(filepath);
-  } catch (error) {
-    console.error("Error reading file:", filepath, error);
-    throw new Error("File not found or unreadable.");
-  }
-}
+// Re-export convenience functions matching old API
+export const uploadFile = (file: File, folder?: string) => storage.uploadFile(file, folder);
+export const saveBuffer = (buffer: Buffer, name: string, folder?: string) => storage.saveBuffer(buffer, name, folder);
+export const readFile = (path: string) => storage.readFile(path);
+export const deleteFile = (path: string) => storage.deleteFile(path);

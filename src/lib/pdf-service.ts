@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
-import { analyzePdfStructure } from './ai/gemini';
-import { saveBuffer } from './storage';
+import { analyzePdfStructure } from '@/lib/ai/gemini';
+import { saveBuffer } from '@/lib/storage';
 
 export async function splitPdfBatch(buffer: Buffer): Promise<{ regNo: string, filePath: string }[]> {
   // 1. Analyze structure (find start/end pages)

@@ -10,13 +10,32 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model University {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  domain    String?  // e.g. "uon.ac.ke" for auto-join
+  code      String   @unique // e.g. "UON"
+
+  users     User[]
+  classes   Classes[]
+  jobs      Job[]
+  auditLogs AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String?  // For local dev auth
   fullName  String?
-  institution String?
-  role      String   // 'lecturer', 'student'
+  institution String? // Legacy? Keep for text.
+
+  universityId Int?
+  university   University? @relation(fields: [universityId], references: [id])
+
+  role      String   // 'lecturer', 'student', 'admin', 'moderator'
   tier      String   @default("Lite") // 'Lite', 'Pro', 'X'
   quota     Int      @default(100) // Script quota
   used      Int      @default(0)   // Used scripts this month
@@ -29,22 +48,26 @@ model User {
   groups    GroupMember[]
   submissions Submission[]
   calibration LecturerCalibration?
+
+  @@index([universityId])
 }
 
-// Renaming Classes to Session conceptually, but keeping table name for now to avoid drastic db reset if possible
-// However, prompts requested unified naming. Let's stick to Classes for now but add features.
+// Renaming Classes to Session conceptually, but keeping table name for now.
 model Classes {
   id        Int      @id @default(autoincrement())
   name      String
   code      String   @unique
   lecturerId Int
   lecturer  User     @relation(fields: [lecturerId], references: [id])
+
+  universityId Int?
+  university   University? @relation(fields: [universityId], references: [id])
+
   status    String   @default("ACTIVE") // DRAFT, ACTIVE, LOCKED, ARCHIVED
   semester  String?
   mode      String?  // ONLINE, OFFLINE, HYBRID
 
-  // JSON list of student IDs is DEPRECATED. Use StudentEnrollment.
-  students  String?
+  students  String? // Deprecated JSON
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -53,6 +76,8 @@ model Classes {
   quizzes   Quiz[]
   enrollments StudentEnrollment[]
   groupSets GroupSet[]
+
+  @@index([universityId])
 }
 
 model StudentEnrollment {
@@ -151,7 +176,7 @@ model Submission {
   userId       Int?
   user         User?    @relation(fields: [userId], references: [id])
 
-  filePath     String? // Path to PDF/Image
+  filePath     String? // Path to PDF/Image (Absolute or relative to storage root)
   ocrText      String? // Extracted Text
   status       String  @default("PENDING") // PENDING, PENDING_OCR, SUBMITTED, PROCESSING, GRADED, FLAGGED, LATE, MISSING
 
@@ -196,11 +221,24 @@ model Score {
 
 model AuditLog {
   id           Int        @id @default(autoincrement())
-  submissionId Int
-  submission   Submission @relation(fields: [submissionId], references: [id])
-  action       String     // 'OCR', 'Grading', 'Flag'
+
+  submissionId Int?
+  submission   Submission? @relation(fields: [submissionId], references: [id])
+
+  universityId Int?
+  university   University? @relation(fields: [universityId], references: [id])
+
+  action       String     // 'OCR', 'Grading', 'Flag', 'Access', 'Login'
   details      String?
+
+  // Security
+  ipAddress    String?
+  userAgent    String?
+  severity     String?    // 'INFO', 'WARN', 'CRITICAL'
+
   timestamp    DateTime   @default(now())
+
+  @@index([universityId])
 }
 
 model Appeals {
@@ -212,7 +250,6 @@ model Appeals {
   response     String?
 }
 
-// Helper model to track used codes if needed, though Quiz.code covers most.
 model QuizCode {
   id     Int    @id @default(autoincrement())
   code   String @unique
@@ -231,12 +268,17 @@ model Job {
 
   quizId    Int? // Optional Link
 
+  // Tenant Isolation
+  universityId Int?
+  university   University? @relation(fields: [universityId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   processedAt DateTime?
 
   @@index([status, priority])
   @@index([type])
+  @@index([universityId])
 }
 
 model LecturerCalibration {

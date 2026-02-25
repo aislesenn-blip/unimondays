@@ -7,7 +7,7 @@ export interface JobData {
   [key: string]: any;
 }
 
-export async function enqueueJob(type: JobType, data: JobData, priority: number = 0, quizId?: number): Promise<Job> {
+export async function enqueueJob(type: JobType, data: JobData, priority: number = 0, quizId?: number, universityId?: number): Promise<Job> {
   return await prisma.job.create({
     data: {
       type,
@@ -15,6 +15,7 @@ export async function enqueueJob(type: JobType, data: JobData, priority: number 
       status: 'PENDING',
       priority,
       quizId,
+      universityId
     },
   });
 }
