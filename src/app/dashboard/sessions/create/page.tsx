@@ -17,14 +17,34 @@ export default function CreateSessionPage() {
   const [loading, setLoading] = useState(false);
   const [sessionMode, setSessionMode] = useState("online");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      // Redirect to the newly created session (mock ID)
-      router.push("/dashboard/sessions/sess_1");
-    }, 1500);
+
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: (document.getElementById('courseName') as HTMLInputElement).value,
+          code: (document.getElementById('courseCode') as HTMLInputElement).value,
+          semester: (document.getElementById('semester') as HTMLInputElement).value,
+          mode: sessionMode
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/dashboard/sessions/${data.id}`);
+      } else {
+        alert("Failed to create session");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error creating session");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

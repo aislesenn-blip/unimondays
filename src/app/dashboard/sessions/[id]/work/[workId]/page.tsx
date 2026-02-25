@@ -49,7 +49,7 @@ export default async function WorkDetailsPage({ params }: { params: Promise<{ id
       submittedAt: s.submittedAt || new Date(),
       score: s.score?.totalMarks || 0,
       maxScore: work.totalMarks || 100,
-      confidence: s.score?.confidence || null,
+      confidence: s.confidenceScore || null,
       filePath: s.filePath
     };
   });
@@ -62,9 +62,9 @@ export default async function WorkDetailsPage({ params }: { params: Promise<{ id
       work={{
         id: work.id,
         title: work.title,
-        status: work.status,
+        status: work.status || "DRAFT",
         type: "Assignment",
-        mode: work.mode,
+        mode: "Standard",
         submissionsCount: work._count.submissions
       }}
       submissions={mappedSubmissions}

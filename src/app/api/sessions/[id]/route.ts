@@ -1,0 +1,27 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { validateRequest } from '@/lib/auth';
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const user = await validateRequest(req);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  try {
+    const session = await prisma.classes.findUnique({
+      where: { id }
+    });
+
+    if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Access check
+    if (user.role === 'LECTURER' && session.lecturerId !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    return NextResponse.json(session);
+  } catch (error) {
+     console.error("Get Session Error:", error);
+     return NextResponse.json({ error: 'Failed to fetch session' }, { status: 500 });
+  }
+}

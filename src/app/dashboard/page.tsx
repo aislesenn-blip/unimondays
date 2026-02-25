@@ -41,27 +41,23 @@ export default async function DashboardPage() {
     take: 3,
     include: {
       _count: {
-        select: { enrollments: true }
+        select: { quizzes: true }
       }
     }
   });
 
-  // Recent Activity: Fetch from AuditLog or Submissions
-  const recentActivity = await prisma.auditLog.findMany({
-    where: { submission: { quiz: { lecturerId: user.id } } },
-    orderBy: { timestamp: "desc" },
+  // Recent Activity: Fetch from Submissions
+  const recentActivity = await prisma.submission.findMany({
+    where: { quiz: { lecturerId: user.id } },
+    orderBy: { submittedAt: "desc" },
     take: 4,
     include: {
-      submission: {
-        include: {
-          quiz: true,
-          // student info?
-        }
-      }
+      quiz: true,
+      user: true
     }
   });
 
-  // If no audit logs, show empty or welcome message
+  // If no activity, show empty or welcome message
   const hasActivity = recentActivity.length > 0;
 
   return (
@@ -150,16 +146,18 @@ export default async function DashboardPage() {
           <CardContent>
             {hasActivity ? (
               <div className="space-y-8">
-                {recentActivity.map((log) => (
-                  <div key={log.id} className="flex items-center">
+                {recentActivity.map((sub) => (
+                  <div key={sub.id} className="flex items-center">
                     <div className="space-y-1">
                       <p className="text-sm font-medium leading-none">
-                        {log.action} <span className="text-muted-foreground font-normal">
-                          {log.submission?.quiz?.title ? `on ${log.submission.quiz.title}` : ''}
+                        {sub.status === 'PENDING' ? 'Submission Received' :
+                         sub.status === 'GRADED' ? 'Graded' : sub.status}
+                        <span className="text-muted-foreground font-normal">
+                           {' '}from {sub.studentName || 'Unknown Student'} for {sub.quiz.title}
                         </span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {log.timestamp ? log.timestamp.toLocaleTimeString() : 'N/A'}
+                        {sub.submittedAt ? sub.submittedAt.toLocaleTimeString() : 'N/A'}
                       </p>
                     </div>
                   </div>
@@ -190,7 +188,7 @@ export default async function DashboardPage() {
                       <p className="text-sm text-muted-foreground">{session.name}</p>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {session._count.enrollments} Students
+                      {session._count.quizzes} Assessments
                     </div>
                   </div>
                 </Link>

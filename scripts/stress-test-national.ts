@@ -29,7 +29,7 @@ async function main() {
     prisma.user.upsert({
       where: { email: `lecturer@${uni.code.toLowerCase()}.edu` },
       update: {},
-      create: { email: `lecturer@${uni.code.toLowerCase()}.edu`, role: 'lecturer', universityId: uni.id }
+      create: { email: `lecturer@${uni.code.toLowerCase()}.edu`, role: 'LECTURER', universityId: uni.id }
     })
   ));
 
@@ -38,7 +38,7 @@ async function main() {
     prisma.quiz.upsert({
       where: { code: `Q_${lec.universityId}` },
       update: {},
-      create: { title: 'National Exam', code: `Q_${lec.universityId}`, lecturerId: lec.id, totalMarks: 100 }
+      create: { title: 'National Exam', code: `Q_${lec.universityId}`, lecturerId: lec.id, totalMarks: 100, universityId: lec.universityId! }
     })
   ));
 
@@ -68,6 +68,7 @@ async function main() {
     const sub = await prisma.submission.create({
       data: {
         quizId: quiz.id,
+        universityId: uni.id,
         studentRegNo: `REG_${uni.code}_${i}`,
         status: 'PENDING',
         filePath: pdfPaths[i % 100], // Reuse PDF

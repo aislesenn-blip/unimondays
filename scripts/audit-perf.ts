@@ -16,13 +16,13 @@ async function main() {
   const lecturer = await prisma.user.upsert({
     where: { email: 'perf@perf.edu' },
     update: {},
-    create: { email: 'perf@perf.edu', role: 'lecturer', universityId: uni.id }
+    create: { email: 'perf@perf.edu', role: 'LECTURER', universityId: uni.id }
   });
 
   const quiz = await prisma.quiz.upsert({
     where: { code: 'PERF_Q' },
     update: {},
-    create: { title: 'Perf Quiz', code: 'PERF_Q', lecturerId: lecturer.id }
+    create: { title: 'Perf Quiz', code: 'PERF_Q', lecturerId: lecturer.id, universityId: uni.id }
   });
 
   // Dummy file
@@ -30,7 +30,7 @@ async function main() {
 
   // Create Submission for AI_GRADE
   const submission = await prisma.submission.create({
-    data: { quizId: quiz.id, studentRegNo: 'PERF_S1', status: 'PENDING', filePath: dummyFile }
+    data: { quizId: quiz.id, studentRegNo: 'PERF_S1', status: 'PENDING', filePath: dummyFile, universityId: uni.id }
   });
 
   // --- TEST 1: Enqueue 10 Jobs...

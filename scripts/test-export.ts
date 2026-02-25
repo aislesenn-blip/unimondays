@@ -9,11 +9,18 @@ import path from 'path';
 async function main() {
   console.log("Setting up test data for Export...");
 
+  // Ensure University
+  const uni = await prisma.university.upsert({
+      where: { code: 'TEST' },
+      update: {},
+      create: { name: 'Test Uni', code: 'TEST' }
+  });
+
   // Ensure Lecturer first
   const lecturer = await prisma.user.upsert({
       where: { email: 'lecturer@test.com' },
       update: {},
-      create: { email: 'lecturer@test.com', role: 'lecturer', fullName: 'Dr. Test' }
+      create: { email: 'lecturer@test.com', role: 'LECTURER', fullName: 'Dr. Test', universityId: uni.id }
   });
 
   // 1. Create Quiz
@@ -22,7 +29,8 @@ async function main() {
       title: 'Export Test Quiz',
       code: `EXP_${Date.now()}`,
       lecturerId: lecturer.id,
-      totalMarks: 100
+      totalMarks: 100,
+      universityId: uni.id
     }
   });
 
@@ -30,6 +38,7 @@ async function main() {
   const sub = await prisma.submission.create({
     data: {
       quizId: quiz.id,
+      universityId: uni.id,
       studentRegNo: 'REG_EXP_1',
       status: 'GRADED',
       filePath: '' // Will be set below
@@ -49,9 +58,8 @@ async function main() {
     data: {
       submissionId: sub.id,
       totalMarks: 85,
-      breakdown: JSON.stringify([{ question: "Q1", score: 85, max: 100, feedback: "Great job." }]),
-      remarks: "Excellent work.",
-      confidence: 90
+      breakdown: [{ question: "Q1", score: 85, max: 100, feedback: "Great job." }],
+      remarks: "Excellent work."
     }
   });
 
