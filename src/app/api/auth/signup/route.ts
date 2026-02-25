@@ -104,13 +104,14 @@ export async function POST(req: NextRequest) {
 
     let publicUser;
     if (!existingUser) {
+        // ENSURE SCHEMA COMPLIANCE: Use strict Enum and valid University ID
         publicUser = await prisma.user.create({
             data: {
                 id: userId,
                 email,
                 fullName,
                 universityId: university.id,
-                role: UserRole.LECTURER, // Enforce Enum
+                role: UserRole.LECTURER, // Maps to 'LECTURER' in DB
                 tier: 'Lite',
                 quota: 100,
             },

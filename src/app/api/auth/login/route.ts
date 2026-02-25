@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
     const userId = authData.user.id;
 
     // 2. Fetch Public User Profile
+    // SAFE SYNC STRATEGY: Query ONLY the user ID first to avoid relational errors
     const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { university: true }
+      where: { id: userId }
     });
 
     if (!user) {

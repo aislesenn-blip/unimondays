@@ -17,7 +17,7 @@ import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   const user = await getAuthenticatedUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?error=orphaned");
 
   // Fetch Data
   const activeSessionsCount = await prisma.classes.count({
