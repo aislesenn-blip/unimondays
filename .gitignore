@@ -45,7 +45,10 @@ next-env.d.ts
 # Data and Uploads
 playbook.db
 playbook.db-journal
+dev.db
+dev.db-journal
 public/uploads/*
 !public/uploads/.gitkeep
 *.pdf
 *.zip
+*.log
