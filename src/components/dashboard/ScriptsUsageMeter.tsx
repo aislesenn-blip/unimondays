@@ -1,11 +1,28 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export function ScriptsUsageMeter({ className }: { className?: string }) {
-  // Mock data
-  const used = 132;
-  // limit is removed
+  const [used, setUsed] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchUsage() {
+      try {
+        const res = await fetch('/api/user/me');
+        if (res.ok) {
+          const data = await res.json();
+          setUsed(data.used);
+        }
+      } catch (error) {
+        console.error("Failed to fetch usage", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchUsage();
+  }, []);
 
   return (
     <div className={`space-y-3 p-4 bg-muted/30 rounded-lg border ${className}`}>
@@ -16,7 +33,11 @@ export function ScriptsUsageMeter({ className }: { className?: string }) {
 
       <div className="space-y-1">
         <div className="flex justify-between text-2xl font-bold">
-          <span>{used}</span>
+          {loading ? (
+             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          ) : (
+             <span>{used !== null ? used : '-'}</span>
+          )}
         </div>
       </div>
 

@@ -1,11 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "YOUR_API_KEY");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function ocrDocument(buffer: Buffer, mimeType: string = "application/pdf"): Promise<string> {
   if (!process.env.GEMINI_API_KEY) {
-    console.warn("GEMINI_API_KEY is not set. Returning mock OCR text.");
-    return "This is a mock OCR result because GEMINI_API_KEY is not set.\n\nStudent Answer:\nThe concept of polymorphism in object-oriented programming allows objects of different classes to be treated as objects of a common superclass.";
+    throw new Error("GEMINI_API_KEY is not set. OCR service unavailable.");
   }
 
   try {
@@ -40,11 +39,7 @@ export interface PdfSplit {
 
 export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
   if (!process.env.GEMINI_API_KEY) {
-    console.warn("GEMINI_API_KEY is not set. Returning mock structure.");
-    return [
-      { regNo: "REG001", startPage: 1, endPage: 2 },
-      { regNo: "REG002", startPage: 3, endPage: 5 }
-    ];
+    throw new Error("GEMINI_API_KEY is not set. Structure analysis service unavailable.");
   }
 
   try {

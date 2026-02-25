@@ -36,19 +36,7 @@ export async function gradeSubmission(
   config: GradeConfig = { strictness: 1.0 }
 ): Promise<GradingResult> {
   if (!deepseek) {
-    console.warn("DEEPSEEK_API_KEY is not set. Returning mock grade.");
-    return {
-      totalScore: Math.floor(totalMarks * 0.8),
-      breakdown: [
-        { question: "Q1", score: Math.floor(totalMarks * 0.4), max: Math.floor(totalMarks * 0.5), feedback: "Good effort.", rubricReference: "Shows understanding." },
-        { question: "Q2", score: Math.floor(totalMarks * 0.4), max: Math.floor(totalMarks * 0.5), feedback: "Correct.", rubricReference: "Correct calculation." }
-      ],
-      aiReasoning: "The student showed good understanding but missed minor details in Q1.",
-      confidence: 85.5,
-      strengths: ["Clear handwriting", "Good logic"],
-      weaknesses: ["Minor calculation error"],
-      improvement: "Practice calculus."
-    };
+    throw new Error("DEEPSEEK_API_KEY is not set. Grading service unavailable.");
   }
 
   const systemPrompt = `

@@ -27,20 +27,20 @@ export default function LandingPage() {
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
               <div className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium bg-secondary text-secondary-foreground">
                 <span className="flex h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
-                Now available for Enterprise
+                Enterprise Grade Assessment Infrastructure
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
-                The Institutional Standard for <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Academic Assessment.</span>
+                Scale Your University's <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Grading Capacity.</span>
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-                Playbook by Uni Monday integrates precision grading, secure exam management, and AI-driven analytics into one unified platform for modern universities.
+                Empower your Lecturers, HODs, and Deans with automated qualitative reports, significant workload reduction, and secure, AI-assisted grading pipelines.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <Link href="/signup" className={cn(buttonVariants({ size: "lg" }), "h-12 px-8 text-base rounded-full")}>
-                  Start as Lecturer <ArrowRight className="ml-2 h-4 w-4" />
+                  Partner with Us <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
                 <Link href="/student/login" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-12 px-8 text-base rounded-full")}>
-                  Student Access
+                  Login to Portal
                 </Link>
               </div>
             </div>
@@ -60,43 +60,43 @@ export default function LandingPage() {
         <section id="outcomes" className="py-24 bg-secondary/30">
           <div className="max-w-7xl mx-auto px-6 md:px-12">
             <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-              <h2 className="text-3xl font-bold tracking-tight">Institutional-Grade Capabilities</h2>
+              <h2 className="text-3xl font-bold tracking-tight">Executive Outcomes for Faculty</h2>
               <p className="text-muted-foreground text-lg">
-                Designed for high-stakes environments where accuracy, speed, and integrity are non-negotiable.
+                Designed to meet the rigorous demands of modern higher education administration.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {[
                 {
-                  icon: Code,
-                  title: "Quiz Code Engine",
-                  desc: "Secure, randomized assessment generation with instant code distribution for students."
+                  icon: FileText,
+                  title: "Executive Summaries",
+                  desc: "Generate automated qualitative reports for HODs and Deans to monitor academic performance across departments."
                 },
                 {
                   icon: BrainCircuit,
-                  title: "AI Grading & Audit",
-                  desc: "Dual-layer AI architecture provides human-level grading accuracy with full audit trails."
+                  title: "90% Workload Reduction",
+                  desc: "AI-assisted grading reduces time spent on routine marking, allowing lecturers to focus on high-impact teaching."
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Audit & Compliance",
+                  desc: "Full audit trails for every grade and change, ensuring strict adherence to university standards."
                 },
                 {
                   icon: BarChart2,
-                  title: "Analytics & Performance",
-                  desc: "Real-time insights into student performance, question difficulty, and class trends."
+                  title: "Department Analytics",
+                  desc: "Real-time visibility into course performance, identifying at-risk students and curriculum gaps."
                 },
                 {
-                  icon: FileText,
-                  title: "Executive Summaries",
-                  desc: "Automated qualitative reports for HODs and Deans generated from grading data."
-                },
-                {
-                  icon: MessageSquare,
-                  title: "Appeals System",
-                  desc: "Streamlined dispute resolution workflow connecting students directly to markers."
+                  icon: Code,
+                  title: "Secure Distribution",
+                  desc: "Encrypted, code-based assessment delivery ensures integrity during both physical and digital exams."
                 },
                 {
                   icon: Download,
-                  title: "Export & Reports",
-                  desc: "One-click generation of Excel gradebooks and formatted PDF reports."
+                  title: "Institutional Export",
+                  desc: "One-click generation of Excel gradebooks and formal PDF report cards compatible with legacy LMS."
                 }
               ].map((feature, idx) => (
                 <div key={idx} className="bg-card border rounded-2xl p-8 hover:shadow-lg transition-all duration-300 group">
@@ -114,7 +114,7 @@ export default function LandingPage() {
         {/* Partnerships Section */}
         <section id="partnerships" className="py-24">
           <div className="max-w-7xl mx-auto px-6 md:px-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight mb-8">Designed for Higher Education Institutions</h2>
+            <h2 className="text-3xl font-bold tracking-tight mb-8">Trusted by Forward-Thinking Institutions</h2>
             <div className="flex flex-wrap justify-center gap-12 opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
                {/* Placeholders for logos */}
                <div className="text-2xl font-bold text-muted-foreground">College of Engineering</div>
@@ -130,14 +130,14 @@ export default function LandingPage() {
         {/* FAQs Section */}
         <section id="faqs" className="py-24 bg-secondary/30">
           <div className="max-w-3xl mx-auto px-6 md:px-12">
-            <h2 className="text-3xl font-bold tracking-tight mb-12 text-center">Frequently Asked Questions</h2>
+            <h2 className="text-3xl font-bold tracking-tight mb-12 text-center">Administrative FAQs</h2>
             <div className="space-y-6">
               {[
-                { q: "How does the AI grading work?", a: "We use a dual-layer approach. Gemini 1.5 Flash handles OCR and structure recognition, while DeepSeek V3 provides semantic analysis and grading based on your specific rubric." },
-                { q: "Is student data secure?", a: "Yes. All data is encrypted at rest and in transit. We adhere to strict data protection policies and do not use student data to train public models." },
-                { q: "Can I override the AI grades?", a: "Absolutely. The AI acts as a co-pilot. You have full control to review, edit, and override any grade before releasing it to students." },
-                { q: "How are group assignments handled?", a: "We support random, manual, and smart grouping based on performance. Lecturers can easily manage groups via a drag-and-drop interface." },
-                { q: "Can I export grades to Excel?", a: "Yes, you can export full gradebooks to Excel or generate formatted PDF report cards for each student with a single click." }
+                { q: "How does this integrate with our existing workflows?", a: "Playbook acts as a specialized layer for assessment. We export data in standard formats (CSV, PDF) compatible with all major LMS platforms." },
+                { q: "Is the AI grading compliant with academic standards?", a: "Yes. The AI serves as a 'First Marker'. The Lecturer maintains full control and override authority, acting as the 'External Examiner' to validate all grades." },
+                { q: "Can Deans view cross-departmental data?", a: "Yes. Our role-based access control allows Deans and HODs to view aggregated reports and performance metrics across their jurisdiction." },
+                { q: "How do you handle data privacy and sovereignty?", a: "We adhere to strict data residency and privacy laws. Student data is encrypted and isolated. We do not use your proprietary data to train public models." },
+                { q: "What is the onboarding process for a Faculty?", a: "We offer a white-glove onboarding service, setting up your department, importing student lists, and training staff on the platform." }
               ].map((faq, i) => (
                 <div key={i} className="bg-card p-6 rounded-xl border">
                   <h3 className="font-semibold text-lg mb-2">{faq.q}</h3>
@@ -152,13 +152,13 @@ export default function LandingPage() {
         <section id="privacy" className="py-24">
           <div className="max-w-4xl mx-auto px-6 md:px-12 text-center space-y-6">
              <ShieldCheck className="h-12 w-12 text-primary mx-auto" />
-             <h2 className="text-3xl font-bold tracking-tight">Privacy & Compliance</h2>
+             <h2 className="text-3xl font-bold tracking-tight">Enterprise Compliance</h2>
              <p className="text-lg text-muted-foreground">
-               We are committed to protecting the privacy of students and educators. Our platform is designed to comply with local and international data protection regulations.
+               We are committed to protecting the integrity of your institution. Our platform is built on secure, audit-ready infrastructure.
              </p>
              <div className="flex justify-center gap-4 pt-4">
-               <Link href="/privacy" className={cn(buttonVariants({ variant: "outline" }))}>Read Full Policy</Link>
-               <Button variant="ghost">Data Processing Agreement</Button>
+               <Link href="/privacy" className={cn(buttonVariants({ variant: "outline" }))}>Read Compliance Policy</Link>
+               <Button variant="ghost">Request Security Audit</Button>
              </div>
           </div>
         </section>

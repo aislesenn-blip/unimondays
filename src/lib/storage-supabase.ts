@@ -44,20 +44,12 @@ export class SupabaseStorageService implements StorageService {
     return data?.path || path;
   }
 
-  async readFile(filePath: string): Promise<Buffer> {
+  async readFile(filePath: string, bucket: string = 'exam_pdfs'): Promise<Buffer> {
      // Download from Supabase
-     // filePath might be 'folder/filename' or full path
-     // If we saved it as 'folder/filename', we know the bucket?
-     // We need to know the bucket.
-     // This abstraction is leaky if buckets vary.
-     // Let's assume we can deduce bucket or it's passed.
-     // For now, only TmpStorageService was used.
-     // I'll implement a basic download from 'exam_pdfs' as default.
-
-     const bucket = 'exam_pdfs'; // Default
+     // filePath is expected to be the path inside the bucket (e.g. 'submissions/xyz.pdf')
      const { data, error } = await supabase.storage.from(bucket).download(filePath);
 
-     if (error) throw new Error(`Supabase Download Error: ${error.message}`);
+     if (error) throw new Error(`Supabase Download Error for ${filePath} in ${bucket}: ${error.message}`);
      return Buffer.from(await data.arrayBuffer());
   }
 

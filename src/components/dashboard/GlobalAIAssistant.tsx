@@ -4,37 +4,48 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Send, X, Bot } from "lucide-react";
+import { Sparkles, Send, X, Bot, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-const MOCK_CHAT_HISTORY = [
-  { role: "assistant", content: "Hello Dr. Manzi, I've analyzed your recent session 'Introduction to Computer Science'. There's a slight dip in average scores for the 'Recursion' topic. Would you like a detailed breakdown?" },
-];
+import { cn } from "@/lib/utils";
 
 export function GlobalAIAssistant() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Array<{ role: string, content: string }>>(MOCK_CHAT_HISTORY);
+  const [messages, setMessages] = useState<Array<{ role: string, content: string }>>([
+      { role: "assistant", content: "Hello! I'm your Playbook AI Assistant. How can I help you with your assessments today?" }
+  ]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
 
     const userMsg = { role: "user", content: input };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
+    setLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "I'm analyzing the data for you. This might take a moment as I cross-reference with the department average..."
-      }]);
-    }, 1000);
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: [...messages, userMsg] })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            setMessages(prev => [...prev, { role: "assistant", content: data.content }]);
+        } else {
+            setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I encountered an error processing your request." }]);
+        }
+    } catch (e) {
+        setMessages(prev => [...prev, { role: "assistant", content: "Network error. Please try again." }]);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {
       setInput(suggestion);
-      // Optional: Auto-send or just populate input
   };
 
 
@@ -53,7 +64,6 @@ export function GlobalAIAssistant() {
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="w-full sm:w-[400px] p-0 flex flex-col h-full border-l shadow-2xl z-50">
-          <div className="flex flex-col h-full">
             <SheetHeader className="p-4 border-b bg-muted/20 flex-shrink-0">
               <div className="flex items-center gap-3">
                  <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shrink-0">
@@ -82,6 +92,16 @@ export function GlobalAIAssistant() {
                   </div>
                 </div>
               ))}
+              {loading && (
+                  <div className="flex gap-3">
+                      <Avatar className="h-8 w-8 border shrink-0 bg-primary text-primary-foreground">
+                          <AvatarFallback><Bot className="h-4 w-4" /></AvatarFallback>
+                      </Avatar>
+                      <div className="p-3 rounded-2xl bg-white border rounded-bl-none text-foreground flex items-center">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                  </div>
+              )}
             </div>
 
             <div className="p-4 bg-background border-t flex-shrink-0">
@@ -103,17 +123,15 @@ export function GlobalAIAssistant() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                   className="rounded-full bg-muted/30 focus-visible:ring-primary/20"
+                  disabled={loading}
                 />
-                <Button size="icon" className="rounded-full shrink-0" onClick={handleSend}>
-                  <Send className="h-4 w-4" />
+                <Button size="icon" className="rounded-full shrink-0" onClick={handleSend} disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
-          </div>
         </SheetContent>
       </Sheet>
     </>
   );
 }
-
-import { cn } from "@/lib/utils";
