@@ -62,6 +62,7 @@ interface WorkDetailsClientProps {
     id: string;
     title: string;
     status: string;
+    strictness?: string;
     type: string;
     mode: string | null;
     submissionsCount: number;
@@ -163,7 +164,11 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
         </TabsList>
 
         <TabsContent value="graded" className="space-y-6">
-          <ResultControlPanel />
+          <ResultControlPanel
+            workId={work.id}
+            initialStatus={work.status}
+            initialStrictness={work.strictness || "MODERATE"}
+          />
 
           <Card>
             <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-4">

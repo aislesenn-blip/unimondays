@@ -32,6 +32,7 @@ import { redirect } from "next/navigation";
 import { ContinuousAssessmentTable } from "@/components/dashboard/ContinuousAssessmentTable";
 import { GroupManagement } from "@/components/dashboard/GroupManagement";
 import { Button } from "@/components/ui/button"; // Added missing import
+import { SessionStatusToggle } from "@/components/dashboard/SessionStatusToggle";
 
 export default async function SessionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -81,9 +82,10 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
           <p className="text-muted-foreground">{session.name}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Badge variant={session.status === "ACTIVE" ? "default" : "secondary"}>
-            {session.status}
-          </Badge>
+          <SessionStatusToggle
+            sessionId={session.id}
+            initialStatus={session.status || "ACTIVE"}
+          />
         </div>
       </div>
 
