@@ -10,11 +10,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { sessionId, title, rubric, deadline, gradingConfig } = body;
+    const { sessionId, title, rubric, markingScheme: providedScheme, instructions, deadline, gradingConfig } = body;
 
     // Map gradingConfig to schema fields
     let strictness = 'MODERATE';
-    let markingScheme = rubric; // Use rubric as marking scheme by default if not separate
+    let markingScheme = providedScheme || rubric; // Use provided scheme or fallback to rubric
 
     if (gradingConfig) {
         // Parse gradingConfig if it's a string, or use directly if object
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
         status: 'PUBLISHED',
         rubric,
         markingScheme,
+        instructions,
         strictness,
         totalMarks: 100,
         deadline: deadline ? new Date(deadline) : null

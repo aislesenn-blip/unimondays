@@ -40,7 +40,7 @@ export default function LandingPage() {
                   Partner with Us <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
                 <Link href="/student/login" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-12 px-8 text-base rounded-full")}>
-                  Login to Portal
+                  Students Access
                 </Link>
               </div>
             </div>

@@ -76,6 +76,7 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
   const [activeTab, setActiveTab] = useState("graded");
   const [loadingAction, setLoadingAction] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
 
   const isOfflineMode = work.mode === "UPLOAD" || work.mode === "HYBRID";
 
@@ -116,6 +117,33 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
     setLoadingAction(false);
   };
 
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     if (!e.target.files?.length) return;
+     setIsBulkUploading(true);
+     setStatusMessage("Uploading scripts...");
+
+     const formData = new FormData();
+     formData.append('quizId', workId);
+     Array.from(e.target.files).forEach(file => {
+         formData.append('files', file);
+     });
+
+     try {
+         const res = await fetch('/api/submissions/bulk', { method: 'POST', body: formData });
+         const data = await res.json();
+         if (res.ok) {
+             setStatusMessage(`Uploaded ${data.results.length} scripts. Processing started.`);
+             window.location.reload();
+         } else {
+             setStatusMessage("Upload failed: " + (data.error || "Unknown error"));
+         }
+     } catch (e) {
+         setStatusMessage("Upload network error.");
+     } finally {
+         setIsBulkUploading(false);
+     }
+  };
+
   return (
     <div className="space-y-6 pb-24">
       <div className="flex items-center gap-4">
@@ -137,6 +165,12 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
           <p className="text-muted-foreground">{sessionCode} • {work.type} • {work.submissionsCount} Submissions</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+           <Button variant="outline" onClick={() => (document.getElementById('bulk-upload') as HTMLInputElement)?.click()} disabled={isBulkUploading}>
+             {isBulkUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+             Upload Scanned Scripts
+           </Button>
+           <Input id="bulk-upload" type="file" multiple className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={handleBulkUpload} />
+
            <Button variant="outline" onClick={() => console.log('Excel export triggered')}>
              <Download className="mr-2 h-4 w-4" />
              Export Excel

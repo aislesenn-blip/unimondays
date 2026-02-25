@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
+    const { email, password, isStudent } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
@@ -26,23 +26,36 @@ export async function POST(req: NextRequest) {
 
     // 2. Fetch Public User Profile
     // SAFE SYNC STRATEGY: Query ONLY the user ID first to avoid relational errors
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { id: userId }
     });
 
     if (!user) {
-      // Data inconsistency: Auth exists but public user missing.
-      // This is an "Orphaned User" scenario.
-      // Gracefully handle by returning 400, not 500.
-      console.warn(`[Login] Orphaned User Detected: ${userId} (Email: ${email})`);
+      if (isStudent) {
+        // Auto-create Student Profile
+        // Note: University ID is unknown here. It will be null until they join a class/university via code.
+        user = await prisma.user.create({
+          data: {
+            id: userId,
+            email: authData.user.email!,
+            role: 'STUDENT',
+            fullName: 'Student' // Placeholder
+          }
+        });
+      } else {
+        // Data inconsistency: Auth exists but public user missing.
+        // This is an "Orphaned User" scenario.
+        // Gracefully handle by returning 400, not 500.
+        console.warn(`[Login] Orphaned User Detected: ${userId} (Email: ${email})`);
 
-      // We could try to auto-repair if we had university info, but we don't.
-      // Return a clean error prompting them to contact support or re-register.
-      // If we delete the auth user here, they could re-signup. But that deletes password.
-      // Safest: Tell them to contact support.
-      return NextResponse.json({
-        error: 'Account setup incomplete. Please contact support at 0745780988.'
-      }, { status: 400 });
+        // We could try to auto-repair if we had university info, but we don't.
+        // Return a clean error prompting them to contact support or re-register.
+        // If we delete the auth user here, they could re-signup. But that deletes password.
+        // Safest: Tell them to contact support.
+        return NextResponse.json({
+          error: 'Account setup incomplete. Please contact support at 0745780988.'
+        }, { status: 400 });
+      }
     }
 
     // 3. Set Session Cookie
