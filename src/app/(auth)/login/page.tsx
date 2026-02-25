@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,10 +14,18 @@ import {
   CardTitle
 } from "@/components/ui/card";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam === "orphaned") {
+      setError("Account setup incomplete. Please contact support.");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,5 +103,13 @@ export default function LoginPage() {
         </form>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
