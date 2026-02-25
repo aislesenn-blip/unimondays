@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,42 +8,106 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Copy, FileText, Calendar, Clock, Lock, Users, Upload, PenTool, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, FileText, Clock, Upload, PenTool, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
-import { SESSIONS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+interface Session {
+  id: number;
+  code: string;
+  name: string;
+}
 
 export default function CreateWorkPage() {
   const router = useRouter();
   const params = useParams();
   const sessionId = params.id as string;
-  const session = SESSIONS.find(s => s.id === sessionId);
 
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [workMode, setWorkMode] = useState("upload");
   const [isGroupWork, setIsGroupWork] = useState(false);
-
-  // Calibration State
   const [languageStrictness, setLanguageStrictness] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Form State
+  const [title, setTitle] = useState("");
+  const [deadlineDate, setDeadlineDate] = useState("");
+  const [deadlineTime, setDeadlineTime] = useState("");
+  const [rubric, setRubric] = useState("");
+  const [timer, setTimer] = useState("60");
+  const [gradingConfig, setGradingConfig] = useState({
+    methodology: "partial",
+    grammar: "ignore",
+    verbosity: "core",
+    languageStrictness: false,
+    customPrompt: ""
+  });
+
+  useEffect(() => {
+    async function fetchSession() {
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}`);
+        if (res.ok) {
+          setSession(await res.json());
+        }
+      } catch (e) {
+        console.error("Failed to fetch session", e);
+      }
+    }
+    fetchSession();
+  }, [sessionId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+
+    try {
+      const deadline = deadlineDate ? new Date(`${deadlineDate}T${deadlineTime || "23:59"}`) : null;
+
+      const payload = {
+        sessionId,
+        title,
+        type: workMode === 'upload' ? 'ASSIGNMENT' : 'QUIZ',
+        mode: workMode === 'upload' ? 'UPLOAD' : 'ONLINE',
+        isGroupWork,
+        rubric,
+        timer: parseInt(timer),
+        deadline,
+        gradingConfig: JSON.stringify({
+          ...gradingConfig,
+          languageStrictness
+        })
+      };
+
+      const res = await fetch('/api/assessments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setGeneratedCode(data.code);
+      } else {
+        alert("Failed to create assessment");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error creating assessment");
+    } finally {
       setLoading(false);
-      setGeneratedCode(`WK-${Math.random().toString(36).substring(2, 7).toUpperCase()}`);
-    }, 1500);
+    }
   };
 
   const handleCopyCode = () => {
-    // Mock copy
-    alert("Code copied to clipboard!");
+    if (generatedCode) {
+      navigator.clipboard.writeText(generatedCode);
+      alert("Code copied to clipboard!");
+    }
   };
 
   if (generatedCode) {
@@ -103,7 +167,7 @@ export default function CreateWorkPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Create New Work</h1>
-          <p className="text-muted-foreground">Set up a quiz, exam, or assignment for {session?.courseCode}.</p>
+          <p className="text-muted-foreground">Set up a quiz, exam, or assignment for {session?.code || "Session"}.</p>
         </div>
       </div>
 
@@ -144,7 +208,7 @@ export default function CreateWorkPage() {
                   </div>
                   <h3 className="font-medium text-lg">Drag & drop files here</h3>
                   <p className="text-sm text-muted-foreground mt-1">PDF, DOCX, or Images up to 10MB</p>
-                  <Button variant="secondary" className="mt-4" onClick={() => alert('File picker mock')}>Select Files</Button>
+                  <Button variant="secondary" className="mt-4" onClick={() => alert('File picker mock (Use real upload in Prod)')}>Select Files</Button>
                 </div>
 
                 <div className="grid gap-4">
@@ -232,6 +296,8 @@ export default function CreateWorkPage() {
                  id="rubric-text"
                  placeholder="Paste your marking scheme, key facts, or model answers here..."
                  className="min-h-[150px] font-mono text-sm"
+                 value={rubric}
+                 onChange={(e) => setRubric(e.target.value)}
                />
              </div>
              <div className="flex items-center gap-4">
@@ -252,20 +318,13 @@ export default function CreateWorkPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <Label htmlFor="title">Work Title</Label>
-                <Input id="title" placeholder="e.g. Mid-Semester Quiz 1" required />
-              </div>
-              <div className="grid gap-2">
-                <Label>Start Date & Time</Label>
-                <div className="flex gap-2">
-                  <Input type="date" className="flex-1" />
-                  <Input type="time" className="w-32" />
-                </div>
+                <Input id="title" placeholder="e.g. Mid-Semester Quiz 1" required value={title} onChange={(e) => setTitle(e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Deadline</Label>
                 <div className="flex gap-2">
-                  <Input type="date" className="flex-1" />
-                  <Input type="time" className="w-32" />
+                  <Input type="date" className="flex-1" value={deadlineDate} onChange={(e) => setDeadlineDate(e.target.value)} />
+                  <Input type="time" className="w-32" value={deadlineTime} onChange={(e) => setDeadlineTime(e.target.value)} />
                 </div>
               </div>
             </CardContent>
@@ -280,25 +339,25 @@ export default function CreateWorkPage() {
               {/* Methodology & Steps */}
               <div className="space-y-2">
                 <Label>Methodology & Steps</Label>
-                <Select defaultValue="partial">
+                <Select defaultValue="partial" onChange={(e) => setGradingConfig({...gradingConfig, methodology: e.target.value})}>
                     <option value="partial">Award partial marks for correct steps/working (Lenient)</option>
-                    <option value="strict">Strict final answer only (Give 0 if the final answer is wrong, regardless of steps)</option>
+                    <option value="strict">Strict final answer only</option>
                 </Select>
               </div>
 
               {/* Grammar & Language Focus */}
                <div className="space-y-2">
                 <Label>Grammar & Language Focus</Label>
-                <Select defaultValue="ignore">
-                    <option value="ignore">Ignore grammar and spelling mistakes; focus purely on facts and concepts.</option>
-                    <option value="deduct">Deduct marks for poor grammar, spelling, and sentence structure.</option>
+                <Select defaultValue="ignore" onChange={(e) => setGradingConfig({...gradingConfig, grammar: e.target.value})}>
+                    <option value="ignore">Ignore grammar and spelling mistakes</option>
+                    <option value="deduct">Deduct marks for poor grammar</option>
                 </Select>
               </div>
 
               {/* Language Strictness */}
               <div className="flex flex-col gap-2 border p-3 rounded-lg bg-secondary/20">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="lang-strict" className="cursor-pointer font-medium">Enforce strict examination language (No Swahili/Vernacular)</Label>
+                  <Label htmlFor="lang-strict" className="cursor-pointer font-medium">Enforce strict examination language</Label>
                   <Switch
                     id="lang-strict"
                     checked={languageStrictness}
@@ -308,15 +367,14 @@ export default function CreateWorkPage() {
                 {languageStrictness && (
                    <Input placeholder="Penalty (e.g. -2 marks or 0)" className="mt-2 h-8 text-sm" />
                 )}
-                <p className="text-xs text-muted-foreground">If ON, the AI will automatically award 0 marks (or deduct a specific penalty) if the student answers an English exam using Swahili or mixed language (Swanglish).</p>
               </div>
 
               {/* Verbosity */}
                <div className="space-y-2">
                 <Label>Verbosity & Rambling</Label>
-                <Select defaultValue="core">
-                    <option value="core">Search for the core fact and award marks, ignore surrounding noise/length.</option>
-                    <option value="penalize">Penalize excessive rambling or off-topic information even if the correct fact is hidden inside.</option>
+                <Select defaultValue="core" onChange={(e) => setGradingConfig({...gradingConfig, verbosity: e.target.value})}>
+                    <option value="core">Search for the core fact and award marks</option>
+                    <option value="penalize">Penalize excessive rambling</option>
                 </Select>
               </div>
 
@@ -324,8 +382,10 @@ export default function CreateWorkPage() {
                <div className="space-y-2">
                  <Label>Custom AI Grading Instructions (Optional Override)</Label>
                  <Textarea
-                   placeholder="e.g., The student MUST explicitly mention the formula 'E=mc^2' to get any marks for question 3. Do not accept paraphrasing."
+                   placeholder="e.g., The student MUST explicitly mention the formula 'E=mc^2' to get any marks for question 3."
                    className="h-20 text-sm"
+                   value={gradingConfig.customPrompt}
+                   onChange={(e) => setGradingConfig({...gradingConfig, customPrompt: e.target.value})}
                  />
                </div>
 
@@ -333,11 +393,7 @@ export default function CreateWorkPage() {
               <div className="pt-4 border-t space-y-4">
                  <div className="flex items-center justify-between space-x-2">
                    <Label htmlFor="timer" className="text-sm text-muted-foreground">Timer (Minutes)</Label>
-                   <Input id="timer" type="number" placeholder="60" className="w-20 h-8" />
-                 </div>
-                 <div className="flex items-center justify-between space-x-2">
-                   <Label htmlFor="auto-release" className="cursor-pointer text-sm text-muted-foreground">Auto Release Grades</Label>
-                   <Switch id="auto-release" />
+                   <Input id="timer" type="number" placeholder="60" className="w-20 h-8" value={timer} onChange={(e) => setTimer(e.target.value)} />
                  </div>
               </div>
             </CardContent>

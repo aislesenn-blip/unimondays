@@ -1,71 +1,108 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Search,
-  Plus,
-  Users,
-  FileText
-} from "lucide-react";
 import Link from "next/link";
-import { SESSIONS } from "@/lib/mock-data";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Users, BookOpen, Calendar, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export default function SessionsPage() {
+export default async function SessionsPage() {
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login");
+
+  const sessions = await prisma.classes.findMany({
+    where: { lecturerId: user.id, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    include: {
+      _count: {
+        select: {
+          enrollments: true,
+          quizzes: true,
+        }
+      }
+    }
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Sessions</h2>
-          <p className="text-muted-foreground">Manage your courses and academic terms.</p>
+          <h2 className="text-3xl font-bold tracking-tight">Academic Sessions</h2>
+          <p className="text-muted-foreground">
+            Manage your classes, students, and assessments.
+          </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Session
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search sessions..." className="pl-9 w-full" />
-        </div>
+        <Link href="/dashboard/sessions/create" className={cn(buttonVariants())}>
+          Create New Session
+        </Link>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {SESSIONS.map((session) => (
-          <Link key={session.id} href={`/dashboard/sessions/${session.id}`} className="block h-full">
-            <Card className="hover:shadow-md transition-all duration-200 cursor-pointer h-full border-l-4 border-l-transparent hover:border-l-primary">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <div className="space-y-1">
-                  <CardTitle className="text-lg font-bold">{session.courseCode}</CardTitle>
-                  <CardDescription className="line-clamp-1">{session.courseName}</CardDescription>
+        {sessions.map((session) => (
+          <Card key={session.id} className="hover:shadow-md transition-all">
+            <CardHeader className="pb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-xl mb-1">{session.code}</CardTitle>
+                  <CardDescription className="line-clamp-1">{session.name}</CardDescription>
                 </div>
-                <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                  session.status === 'ACTIVE'
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    : 'bg-muted text-muted-foreground'
-                }`}>
+                <Badge variant={session.status === "ACTIVE" ? "default" : "secondary"}>
                   {session.status}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
+                <div className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  {session._count.enrollments} Students
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Users className="mr-2 h-4 w-4" />
-                    {session.studentsCount} Students Enrolled
-                  </div>
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <FileText className="mr-2 h-4 w-4" />
-                    {session.worksCount} Works Created
-                  </div>
-                  <div className="pt-4 text-xs text-muted-foreground border-t border-dashed mt-4">
-                    {session.semester}
-                  </div>
+                <div className="flex items-center gap-1">
+                  <BookOpen className="h-4 w-4" />
+                  {session._count.quizzes} Works
                 </div>
-              </CardContent>
-            </Card>
-          </Link>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Calendar className="h-3 w-3" />
+                Created {session.createdAt.toLocaleDateString()}
+              </div>
+            </CardContent>
+            <CardFooter className="pt-4 border-t flex justify-between">
+              <Link
+                href={`/dashboard/sessions/${session.id}`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full")}
+              >
+                Manage Session
+              </Link>
+            </CardFooter>
+          </Card>
         ))}
+
+        {sessions.length === 0 && (
+          <div className="col-span-full flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg bg-muted/50">
+            <BookOpen className="h-10 w-10 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">No sessions found</h3>
+            <p className="text-sm text-muted-foreground mb-4">Get started by creating your first academic session.</p>
+            <Link href="/dashboard/sessions/create" className={cn(buttonVariants())}>
+              Create Session
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

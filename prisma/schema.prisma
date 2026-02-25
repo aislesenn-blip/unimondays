@@ -13,6 +13,9 @@ datasource db {
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
+  password  String?  // For local dev auth
+  fullName  String?
+  institution String?
   role      String   // 'lecturer', 'student'
   tier      String   @default("Lite") // 'Lite', 'Pro', 'X'
   quota     Int      @default(100) // Script quota
@@ -24,6 +27,7 @@ model User {
   quizzes   Quiz[]
   enrollments StudentEnrollment[]
   groups    GroupMember[]
+  submissions Submission[]
 }
 
 // Renaming Classes to Session conceptually, but keeping table name for now to avoid drastic db reset if possible
@@ -31,6 +35,7 @@ model User {
 model Classes {
   id        Int      @id @default(autoincrement())
   name      String
+  code      String   @unique
   lecturerId Int
   lecturer  User     @relation(fields: [lecturerId], references: [id])
   status    String   @default("ACTIVE") // DRAFT, ACTIVE, LOCKED, ARCHIVED
@@ -111,8 +116,10 @@ model Quiz {
 
   deadline  DateTime?
   timer     Int?     // Minutes per student
-  isUpload  Boolean  @default(true) // Upload or Online Mode
+  mode      String?  // 'ONLINE', 'UPLOAD', 'HYBRID'
+  isUpload  Boolean  @default(true) // Legacy support
   rubric    String?  // Grading Rubric text
+  gradingConfig String? // JSON: { strictness, language, etc. }
 
   // Production Hardening
   status    String   @default("DRAFT") // DRAFT, PUBLISHED, GRADING, RELEASED
@@ -136,8 +143,10 @@ model Submission {
 
   // Link to real User if enrolled
   userId       Int?
+  user         User?    @relation(fields: [userId], references: [id])
 
   filePath     String? // Path to PDF/Image
+  ocrText      String? // Extracted Text
   status       String  @default("PENDING") // PENDING, SUBMITTED, PROCESSING, GRADED, FLAGGED, LATE, MISSING
 
   submittedAt  DateTime @default(now())

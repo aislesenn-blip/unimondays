@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Shuffle, Plus, Clock, MoreVertical, Trash2, Loader2, UserPlus, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -19,123 +18,154 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface Student {
-  id: string;
+  id: number;
   name: string;
   regNo: string;
 }
 
 interface Group {
-  id: string;
+  id: number;
   name: string;
   members: Student[];
 }
 
-export function GroupManagement() {
+export function GroupManagement({ sessionId }: { sessionId: string }) {
   const [groupType, setGroupType] = useState("random");
   const [loading, setLoading] = useState(false);
   const [groupSize, setGroupSize] = useState(3);
 
-  // Mock Data
-  const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([
-    { id: "s1", name: "Baraka Juma", regNo: "2024-04-1001" },
-    { id: "s2", name: "Amina Hassan", regNo: "2024-04-1002" },
-    { id: "s3", name: "Sarah M.", regNo: "2024-04-1003" },
-    { id: "s4", name: "Daniel K.", regNo: "2024-04-1004" },
-    { id: "s5", name: "Juma Ali", regNo: "2024-04-1005" },
-    { id: "s6", name: "Peter P.", regNo: "2024-04-1006" },
-  ]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [activeGroups, setActiveGroups] = useState<Group[]>([]);
+  const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([]);
 
-  const [activeGroups, setActiveGroups] = useState<Group[]>([
-    { id: "g1", name: "Group A", members: [] },
-    { id: "g2", name: "Group B", members: [] },
-  ]);
+  // Fetch initial data
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [studentsRes, groupsRes] = await Promise.all([
+           fetch(`/api/sessions/${sessionId}/students`),
+           fetch(`/api/sessions/${sessionId}/groups`)
+        ]);
 
-  const [previousSets, setPreviousSets] = useState([
-    { id: "set_1", name: "Assignment 1 Groups", date: "Feb 10, 2024", count: 2 },
-  ]);
+        const allStudents = await studentsRes.json();
+        const groups = await groupsRes.json();
 
-  const handleGenerateGroups = () => {
-    setLoading(true);
-    // Simulate Backend API Call: POST /api/sessions/[id]/groups/generate
-    console.log(`POST /api/sessions/[id]/groups/generate { method: ${groupType}, size: ${groupSize} }`);
+        setStudents(allStudents);
+        setActiveGroups(groups);
 
-    setTimeout(() => {
-      // Mock logic: Randomly distribute unassigned students
-      if (groupType === 'random') {
-        const shuffled = [...unassignedStudents].sort(() => 0.5 - Math.random());
-        const newGroups: Group[] = [];
-        let currentGroup: Student[] = [];
+        // Compute unassigned
+        const assignedIds = new Set(groups.flatMap((g: Group) => g.members.map(m => m.id)));
+        setUnassignedStudents(allStudents.filter((s: Student) => !assignedIds.has(s.id)));
 
-        shuffled.forEach((student, index) => {
-          currentGroup.push(student);
-          if (currentGroup.length === groupSize || index === shuffled.length - 1) {
-             newGroups.push({
-               id: `g_new_${newGroups.length}`,
-               name: `Group ${String.fromCharCode(65 + newGroups.length)}`,
-               members: currentGroup
-             });
-             currentGroup = [];
-          }
-        });
-        setActiveGroups(newGroups);
-        setUnassignedStudents([]);
+      } catch (error) {
+        console.error("Failed to fetch group data", error);
       }
+    }
+    fetchData();
+  }, [sessionId]);
+
+  const handleGenerateGroups = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/groups/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: groupType, size: groupSize, name: `Set ${new Date().toLocaleTimeString()}` })
+      });
+
+      if (res.ok) {
+        // Refresh
+        window.location.reload();
+      } else {
+        alert("Failed to generate groups");
+      }
+    } catch (error) {
+      alert("Error generating groups");
+    } finally {
       setLoading(false);
-      alert("Groups generated successfully via Backend API.");
-    }, 1000);
-  };
-
-  const handleCreateGroup = () => {
-    // Backend: POST /api/groups
-    const newGroup = { id: `g_${Date.now()}`, name: `Group ${activeGroups.length + 1}`, members: [] };
-    setActiveGroups([...activeGroups, newGroup]);
-    console.log("POST /api/groups", newGroup);
-  };
-
-  const handleDeleteGroup = (groupId: string) => {
-    // Backend: DELETE /api/groups/[id]
-    const group = activeGroups.find(g => g.id === groupId);
-    if (group) {
-      setUnassignedStudents([...unassignedStudents, ...group.members]);
-      setActiveGroups(activeGroups.filter(g => g.id !== groupId));
-      console.log(`DELETE /api/groups/${groupId}`);
     }
   };
 
-  const handleAssignStudent = (studentId: string, groupId: string) => {
-    // Backend: PATCH /api/groups/[id]/add-member { studentId }
-    const student = unassignedStudents.find(s => s.id === studentId);
-    const group = activeGroups.find(g => g.id === groupId);
+  const handleCreateGroup = async () => {
+    const name = `Group ${activeGroups.length + 1}`;
+    try {
+      const res = await fetch(`/api/groups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, name })
+      });
+      if (res.ok) {
+        const newGroup = await res.json();
+        // Normalize response
+        newGroup.members = [];
+        setActiveGroups([...activeGroups, newGroup]);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
-    if (student && group) {
-      // Optimistic Update
-      setUnassignedStudents(unassignedStudents.filter(s => s.id !== studentId));
-      setActiveGroups(activeGroups.map(g => {
-        if (g.id === groupId) {
-          return { ...g, members: [...g.members, student] };
+  const handleDeleteGroup = async (groupId: number) => {
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, { method: "DELETE" });
+      if (res.ok) {
+        // Move members to unassigned locally
+        const group = activeGroups.find(g => g.id === groupId);
+        if (group) {
+          setUnassignedStudents([...unassignedStudents, ...group.members]);
+          setActiveGroups(activeGroups.filter(g => g.id !== groupId));
         }
-        return g;
-      }));
-      console.log(`PATCH /api/groups/${groupId}/add-member`, { studentId });
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const handleRemoveMember = (studentId: string, groupId: string) => {
-     // Backend: PATCH /api/groups/[id]/remove-member { studentId }
-     const group = activeGroups.find(g => g.id === groupId);
-     if (group) {
-       const member = group.members.find(m => m.id === studentId);
-       if (member) {
-         setUnassignedStudents([...unassignedStudents, member]);
-         setActiveGroups(activeGroups.map(g => {
-           if (g.id === groupId) {
-             return { ...g, members: g.members.filter(m => m.id !== studentId) };
-           }
-           return g;
-         }));
-         console.log(`PATCH /api/groups/${groupId}/remove-member`, { studentId });
-       }
-     }
+  const handleAssignStudent = async (studentId: number, groupId: number) => {
+    try {
+      const res = await fetch(`/api/groups/${groupId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId })
+      });
+
+      if (res.ok) {
+        const student = unassignedStudents.find(s => s.id === studentId);
+        if (student) {
+          setUnassignedStudents(unassignedStudents.filter(s => s.id !== studentId));
+          setActiveGroups(activeGroups.map(g => {
+            if (g.id === groupId) return { ...g, members: [...g.members, student] };
+            return g;
+          }));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRemoveMember = async (studentId: number, groupId: number) => {
+    try {
+      const res = await fetch(`/api/groups/${groupId}/members`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId })
+      });
+
+      if (res.ok) {
+         const group = activeGroups.find(g => g.id === groupId);
+         const member = group?.members.find(m => m.id === studentId);
+         if (member && group) {
+           setUnassignedStudents([...unassignedStudents, member]);
+           setActiveGroups(activeGroups.map(g => {
+             if (g.id === groupId) return { ...g, members: g.members.filter(m => m.id !== studentId) };
+             return g;
+           }));
+         }
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -145,9 +175,6 @@ export function GroupManagement() {
           <h3 className="text-lg font-medium">Group Management</h3>
           <p className="text-sm text-muted-foreground">Create and manage student groups for collaborative work.</p>
         </div>
-        <Button onClick={() => alert("Logic: POST /api/groups/sets/save - Archives current configuration")}>
-          <Plus className="mr-2 h-4 w-4" /> Save Current Set
-        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -253,12 +280,8 @@ export function GroupManagement() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => alert(`Logic: GET /api/groups/${group.id} - View Details`)}>
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => alert(`Logic: PATCH /api/groups/${group.id} - Edit Name`)}>
-                          Edit Name
-                        </DropdownMenuItem>
+                        <DropdownMenuItem>View Details</DropdownMenuItem>
+                        <DropdownMenuItem>Edit Name</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteGroup(group.id)}>
                           Delete Group
@@ -306,29 +329,6 @@ export function GroupManagement() {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* History Section */}
-      <div className="pt-6 border-t">
-        <h4 className="text-sm font-semibold mb-4 flex items-center gap-2">
-          <Clock className="h-4 w-4" /> Group History
-        </h4>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {previousSets.map((set) => (
-            <div key={set.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-              <div>
-                <p className="font-medium text-sm">{set.name}</p>
-                <p className="text-xs text-muted-foreground">{set.date} • {set.count} Groups</p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => alert("Logic: POST /api/groups/restore/[id]")}>Reuse</Button>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => alert("Logic: DELETE /api/groups/sets/[id]")}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
