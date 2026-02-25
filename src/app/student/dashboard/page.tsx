@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -9,7 +10,21 @@ import { WorkCodeInput } from "@/components/student/WorkCodeInput";
 
 export default async function StudentDashboard() {
   const user = await getAuthenticatedUser();
-  if (!user || user.role.toUpperCase() !== 'STUDENT') redirect("/login");
+
+  if (!user) {
+    const cookieStore = await cookies();
+    // LOOP PROTECTION:
+    // If we have a session cookie but validation failed (orphaned user),
+    // redirect to the error page instead of /login to prevent infinite loops.
+    if (cookieStore.has('auth-session')) {
+        redirect('/auth-error');
+    }
+    redirect("/login");
+  }
+
+  if (user.role.toUpperCase() !== 'STUDENT') {
+      redirect("/login"); // Or access denied page?
+  }
 
   // Active Works: Based on User's Submissions (Pending/Processing)
   // Logic: Show Quizzes where the student has started a submission or has been assigned.

@@ -9,7 +9,7 @@ export type AuthenticatedUser = User & { university: University | null };
  * Validates the session and returns the authenticated user with tenant context.
  * Logs the access attempt for audit purposes.
  */
-export async function validateRequest(req: NextRequest): Promise<AuthenticatedUser | null> {
+export async function validateRequest(req?: NextRequest): Promise<AuthenticatedUser | null> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get('auth-session');
 
@@ -21,33 +21,53 @@ export async function validateRequest(req: NextRequest): Promise<AuthenticatedUs
     // Validate session structure
     if (!session.userId) return null;
 
+    // SAFE SYNC STRATEGY: Avoid 'include' if causing crashes.
+    // First, fetch the user.
     const user = await prisma.user.findUnique({
-      where: { id: session.userId },
-      include: { university: true }
+      where: { id: session.userId }
     });
 
     if (!user) return null;
 
+    // Fetch university separately if ID exists
+    let university: University | null = null;
+    if (user.universityId) {
+        try {
+            university = await prisma.university.findUnique({
+                where: { id: user.universityId }
+            });
+        } catch (e) {
+            console.error("Failed to fetch university details for user:", user.id, e);
+            // Continue without university details rather than crashing auth
+        }
+    }
+
+    // Combine
+    const authenticatedUser: AuthenticatedUser = {
+        ...user,
+        university
+    };
+
     // Audit Log (Async, don't block)
-    // In production, use a fire-and-forget queue or specialized logger
-    // For now, we write to DB but catch errors to avoid blocking auth
-    const ip = req.headers.get('x-forwarded-for') || 'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-    const path = req.nextUrl.pathname;
+    // Only log if request object is provided (Client-side usage might not provide it, Server Components neither)
+    if (req) {
+        const ip = req.headers.get('x-forwarded-for') || 'unknown';
+        const path = req.nextUrl.pathname;
 
-    prisma.auditLog.create({
-      data: {
-        universityId: user.universityId,
-        action: 'API_ACCESS',
-        details: `Access to ${path}`,
-        ipAddress: ip,
-        // userAgent: userAgent, // Removed from schema
-        severity: 'INFO'
-      }
-    }).catch(e => console.error("Audit Log Error:", e));
+        prisma.auditLog.create({
+        data: {
+            universityId: user.universityId,
+            action: 'API_ACCESS',
+            details: `Access to ${path}`,
+            ipAddress: ip,
+            severity: 'INFO'
+        }
+        }).catch(e => console.error("Audit Log Error:", e));
+    }
 
-    return user;
-  } catch {
+    return authenticatedUser;
+  } catch (error) {
+    console.error("Auth Validation Error:", error);
     return null;
   }
 }
@@ -61,7 +81,8 @@ export async function getAuthenticatedUser() {
    if (!sessionCookie) return null;
    try {
      const session = JSON.parse(sessionCookie.value);
-     return await prisma.user.findUnique({ where: { id: session.userId } });
+     const user = await prisma.user.findUnique({ where: { id: session.userId } });
+     return user;
    } catch {
      return null;
    }
