@@ -9,7 +9,8 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Use gemini-flash-latest to align with available models and paid quota.
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     const base64Data = buffer.toString("base64");
 
     const result = await model.generateContent([
@@ -47,7 +48,7 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     const base64Data = buffer.toString("base64");
 
     const prompt = `

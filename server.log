@@ -8,6 +8,28 @@
 - Environments: .env
 
 ✓ Starting...
-✓ Ready in 1142ms
-○ Compiling /login ...
- GET /login 200 in 8.3s (compile: 7.8s, render: 493ms)
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+✓ Ready in 1193ms
+[Storage] Initialized TmpStorageService at /tmp
+ POST /api/upload/bulk 200 in 814ms (compile: 744ms, render: 70ms)
+ POST /api/upload/bulk 200 in 40ms (compile: 7ms, render: 33ms)
+ POST /api/upload/bulk 200 in 29ms (compile: 4ms, render: 26ms)
+ POST /api/upload/bulk 200 in 37ms (compile: 8ms, render: 29ms)
+ POST /api/upload/bulk 200 in 50ms (compile: 8ms, render: 41ms)
+ POST /api/upload/bulk 200 in 39ms (compile: 4ms, render: 35ms)
+ POST /api/upload/bulk 200 in 43ms (compile: 6ms, render: 37ms)
+ POST /api/upload/bulk 200 in 33ms (compile: 7ms, render: 27ms)
+ POST /api/upload/bulk 200 in 36ms (compile: 4ms, render: 31ms)
+○ Compiling /dashboard ...
+ GET /dashboard 200 in 6.6s (compile: 5.5s, render: 1178ms)
+ GET /dashboard 200 in 223ms (compile: 10ms, render: 212ms)
+ GET /api/auth/me 404 in 1044ms (compile: 845ms, render: 199ms)
+ GET /dashboard/sessions/1 200 in 2.6s (compile: 2.4s, render: 201ms)
+ GET /dashboard 200 in 161ms (compile: 4ms, render: 157ms)
+ GET /api/auth/me 404 in 55ms (compile: 4ms, render: 51ms)
+ GET /dashboard/sessions/1 200 in 137ms (compile: 29ms, render: 108ms)
+[?25h
