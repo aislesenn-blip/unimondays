@@ -8,18 +8,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { code } = await params;
-
   try {
+    const { code } = await params;
+
     const quiz = await prisma.quiz.findUnique({
-      where: { code },
-      select: { id: true }
+      where: { code: code.toUpperCase() },
+      include: {
+        university: true,
+        lecturer: {
+          select: { fullName: true }
+        }
+      }
     });
 
     if (!quiz) {
-      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
+    // Find submission for this user
     const submission = await prisma.submission.findUnique({
       where: {
         quizId_userId: {
@@ -28,23 +34,30 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
         }
       },
       include: {
-        score: true,
-        quiz: {
-          select: {
-            title: true,
-            totalMarks: true
-          }
-        }
+        score: true
       }
     });
 
     if (!submission) {
-      return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+       // Return 404 if no submission started, or maybe empty object?
+       // Frontend AssessmentResultPage expects submission details or handles 404.
+       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
     }
 
-    return NextResponse.json(submission);
+    return NextResponse.json({
+      id: submission.id,
+      status: submission.status,
+      score: submission.score,
+      filePath: submission.filePath,
+      quiz: {
+        title: quiz.title,
+        totalMarks: quiz.totalMarks,
+        lecturer: quiz.lecturer
+      }
+    });
+
   } catch (error) {
-    console.error("Fetch Submission Result Error:", error);
+    console.error("Submission Status Error:", error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
