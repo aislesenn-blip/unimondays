@@ -2481,3 +2481,1253 @@ Validation Error Count: 1
   clientVersion: '5.22.0',
   errorCode: undefined
 }
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Worker loop fatal error: PrismaClientInitializationError:
+Invalid `prisma.job.findFirst()` invocation in
+/app/src/lib/queue.ts:32:38
+
+  29 }
+  30
+  31 // 1. Find a candidate (oldest created)
+→ 32 const candidate = await prisma.job.findFirst(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async claimJob (/app/src/lib/queue.ts:32:21)
+    at async processJobs (/app/src/workers/index.ts:29:19) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
