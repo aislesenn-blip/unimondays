@@ -38,7 +38,7 @@ async function main() {
     }
   });
 
-  const uploadData = await uploadRes.json();
+  const uploadData = await uploadRes.json() as { success: boolean, jobId: string, error?: string, message?: string };
   console.log("Upload Response:", uploadData);
 
   if (!uploadRes.ok) {
@@ -104,7 +104,7 @@ async function main() {
     }
   });
 
-  const exportData = await exportRes.json();
+  const exportData = await exportRes.json() as { success: boolean, jobId: string, error?: string };
   console.log("Export Response:", exportData);
 
   if (!exportRes.ok) {
