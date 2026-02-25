@@ -153,6 +153,14 @@ export async function handleAiGrade(job: Job) {
     }
   });
 
+  // Increment Lecturer Quota (Dead Logic Fix)
+  if (submission.quiz.lecturerId) {
+    await prisma.user.update({
+        where: { id: submission.quiz.lecturerId },
+        data: { used: { increment: 1 } }
+    }).catch(e => console.warn(`[AI_GRADE] Failed to increment quota for user ${submission.quiz.lecturerId}`, e));
+  }
+
   return {
     success: true,
     score: result.totalScore,
