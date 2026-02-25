@@ -1,10 +1,25 @@
-"use client";
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SESSIONS, ANALYTICS } from "@/lib/mock-data";
 import { BarChart2, TrendingUp, AlertTriangle, Users } from "lucide-react";
+import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login");
+
+  // Mock logic for now - in production this would be heavy SQL aggregation
+  const studentRiskCount = 0;
+  const averageTurnaroundTime = "2.4h"; // Placeholder
+
+  // Count unique students enrolled in lecturer's classes
+  const enrollments = await prisma.studentEnrollment.findMany({
+    where: { class: { lecturerId: user.id } },
+    select: { userId: true },
+    distinct: ['userId']
+  });
+  const totalStudents = enrollments.length;
+
   return (
     <div className="space-y-6">
       <div>
@@ -29,7 +44,7 @@ export default function AnalyticsPage() {
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{ANALYTICS.studentRiskCount}</div>
+            <div className="text-2xl font-bold">{studentRiskCount}</div>
             <p className="text-xs text-muted-foreground">Requires intervention</p>
           </CardContent>
         </Card>
@@ -39,7 +54,7 @@ export default function AnalyticsPage() {
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{ANALYTICS.averageTurnaroundTime}</div>
+            <div className="text-2xl font-bold">{averageTurnaroundTime}</div>
             <p className="text-xs text-muted-foreground">Avg. grading speed</p>
           </CardContent>
         </Card>
@@ -49,7 +64,7 @@ export default function AnalyticsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">294</div>
+            <div className="text-2xl font-bold">{totalStudents}</div>
             <p className="text-xs text-muted-foreground">Across all sessions</p>
           </CardContent>
         </Card>

@@ -10,10 +10,60 @@ import {
   ArrowUpRight
 } from "lucide-react";
 import Link from "next/link";
-import { ANALYTICS, SESSIONS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login");
+
+  // Fetch Data
+  const activeSessionsCount = await prisma.classes.count({
+    where: { lecturerId: user.id, status: "ACTIVE", deletedAt: null }
+  });
+
+  const pendingReviewsCount = await prisma.submission.count({
+    where: {
+      quiz: { lecturerId: user.id },
+      status: { in: ["SUBMITTED", "FLAGGED", "PROCESSING"] }
+    }
+  });
+
+  // Risk count: Mock logic for now (e.g., scores < 40%)
+  // Real logic would require aggregation which is complex.
+  const studentRiskCount = 0;
+
+  const recentSessions = await prisma.classes.findMany({
+    where: { lecturerId: user.id, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: 3,
+    include: {
+      _count: {
+        select: { enrollments: true }
+      }
+    }
+  });
+
+  // Recent Activity: Fetch from AuditLog or Submissions
+  const recentActivity = await prisma.auditLog.findMany({
+    where: { submission: { quiz: { lecturerId: user.id } } },
+    orderBy: { timestamp: "desc" },
+    take: 4,
+    include: {
+      submission: {
+        include: {
+          quiz: true,
+          // student info?
+        }
+      }
+    }
+  });
+
+  // If no audit logs, show empty or welcome message
+  const hasActivity = recentActivity.length > 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -35,9 +85,9 @@ export default function DashboardPage() {
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{ANALYTICS.scriptsUsed}</div>
+              <div className="text-2xl font-bold">{user.used}</div>
               <p className="text-xs text-muted-foreground">
-                Lifetime usage
+                Lifetime usage ({user.used}/{user.quota})
               </p>
             </CardContent>
           </Card>
@@ -50,9 +100,9 @@ export default function DashboardPage() {
               <BookOpen className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{ANALYTICS.activeSessions}</div>
+              <div className="text-2xl font-bold">{activeSessionsCount}</div>
               <p className="text-xs text-muted-foreground">
-                Across 2 semesters
+                Current Semester
               </p>
             </CardContent>
           </Card>
@@ -65,7 +115,7 @@ export default function DashboardPage() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{ANALYTICS.pendingReviews}</div>
+              <div className="text-2xl font-bold">{pendingReviewsCount}</div>
               <p className="text-xs text-muted-foreground">
                 Requires manual attention
               </p>
@@ -80,7 +130,7 @@ export default function DashboardPage() {
               <AlertCircle className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{ANALYTICS.studentRiskCount}</div>
+              <div className="text-2xl font-bold">{studentRiskCount}</div>
               <p className="text-xs text-muted-foreground">
                 Scored below 40% average
               </p>
@@ -98,52 +148,27 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-8">
-              {[
-                {
-                  user: "Dr. Sarah Manzi",
-                  action: "published grades for",
-                  target: "Mid-Semester Quiz 1",
-                  time: "2 hours ago",
-                  link: "/dashboard/sessions/sess_1/work/work_1"
-                },
-                {
-                  user: "System AI",
-                  action: "completed grading for",
-                  target: "Assignment 1 Batch A",
-                  time: "4 hours ago",
-                  link: "/dashboard/sessions/sess_1/work/work_2"
-                },
-                {
-                  user: "Dr. Sarah Manzi",
-                  action: "created new session",
-                  target: "CS 101 - Intro to CS",
-                  time: "Yesterday",
-                  link: "/dashboard/sessions/sess_1"
-                },
-                {
-                  user: "System AI",
-                  action: "flagged 3 submissions in",
-                  target: "Final Exam Prep",
-                  time: "Yesterday",
-                  link: "/dashboard/sessions/sess_1/work/work_3"
-                }
-              ].map((item, i) => (
-                <Link key={i} href={item.link} className="flex items-center hover:bg-muted/50 p-2 rounded-lg transition-colors -mx-2">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {item.user} <span className="text-muted-foreground font-normal">{item.action}</span> {item.target}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.time}
-                    </p>
+            {hasActivity ? (
+              <div className="space-y-8">
+                {recentActivity.map((log) => (
+                  <div key={log.id} className="flex items-center">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {log.action} <span className="text-muted-foreground font-normal">on {log.submission.quiz.title}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {log.timestamp.toLocaleTimeString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="ml-auto font-medium">
-                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </Link>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                <Activity className="h-8 w-8 mb-2 opacity-50" />
+                <p>No recent activity.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card className="col-span-3">
@@ -155,19 +180,23 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {SESSIONS.slice(0, 3).map((session) => (
+              {recentSessions.length > 0 ? recentSessions.map((session) => (
                 <Link key={session.id} href={`/dashboard/sessions/${session.id}`}>
                   <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer mb-2">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium leading-none">{session.courseCode}</p>
-                      <p className="text-sm text-muted-foreground">{session.courseName}</p>
+                      <p className="text-sm font-medium leading-none">{session.code}</p>
+                      <p className="text-sm text-muted-foreground">{session.name}</p>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {session.studentsCount} Students
+                      {session._count.enrollments} Students
                     </div>
                   </div>
                 </Link>
-              ))}
+              )) : (
+                 <div className="text-center py-4 text-muted-foreground">
+                   No active sessions.
+                 </div>
+              )}
             </div>
           </CardContent>
         </Card>

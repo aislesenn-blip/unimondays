@@ -1,17 +1,22 @@
-"use client";
-
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { USERS } from "@/lib/mock-data";
-import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export default function AdminPage() {
-  const lecturers = USERS.filter(u => u.role === "LECTURER");
+export default async function AdminPage() {
+  const currentUser = await getAuthenticatedUser();
+  // Simple check - in real app add ADMIN role
+  if (!currentUser) redirect("/login");
+
+  const users = await prisma.user.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 50
+  });
 
   return (
     <div className="min-h-screen bg-muted/20 p-6 md:p-12">
@@ -28,64 +33,42 @@ export default function AdminPage() {
       <div className="max-w-7xl mx-auto">
         <Card>
           <CardHeader>
-            <CardTitle>Lecturer Management</CardTitle>
-            <CardDescription>Control access and subscription tiers.</CardDescription>
+            <CardTitle>User Management</CardTitle>
+            <CardDescription>All registered users.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Lecturer</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Institution</TableHead>
-                  <TableHead>Current Tier</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Tier</TableHead>
                   <TableHead>Usage</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lecturers.map((user) => (
+                {users.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
-                        <img src={user.avatar} className="h-10 w-10 rounded-full object-cover border" alt={user.name} />
                         <div className="flex flex-col">
-                          <span>{user.name}</span>
+                          <span>{user.fullName || "Unknown"}</span>
                           <span className="text-xs text-muted-foreground">{user.email}</span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{user.institution}</TableCell>
-                    <TableCell>
-                      <Select defaultValue={user.tier || "LITE"} className="w-[140px]">
-                        <option value="LITE">LITE</option>
-                        <option value="X">X (Standard)</option>
-                        <option value="PRO">PRO (Enterprise)</option>
-                      </Select>
-                    </TableCell>
+                    <TableCell>{user.institution || "-"}</TableCell>
+                    <TableCell>{user.role}</TableCell>
+                    <TableCell>{user.tier}</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <span className="font-bold">240</span> / 500
+                        <span className="font-bold">{user.used}</span> / {user.quota}
                       </div>
-                      <div className="w-24 bg-secondary h-1.5 rounded-full mt-1">
-                        <div className="bg-primary h-1.5 rounded-full w-[48%]" />
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-                        user.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {user.status}
-                      </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end items-center gap-4">
-                        <Button variant="ghost" size="sm" className="text-xs">Reset Pwd</Button>
-                        <div className="flex items-center gap-2">
-                          <Switch defaultChecked={user.status === 'ACTIVE'} />
-                          <span className="text-xs text-muted-foreground">{user.status === 'ACTIVE' ? 'On' : 'Off'}</span>
-                        </div>
-                      </div>
+                      <Button variant="ghost" size="sm" className="text-xs">Edit</Button>
                     </TableCell>
                   </TableRow>
                 ))}

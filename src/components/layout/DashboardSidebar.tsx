@@ -13,7 +13,7 @@ import {
   ChevronLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { USERS } from "@/lib/mock-data";
+import { useUser } from "@/hooks/use-user";
 import { ScriptsUsageMeter } from "@/components/dashboard/ScriptsUsageMeter";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -34,7 +34,32 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ className, collapsed = false, onToggleCollapse, isMobile = false }: DashboardSidebarProps) {
   const pathname = usePathname();
-  const user = USERS[0]; // Mock user
+  const { user, loading } = useUser();
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className={cn("w-64 border-r bg-card h-full", className)}>
+        <div className="flex items-center justify-center h-16 border-b">
+           <span className="text-muted-foreground animate-pulse">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const displayUser = user || {
+    fullName: "Guest",
+    institution: "Unknown",
+    avatar: "https://ui-avatars.com/api/?name=Guest"
+  };
 
   return (
     <TooltipProvider>
@@ -55,7 +80,6 @@ export function DashboardSidebar({ className, collapsed = false, onToggleCollaps
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-3">
-          {/* Scripts Usage Meter - Hidden when collapsed */}
           {!collapsed && (
             <div className="mb-6 px-1">
                <ScriptsUsageMeter />
@@ -112,25 +136,27 @@ export function DashboardSidebar({ className, collapsed = false, onToggleCollaps
         <div className="border-t p-4">
           <div className={cn("flex items-center gap-3 mb-4", collapsed ? "justify-center" : "px-2")}>
             <img
-              src={user.avatar}
-              alt={user.name}
+              src={displayUser.avatar}
+              alt={displayUser.fullName || "User"}
               className="h-10 w-10 rounded-full object-cover border border-border shrink-0"
             />
             {!collapsed && (
               <div className="flex flex-col overflow-hidden">
-                <span className="text-sm font-medium truncate">{user.name}</span>
-                <span className="text-xs text-muted-foreground truncate">{user.institution}</span>
+                <span className="text-sm font-medium truncate">{displayUser.fullName}</span>
+                <span className="text-xs text-muted-foreground truncate">{displayUser.institution}</span>
               </div>
             )}
           </div>
 
-          <Link href="/" className={cn(
-             "flex items-center gap-3 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-xl transition-colors",
-             collapsed ? "justify-center p-2" : "w-full px-4 py-2"
+          <button
+            onClick={handleLogout}
+            className={cn(
+             "flex items-center gap-3 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-xl transition-colors w-full",
+             collapsed ? "justify-center p-2" : "px-4 py-2"
            )}>
             <LogOut className="h-4 w-4" />
             {!collapsed && "Sign Out"}
-          </Link>
+          </button>
         </div>
       </div>
     </TooltipProvider>
