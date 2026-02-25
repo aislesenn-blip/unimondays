@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 export default function AppealsPage() {
   const [appeals, setAppeals] = useState([
     {
-      id: 1,
+      id: "1",
       student: "Juma Ali",
       regNo: "2021-04-0022",
       work: "Mid-Semester Quiz 1",
@@ -21,7 +21,7 @@ export default function AppealsPage() {
       date: "2 hours ago"
     },
     {
-      id: 2,
+      id: "2",
       student: "Sarah M.",
       regNo: "2021-04-0099",
       work: "Assignment 1",
@@ -32,7 +32,7 @@ export default function AppealsPage() {
     }
   ]);
 
-  const handleAction = (id: number, action: string) => {
+  const handleAction = (id: string, action: string) => {
     if (action === "Reject") {
         setAppeals(prev => prev.map(a => a.id === id ? { ...a, status: "REJECTED" } : a));
         alert(`Appeal #${id} rejected.`);

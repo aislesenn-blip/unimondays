@@ -27,7 +27,7 @@ export default async function DashboardPage() {
   const pendingReviewsCount = await prisma.submission.count({
     where: {
       quiz: { lecturerId: user.id },
-      status: { in: ["SUBMITTED", "FLAGGED", "PROCESSING"] }
+      status: { in: ["PENDING", "FLAGGED", "PROCESSING"] }
     }
   });
 
@@ -159,7 +159,7 @@ export default async function DashboardPage() {
                         </span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {log.timestamp.toLocaleTimeString()}
+                        {log.timestamp ? log.timestamp.toLocaleTimeString() : 'N/A'}
                       </p>
                     </div>
                   </div>

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     id: job.id,
     type: job.type,
     status: job.status,
-    result: job.result ? JSON.parse(job.result) : null,
+    result: job.result,
     error: job.error,
     progress: job.processedAt ? 100 : 0 // Simple progress
   });

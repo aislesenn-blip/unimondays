@@ -4,7 +4,7 @@ import { validateRequest } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const user = await validateRequest(request);
-  if (!user || user.role !== 'admin') {
+  if (!user || user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

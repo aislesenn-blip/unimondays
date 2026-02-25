@@ -41,7 +41,7 @@ export async function validateRequest(req: NextRequest): Promise<AuthenticatedUs
         action: 'API_ACCESS',
         details: `Access to ${path}`,
         ipAddress: ip,
-        userAgent: userAgent,
+        // userAgent: userAgent, // Removed from schema
         severity: 'INFO'
       }
     }).catch(e => console.error("Audit Log Error:", e));

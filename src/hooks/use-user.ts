@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 
 export interface User {
-  id: number;
+  id: string;
   email: string;
   fullName: string | null;
   institution: string | null;

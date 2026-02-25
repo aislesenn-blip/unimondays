@@ -27,7 +27,7 @@ export async function createFeedbackPage(submission: FullSubmission): Promise<Bu
   // Breakdown
   if (submission.score?.breakdown) {
     try {
-      const breakdown = JSON.parse(submission.score.breakdown);
+      const breakdown = submission.score.breakdown as any[];
       page.drawText('Breakdown:', { x: 50, y, size: 14, font: timesRomanFont });
       y -= 20;
 

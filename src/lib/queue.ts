@@ -1,31 +1,25 @@
 import { prisma } from './prisma';
-import { Job } from '@prisma/client';
+import { Job, JobType, JobStatus } from '@prisma/client';
 
-export type JobType = 'OCR_SPLIT' | 'AI_GRADE' | 'EXPORT_ZIP';
+export type { JobType, JobStatus };
 
-export interface JobData {
+export interface JobPayload {
   [key: string]: any;
 }
 
-export async function enqueueJob(type: JobType, data: JobData, priority: number = 0, quizId?: number, universityId?: number): Promise<Job> {
+export async function enqueueJob(type: JobType, payload: JobPayload, priority: number = 0, quizId?: string, universityId?: string): Promise<Job> {
+  // priority and quizId are deprecated/removed from schema but kept in signature for compatibility if needed (ignored)
   return await prisma.job.create({
     data: {
       type,
-      data: JSON.stringify(data),
+      payload: payload,
       status: 'PENDING',
-      priority,
-      quizId,
       universityId
     },
   });
 }
 
 export async function claimJob(types: JobType[] = []): Promise<Job | null> {
-  // Find a pending job
-  // We use a transaction to ensure we don't pick the same job twice if multiple workers run
-  // But Prisma doesn't support 'SKIP LOCKED' easily on SQLite.
-  // We will use an optimistic approach: Find candidate, try to update status.
-
   const whereClause: any = {
     status: 'PENDING',
   };
@@ -34,11 +28,10 @@ export async function claimJob(types: JobType[] = []): Promise<Job | null> {
     whereClause.type = { in: types };
   }
 
-  // 1. Find a candidate (highest priority, oldest created)
+  // 1. Find a candidate (oldest created)
   const candidate = await prisma.job.findFirst({
     where: whereClause,
     orderBy: [
-      { priority: 'desc' },
       { createdAt: 'asc' },
     ],
   });
@@ -46,7 +39,6 @@ export async function claimJob(types: JobType[] = []): Promise<Job | null> {
   if (!candidate) return null;
 
   // 2. Try to claim it
-  // We use updateMany to ensure we only update if it is still PENDING
   const { count } = await prisma.job.updateMany({
     where: {
       id: candidate.id,
@@ -55,15 +47,14 @@ export async function claimJob(types: JobType[] = []): Promise<Job | null> {
     data: {
       status: 'PROCESSING',
       processedAt: new Date(),
+      retryCount: { increment: 1 }
     },
   });
 
   if (count === 0) {
-    // Someone else claimed it, recurse (or return null to retry next loop)
     return null;
   }
 
-  // Return the updated job
   return await prisma.job.findUnique({ where: { id: candidate.id } });
 }
 
@@ -72,7 +63,8 @@ export async function completeJob(id: string, result: any): Promise<Job> {
     where: { id },
     data: {
       status: 'COMPLETED',
-      result: JSON.stringify(result),
+      result: result, // Prisma handles Json type
+      processedAt: new Date() // Update processedAt on completion too? Or rely on claim time? Schema has processedAt.
     },
   });
 }
@@ -81,14 +73,13 @@ export async function failJob(id: string, error: string): Promise<Job> {
   const job = await prisma.job.findUnique({ where: { id } });
   if (!job) throw new Error(`Job ${id} not found`);
 
-  // Simple retry logic: up to 3 attempts
-  if (job.attempts < 3) {
+  // Retry logic: up to 3 attempts
+  if ((job.retryCount || 0) < 3) {
     return await prisma.job.update({
       where: { id },
       data: {
         status: 'PENDING', // Re-queue
-        attempts: { increment: 1 },
-        error: error, // Log last error
+        error: error,
       },
     });
   } else {

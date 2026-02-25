@@ -12,7 +12,7 @@ export default function QuizEntry() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [quizDetails, setQuizDetails] = useState<{ title: string; id: number } | null>(null);
+  const [quizDetails, setQuizDetails] = useState<{ title: string; id: string } | null>(null);
 
   const handleCodeSubmit = async () => {
     if (code.length > 3) {

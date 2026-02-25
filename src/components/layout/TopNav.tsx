@@ -2,12 +2,12 @@
 
 import { usePathname } from "next/navigation";
 import {
-  Bell,
   Search,
   Menu
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { NotificationsPopover } from "@/components/dashboard/NotificationsPopover";
 
 function getBreadcrumbs(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
@@ -58,10 +58,7 @@ export function TopNav({ className, toggleSidebar }: { className?: string, toggl
           />
         </div>
 
-        <Button variant="ghost" size="icon" className="relative rounded-full hover:bg-muted" onClick={() => alert('Notifications panel coming soon')}>
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive shadow-sm animate-pulse" />
-        </Button>
+        <NotificationsPopover />
       </div>
     </header>
   );
