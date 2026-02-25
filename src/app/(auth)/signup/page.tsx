@@ -13,17 +13,53 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card";
+import { toast } from "sonner"; // Assuming sonner is installed or use alerts
 
 export default function SignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      router.push("/onboarding");
-    }, 1500);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const firstName = formData.get("first-name") as string;
+    const lastName = formData.get("last-name") as string;
+    const email = formData.get("email") as string;
+    const institutionName = formData.get("institution") as string;
+    const password = formData.get("password") as string;
+
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          fullName,
+          institutionName
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Signup failed");
+        return;
+      }
+
+      // Success
+      router.push("/onboarding"); // Or /dashboard directly if onboarding is just a welcome
+    } catch (err) {
+      setError("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,27 +73,32 @@ export default function SignupPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {error && (
+              <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
+                {error}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label htmlFor="first-name" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">First name</label>
-                <Input id="first-name" placeholder="John" required />
+                <Input id="first-name" name="first-name" placeholder="John" required />
               </div>
               <div className="space-y-2">
                 <label htmlFor="last-name" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Last name</label>
-                <Input id="last-name" placeholder="Doe" required />
+                <Input id="last-name" name="last-name" placeholder="Doe" required />
               </div>
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Email</label>
-              <Input id="email" type="email" placeholder="john.doe@university.edu" required />
+              <Input id="email" name="email" type="email" placeholder="john.doe@university.edu" required />
             </div>
             <div className="space-y-2">
               <label htmlFor="institution" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Institution</label>
-              <Input id="institution" placeholder="University of Dar es Salaam" required />
+              <Input id="institution" name="institution" placeholder="University of Dar es Salaam" required />
             </div>
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Password</label>
-              <Input id="password" type="password" required />
+              <Input id="password" name="password" type="password" required />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
