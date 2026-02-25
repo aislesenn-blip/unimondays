@@ -28,6 +28,7 @@ model User {
   enrollments StudentEnrollment[]
   groups    GroupMember[]
   submissions Submission[]
+  calibration LecturerCalibration?
 }
 
 // Renaming Classes to Session conceptually, but keeping table name for now to avoid drastic db reset if possible
@@ -122,6 +123,9 @@ model Quiz {
   gradingConfig String? // JSON: { strictness, language, etc. }
 
   // Production Hardening
+  markingScheme String? // Text or path to marking scheme
+  strictness    String? // 'LENIENT', 'MODERATE', 'STRICT'
+
   status    String   @default("DRAFT") // DRAFT, PUBLISHED, GRADING, RELEASED
   weight    Int      @default(0) // Basis points (e.g. 1000 = 10.00%)
   totalMarks Int?    // Immutable after publish
@@ -131,6 +135,8 @@ model Quiz {
   deletedAt DateTime? // Soft delete
 
   submissions Submission[]
+
+  @@index([code])
 }
 
 model Submission {
@@ -147,7 +153,11 @@ model Submission {
 
   filePath     String? // Path to PDF/Image
   ocrText      String? // Extracted Text
-  status       String  @default("PENDING") // PENDING, SUBMITTED, PROCESSING, GRADED, FLAGGED, LATE, MISSING
+  status       String  @default("PENDING") // PENDING, PENDING_OCR, SUBMITTED, PROCESSING, GRADED, FLAGGED, LATE, MISSING
+
+  feedback        String? // JSON structured feedback
+  confidenceScore Float?
+  calibrationId   Int? // Link to used calibration
 
   submittedAt  DateTime @default(now())
 
@@ -163,6 +173,7 @@ model Submission {
 
   @@unique([quizId, userId]) // Constraint: One submission per student per quiz
   @@index([quizId])
+  @@index([status])
 }
 
 model Score {
@@ -172,6 +183,7 @@ model Score {
 
   totalMarks   Float
   breakdown    String     // JSON string of question breakdown
+  rubricMap    String?    // JSON string: how rubric was applied
   remarks      String?
   confidence   Float?
 
@@ -205,4 +217,36 @@ model QuizCode {
   id     Int    @id @default(autoincrement())
   code   String @unique
   quizId Int
+}
+
+model Job {
+  id        String   @id @default(cuid())
+  type      String   // 'OCR_SPLIT', 'AI_GRADE', 'EXPORT_ZIP'
+  data      String   // JSON payload
+  status    String   // 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'
+  result    String?  // JSON result
+  error     String?
+  attempts  Int      @default(0)
+  priority  Int      @default(0)
+
+  quizId    Int? // Optional Link
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  processedAt DateTime?
+
+  @@index([status, priority])
+  @@index([type])
+}
+
+model LecturerCalibration {
+  id         Int      @id @default(autoincrement())
+  lecturerId Int      @unique
+  lecturer   User     @relation(fields: [lecturerId], references: [id])
+
+  strictness Float    @default(1.0) // Multiplier
+  notes      String?  // JSON: specific biases
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

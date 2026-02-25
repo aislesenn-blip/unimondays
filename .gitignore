@@ -41,3 +41,11 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Data and Uploads
+playbook.db
+playbook.db-journal
+public/uploads/*
+!public/uploads/.gitkeep
+*.pdf
+*.zip
