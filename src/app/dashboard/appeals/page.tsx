@@ -1,46 +1,63 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, CheckCircle2, XCircle, Clock, Filter, Search } from "lucide-react";
+import { MessageSquare, CheckCircle2, XCircle, Clock, Filter, Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
-export default function AppealsPage() {
-  const [appeals, setAppeals] = useState([
-    {
-      id: "1",
-      student: "Juma Ali",
-      regNo: "2021-04-0022",
-      work: "Mid-Semester Quiz 1",
-      question: "Q2",
-      reason: "I believe my recursion logic is correct, just inefficient.",
-      status: "PENDING",
-      date: "2 hours ago"
-    },
-    {
-      id: "2",
-      student: "Sarah M.",
-      regNo: "2021-04-0099",
-      work: "Assignment 1",
-      question: "General",
-      reason: "Missing marks for formatting section.",
-      status: "RESOLVED",
-      date: "1 day ago"
-    }
-  ]);
+interface Appeal {
+  id: string;
+  submissionId: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+  submission: {
+    quiz: {
+      title: string;
+      code: string;
+    };
+    user: {
+      fullName: string;
+      email: string;
+    } | null;
+    studentName: string | null;
+    studentRegNo: string | null;
+  };
+}
 
-  const handleAction = (id: string, action: string) => {
-    if (action === "Reject") {
-        setAppeals(prev => prev.map(a => a.id === id ? { ...a, status: "REJECTED" } : a));
-        alert(`Appeal #${id} rejected.`);
-    } else if (action === "Accept") {
-        setAppeals(prev => prev.map(a => a.id === id ? { ...a, status: "RESOLVED" } : a));
-        alert(`Appeal #${id} accepted. Marks updated.`);
-    } else {
-        alert(`Opening review panel for Appeal #${id}...`);
+export default function AppealsPage() {
+  const [appeals, setAppeals] = useState<Appeal[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/appeals')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setAppeals(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  const handleAction = async (id: string, action: string) => {
+    const status = action === "Accept" ? "APPROVED" : "REJECTED";
+    try {
+        const res = await fetch('/api/appeals', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, status, comment: `Marked as ${status} by lecturer.` })
+        });
+        if (res.ok) {
+            setAppeals(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+        }
+    } catch (e) {
+        console.error(e);
     }
   };
 
@@ -67,11 +84,16 @@ export default function AppealsPage() {
           <CardDescription>Requests requiring your attention.</CardDescription>
         </CardHeader>
         <CardContent>
+          {loading ? (
+             <div className="flex justify-center py-12">
+               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+             </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Student</TableHead>
-                <TableHead>Work / Question</TableHead>
+                <TableHead>Work</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Status</TableHead>
@@ -89,12 +111,16 @@ export default function AppealsPage() {
                   appeals.map((appeal) => (
                     <TableRow key={appeal.id}>
                       <TableCell>
-                        <div className="font-medium">{appeal.student}</div>
-                        <div className="text-xs text-muted-foreground">{appeal.regNo}</div>
+                        <div className="font-medium">
+                            {appeal.submission.studentName || appeal.submission.user?.fullName || "Unknown"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            {appeal.submission.studentRegNo || appeal.submission.user?.email || "N/A"}
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{appeal.work}</div>
-                        <Badge variant="outline" className="mt-1">{appeal.question}</Badge>
+                        <div className="text-sm">{appeal.submission.quiz.title}</div>
+                        <Badge variant="outline" className="mt-1">{appeal.submission.quiz.code}</Badge>
                       </TableCell>
                       <TableCell className="max-w-[300px]">
                         <p className="text-sm text-muted-foreground truncate" title={appeal.reason}>
@@ -103,12 +129,12 @@ export default function AppealsPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" /> {appeal.date}
+                          <Clock className="h-3 w-3" /> {new Date(appeal.createdAt).toLocaleDateString()}
                         </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant={appeal.status === 'PENDING' ? 'secondary' : (appeal.status === 'REJECTED' ? 'destructive' : 'default')}
-                               className={appeal.status === 'PENDING' ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100" : (appeal.status === 'RESOLVED' ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100" : "")}>
+                               className={appeal.status === 'PENDING' ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100" : (appeal.status === 'APPROVED' ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100" : "")}>
                           {appeal.status}
                         </Badge>
                       </TableCell>
@@ -124,9 +150,6 @@ export default function AppealsPage() {
                                 </Button>
                               </>
                           )}
-                          <Button size="sm" variant="ghost" onClick={() => handleAction(appeal.id, "Review")}>
-                            Review
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -134,6 +157,7 @@ export default function AppealsPage() {
               )}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </div>

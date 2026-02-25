@@ -1,0 +1,20 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+
+✓ Starting...
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 1488ms
+○ Compiling /login ...
+ GET /login 200 in 5.5s (compile: 5.0s, proxy.ts: 144ms, render: 383ms)
+ GET /student/login 200 in 924ms (compile: 697ms, proxy.ts: 9ms, render: 218ms)
+ GET /signup 200 in 683ms (compile: 516ms, proxy.ts: 14ms, render: 153ms)

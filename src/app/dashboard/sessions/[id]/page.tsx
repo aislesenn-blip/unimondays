@@ -30,7 +30,6 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ContinuousAssessmentTable } from "@/components/dashboard/ContinuousAssessmentTable";
-import { GroupManagement } from "@/components/dashboard/GroupManagement";
 import { Button } from "@/components/ui/button"; // Added missing import
 import { SessionStatusToggle } from "@/components/dashboard/SessionStatusToggle";
 
@@ -93,7 +92,6 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
         <TabsList>
           <TabsTrigger value="works">Assessments</TabsTrigger>
           <TabsTrigger value="students">Students & CA</TabsTrigger>
-          <TabsTrigger value="groups">Groups</TabsTrigger>
         </TabsList>
 
         <TabsContent value="works" className="space-y-4">
@@ -156,10 +154,6 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
 
         <TabsContent value="students">
            <ContinuousAssessmentTable sessionId={sessionId} />
-        </TabsContent>
-
-        <TabsContent value="groups">
-          <GroupManagement sessionId={sessionId} />
         </TabsContent>
       </Tabs>
     </div>

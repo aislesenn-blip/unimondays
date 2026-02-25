@@ -8,6 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { NotificationsPopover } from "@/components/dashboard/NotificationsPopover";
+import { BackButton } from "@/components/ui/back-button";
 
 function getBreadcrumbs(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
@@ -31,6 +32,7 @@ export function TopNav({ className, toggleSidebar }: { className?: string, toggl
         >
           <Menu className="h-5 w-5" />
         </Button>
+        <BackButton className="mr-2" />
 
         <div className="hidden md:flex items-center text-sm font-medium text-muted-foreground">
           <span className="text-foreground font-semibold">Dashboard</span>
@@ -49,15 +51,6 @@ export function TopNav({ className, toggleSidebar }: { className?: string, toggl
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <input
-            type="search"
-            placeholder="Search..."
-            className="h-9 w-64 rounded-full border border-input bg-muted pl-9 text-sm outline-none focus:ring-1 focus:ring-ring transition-all"
-          />
-        </div>
-
         <NotificationsPopover />
       </div>
     </header>

@@ -14,6 +14,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { toast } from "sonner";
 
 interface Session {
   id: string;
@@ -36,6 +37,12 @@ export default function CreateWorkPage() {
   const [uploading, setUploading] = useState(false);
   const [rubricFileUrl, setRubricFileUrl] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string | null>(null);
+
+  const [markingScheme, setMarkingScheme] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [msFileUrl, setMsFileUrl] = useState<string | null>(null);
+  const [msUploading, setMsUploading] = useState(false);
+  const [msOcrStatus, setMsOcrStatus] = useState<string | null>(null);
 
   // Form State
   const [title, setTitle] = useState("");
@@ -116,6 +123,57 @@ export default function CreateWorkPage() {
     }
   };
 
+  const handleMarkingSchemeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setMsUploading(true);
+      setError(null);
+      setMsOcrStatus("Uploading...");
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'marking_schemes');
+      formData.append('bucket', 'exam_pdfs');
+
+      try {
+        // 1. Upload File
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error("Failed to upload marking scheme");
+
+        const data = await res.json();
+        setMsFileUrl(data.path);
+
+        // 2. Perform OCR
+        setMsOcrStatus("Processing OCR (this may take a moment)...");
+        const ocrRes = await fetch('/api/ocr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: data.path, bucket: 'exam_pdfs' })
+        });
+
+        if (ocrRes.ok) {
+            const ocrData = await ocrRes.json();
+            setMarkingScheme(prev => `[MARKING SCHEME DOCUMENT]\n${ocrData.text}\n\n${prev}`);
+            setMsOcrStatus("Marking Scheme processed successfully.");
+        } else {
+             console.warn("OCR failed, falling back to manual entry.");
+             setMsOcrStatus("Upload complete, but OCR failed. Please paste text manually.");
+        }
+
+      } catch (error: any) {
+        console.error("Marking Scheme upload failed", error);
+        setError(error.message || "Upload failed");
+        setMsOcrStatus(null);
+      } finally {
+        setMsUploading(false);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -130,7 +188,9 @@ export default function CreateWorkPage() {
         type: workMode === 'upload' ? 'ASSIGNMENT' : 'QUIZ',
         mode: workMode === 'upload' ? 'UPLOAD' : 'ONLINE',
         isGroupWork,
-        rubric: rubric, // Send the FULL text (including OCR'd content)
+        rubric: rubric,
+        markingScheme: markingScheme,
+        instructions: instructions,
         timer: parseInt(timer),
         deadline,
         gradingConfig: JSON.stringify({
@@ -163,6 +223,7 @@ export default function CreateWorkPage() {
   const handleCopyCode = () => {
     if (generatedCode) {
       navigator.clipboard.writeText(generatedCode);
+      toast.success("Code copied to clipboard");
     }
   };
 
@@ -299,6 +360,53 @@ export default function CreateWorkPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Marking Scheme Upload</CardTitle>
+            <CardDescription>Upload the official marking scheme or answer key.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer">
+              <Button variant="secondary" onClick={() => (document.getElementById('ms-upload') as HTMLInputElement)?.click()} type="button">
+                {msUploading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                Upload Marking Scheme
+              </Button>
+              <Input id="ms-upload" type="file" className="hidden" onChange={handleMarkingSchemeUpload} accept=".pdf,.docx,.png,.jpg,.jpeg" />
+            </div>
+
+            {msOcrStatus && (
+               <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded">
+                 <Loader2 className={cn("h-4 w-4", msUploading ? "animate-spin" : "")} /> {msOcrStatus}
+               </div>
+            )}
+
+            <div className="grid w-full gap-2">
+               <Label htmlFor="ms-text">Marking Scheme Content</Label>
+               <Textarea
+                 id="ms-text"
+                 placeholder="Extracted marking scheme text will appear here..."
+                 className="min-h-[200px] font-mono text-sm"
+                 value={markingScheme}
+                 onChange={(e) => setMarkingScheme(e.target.value)}
+               />
+             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Instructions for Students</CardTitle>
+            <CardDescription>Specific instructions regarding the assessment.</CardDescription>
+          </CardHeader>
+          <CardContent>
+             <Textarea
+               placeholder="e.g. Answer all questions. Show your working."
+               value={instructions}
+               onChange={(e) => setInstructions(e.target.value)}
+             />
+          </CardContent>
+        </Card>
 
         {/* Rubric Builder Section */}
         <Card className="border-l-4 border-l-blue-500">

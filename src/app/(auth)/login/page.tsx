@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card";
+import { BackButton } from "@/components/ui/back-button";
 
 function LoginForm() {
   const router = useRouter();
@@ -60,7 +61,10 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4 relative">
+      <div className="absolute top-4 left-4">
+        <BackButton />
+      </div>
       <Card className="w-full max-w-md border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
