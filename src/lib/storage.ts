@@ -85,7 +85,7 @@ class TmpStorageService implements StorageService {
 export const storage: StorageService = new TmpStorageService();
 
 // Re-export convenience functions matching old API
-export const uploadFile = (file: File, folder?: string) => storage.uploadFile(file, folder);
-export const saveBuffer = (buffer: Buffer, name: string, folder?: string) => storage.saveBuffer(buffer, name, folder);
+export const uploadFile = (file: File, folder: string = 'submissions') => storage.uploadFile(file, folder);
+export const saveBuffer = (buffer: Buffer, name: string, folder: string = 'submissions') => storage.saveBuffer(buffer, name, folder);
 export const readFile = (path: string) => storage.readFile(path);
 export const deleteFile = (path: string) => storage.deleteFile(path);

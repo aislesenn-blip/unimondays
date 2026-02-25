@@ -154,7 +154,9 @@ export default async function DashboardPage() {
                   <div key={log.id} className="flex items-center">
                     <div className="space-y-1">
                       <p className="text-sm font-medium leading-none">
-                        {log.action} <span className="text-muted-foreground font-normal">on {log.submission.quiz.title}</span>
+                        {log.action} <span className="text-muted-foreground font-normal">
+                          {log.submission?.quiz?.title ? `on ${log.submission.quiz.title}` : ''}
+                        </span>
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {log.timestamp.toLocaleTimeString()}
