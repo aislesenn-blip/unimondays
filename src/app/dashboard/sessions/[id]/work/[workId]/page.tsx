@@ -63,6 +63,7 @@ export default async function WorkDetailsPage({ params }: { params: Promise<{ id
         id: work.id,
         title: work.title,
         status: work.status || "DRAFT",
+        strictness: work.strictness || "MODERATE",
         type: "Assignment",
         mode: "Standard",
         submissionsCount: work._count.submissions

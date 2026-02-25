@@ -5,7 +5,6 @@
 ▲ Next.js 16.1.6 (Turbopack)
 - Local:         http://localhost:3000
 - Network:       http://192.168.0.2:3000
-- Environments: .env
 
 ✓ Starting...
 Attention: Next.js now collects completely anonymous telemetry regarding usage.
@@ -13,23 +12,35 @@ This information is used to shape Next.js' roadmap and prioritize features.
 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
 https://nextjs.org/telemetry
 
-✓ Ready in 1193ms
-[Storage] Initialized TmpStorageService at /tmp
- POST /api/upload/bulk 200 in 814ms (compile: 744ms, render: 70ms)
- POST /api/upload/bulk 200 in 40ms (compile: 7ms, render: 33ms)
- POST /api/upload/bulk 200 in 29ms (compile: 4ms, render: 26ms)
- POST /api/upload/bulk 200 in 37ms (compile: 8ms, render: 29ms)
- POST /api/upload/bulk 200 in 50ms (compile: 8ms, render: 41ms)
- POST /api/upload/bulk 200 in 39ms (compile: 4ms, render: 35ms)
- POST /api/upload/bulk 200 in 43ms (compile: 6ms, render: 37ms)
- POST /api/upload/bulk 200 in 33ms (compile: 7ms, render: 27ms)
- POST /api/upload/bulk 200 in 36ms (compile: 4ms, render: 31ms)
-○ Compiling /dashboard ...
- GET /dashboard 200 in 6.6s (compile: 5.5s, render: 1178ms)
- GET /dashboard 200 in 223ms (compile: 10ms, render: 212ms)
- GET /api/auth/me 404 in 1044ms (compile: 845ms, render: 199ms)
- GET /dashboard/sessions/1 200 in 2.6s (compile: 2.4s, render: 201ms)
- GET /dashboard 200 in 161ms (compile: 4ms, render: 157ms)
- GET /api/auth/me 404 in 55ms (compile: 4ms, render: 51ms)
- GET /dashboard/sessions/1 200 in 137ms (compile: 29ms, render: 108ms)
-[?25h
+✓ Ready in 1378ms
+ GET /api/admin/monitoring 401 in 956ms (compile: 916ms, render: 40ms)
+Dev Login Error: Error [PrismaClientInitializationError]:
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].university.upsert()` invocation in
+/app/.next/dev/server/chunks/[root-of-the-server]__3d617dec._.js:74:167
+
+  71 async function POST(req) {
+  72     try {
+  73         // 1. Ensure University
+→ 74         const uni = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].university.upsert(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at <unknown> (src/app/api/dev/login/route.ts:8:41)
+    at <unknown> (-->  schema.prisma:10)
+    at async POST (src/app/api/dev/login/route.ts:8:17)
+   6 |   try {
+   7 |     // 1. Ensure University
+>  8 |     const uni = await prisma.university.upsert({
+     |                                         ^
+   9 |       where: { code: 'TEST_UNI' },
+  10 |       update: {},
+  11 |       create: { {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+ POST /api/dev/login 500 in 852ms (compile: 393ms, render: 459ms)
