@@ -114,15 +114,15 @@ export default function LandingPage() {
         {/* Partnerships Section */}
         <section id="partnerships" className="py-24">
           <div className="max-w-7xl mx-auto px-6 md:px-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight mb-8">Trusted by Leading Institutions</h2>
+            <h2 className="text-3xl font-bold tracking-tight mb-8">Designed for Higher Education Institutions</h2>
             <div className="flex flex-wrap justify-center gap-12 opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
                {/* Placeholders for logos */}
-               <div className="text-2xl font-bold text-muted-foreground">University of Dar es Salaam</div>
-               <div className="text-2xl font-bold text-muted-foreground">Ardhi University</div>
-               <div className="text-2xl font-bold text-muted-foreground">IFM</div>
-               <div className="text-2xl font-bold text-muted-foreground">Mzumbe University</div>
-               <div className="text-2xl font-bold text-muted-foreground">SUA</div>
-               <div className="text-2xl font-bold text-muted-foreground">UDOM</div>
+               <div className="text-2xl font-bold text-muted-foreground">College of Engineering</div>
+               <div className="text-2xl font-bold text-muted-foreground">Institute of Technology</div>
+               <div className="text-2xl font-bold text-muted-foreground">School of Business</div>
+               <div className="text-2xl font-bold text-muted-foreground">Faculty of Law</div>
+               <div className="text-2xl font-bold text-muted-foreground">Medical Sciences</div>
+               <div className="text-2xl font-bold text-muted-foreground">Department of Computer Science</div>
             </div>
           </div>
         </section>
