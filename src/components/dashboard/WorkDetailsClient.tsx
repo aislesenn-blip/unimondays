@@ -2,7 +2,7 @@
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import {
   ArrowLeft,
   Download,
@@ -17,7 +17,9 @@ import {
   Upload,
   FileDigit,
   BrainCircuit,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Loader2,
+  Info
 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -67,14 +69,12 @@ interface WorkDetailsClientProps {
   submissions: SubmissionWithScore[];
 }
 
-const MOCK_UNMATCHED = [
-  { id: 'u1', imageUrl: 'https://placehold.co/600x200/e2e8f0/64748b?text=Header+Crop+A', confidence: 'Low', time: '10:42 AM' },
-];
-
 export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submissions }: WorkDetailsClientProps) {
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [auditStudentName, setAuditStudentName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("graded");
+  const [loadingAction, setLoadingAction] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const isOfflineMode = work.mode === "UPLOAD" || work.mode === "HYBRID";
 
@@ -95,18 +95,24 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
   };
 
   const handleBulkAction = async (action: string) => {
+    setLoadingAction(true);
+    setStatusMessage(null);
+
     if (action === "grade") {
        try {
          const res = await fetch(`/api/assessments/${workId}/grade-all`, { method: "POST" });
-         if (res.ok) alert("Grading started in background.");
-         else alert("Failed to start grading.");
+         if (res.ok) setStatusMessage("Grading started in background.");
+         else setStatusMessage("Failed to start grading.");
        } catch (e) {
-         alert("Error triggering grading.");
+         setStatusMessage("Error triggering grading.");
        }
     } else {
-       alert(`Bulk Action Triggered: ${action} for ${selectedStudents.length} items`);
+       console.log(`Bulk Action Triggered: ${action} for ${selectedStudents.length} items`);
+       setStatusMessage(`Action '${action}' processed for ${selectedStudents.length} items.`);
     }
+
     setSelectedStudents([]);
+    setLoadingAction(false);
   };
 
   return (
@@ -130,32 +136,31 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
           <p className="text-muted-foreground">{sessionCode} • {work.type} • {work.submissionsCount} Submissions</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-           <Button variant="outline" onClick={() => alert('Excel exported!')}>
+           <Button variant="outline" onClick={() => console.log('Excel export triggered')}>
              <Download className="mr-2 h-4 w-4" />
              Export Excel
            </Button>
            <Button
              onClick={() => handleBulkAction("grade")}
-             disabled={work.status === "GRADING"}
+             disabled={work.status === "GRADING" || loadingAction}
            >
-             <BrainCircuit className="mr-2 h-4 w-4" />
+             {loadingAction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BrainCircuit className="mr-2 h-4 w-4" />}
              {work.status === "GRADING" ? "Grading..." : "Start Grading"}
            </Button>
         </div>
       </div>
 
+      {statusMessage && (
+        <div className="bg-blue-50 text-blue-700 p-3 rounded-md text-sm flex items-center gap-2">
+            <Info className="h-4 w-4" /> {statusMessage}
+        </div>
+      )}
+
       <Tabs defaultValue="graded" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        {isOfflineMode && (
-          <TabsList>
+        <TabsList>
             <TabsTrigger value="graded">Matched & Graded</TabsTrigger>
-            <TabsTrigger value="unmatched" className="relative">
-              Unmatched Scripts
-              <span className="ml-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-100 text-[10px] font-bold text-red-600">
-                {MOCK_UNMATCHED.length}
-              </span>
-            </TabsTrigger>
-          </TabsList>
-        )}
+            {/* Removed Mock Unmatched Tab */}
+        </TabsList>
 
         <TabsContent value="graded" className="space-y-6">
           <ResultControlPanel />
@@ -213,11 +218,11 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
                       </TableCell>
                       <TableCell className="font-medium">
                         <Link href={`/dashboard/sessions/${sessionId}/work/${workId}/grade/${submission.id}`} className="hover:text-primary hover:underline block w-full h-full transition-colors">
-                          {submission.studentName}
+                          {submission.studentName || "Unknown Student"}
                         </Link>
                       </TableCell>
-                      <TableCell>{submission.regNo}</TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(submission.submittedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{submission.regNo || "N/A"}</TableCell>
+                      <TableCell className="text-muted-foreground">{submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString() : "-"}</TableCell>
                       <TableCell>
                         <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
                           submission.status === 'GRADED' ? 'bg-emerald-100 text-emerald-700' :
@@ -263,12 +268,6 @@ export function WorkDetailsClient({ sessionId, workId, sessionCode, work, submis
               </Table>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="unmatched" className="space-y-4">
-           <div className="text-center py-8">
-             <p className="text-muted-foreground">Feature coming soon.</p>
-           </div>
         </TabsContent>
       </Tabs>
 

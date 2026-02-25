@@ -68,6 +68,16 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    // 5. Trigger AI Grading Job
+    await prisma.job.create({
+      data: {
+        type: 'AI_GRADE',
+        payload: { submissionId: submission.id },
+        status: 'PENDING',
+        universityId: quiz.universityId
+      }
+    });
+
     return NextResponse.json({ success: true, id: submission.id });
 
   } catch (error) {

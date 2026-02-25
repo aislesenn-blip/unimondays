@@ -5,7 +5,7 @@ import { validateRequest } from '@/lib/auth';
 
 // Initialize DeepSeek
 const deepseek = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY || 'mock-key',
+  apiKey: process.env.DEEPSEEK_API_KEY || 'missing-key',
   baseURL: 'https://api.deepseek.com'
 });
 
@@ -72,12 +72,8 @@ Refuse to answer non-academic questions or questions unrelated to the context.
     `;
 
     // 3. Call DeepSeek
-    // Check if API Key is present, else mock
     if (!process.env.DEEPSEEK_API_KEY) {
-       return NextResponse.json({
-         role: 'assistant',
-         content: "[Mock Response] I see you are asking about grades. Since the AI key is missing, I can't generate a real response, but I know who you are!"
-       });
+       return NextResponse.json({ error: "AI Service Unavailable (Missing API Key)" }, { status: 503 });
     }
 
     const completion = await deepseek.chat.completions.create({

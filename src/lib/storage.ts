@@ -10,7 +10,7 @@ import { SupabaseStorageService } from './storage-supabase';
 export interface StorageService {
   uploadFile(file: File, folder: string): Promise<string>;
   saveBuffer(buffer: Buffer, originalName: string, folder: string): Promise<string>;
-  readFile(filePath: string): Promise<Buffer>;
+  readFile(filePath: string, bucket?: string): Promise<Buffer>;
   deleteFile(filePath: string): Promise<void>;
 }
 
@@ -52,7 +52,7 @@ class TmpStorageService implements StorageService {
     return filepath;
   }
 
-  async readFile(filePath: string): Promise<Buffer> {
+  async readFile(filePath: string, bucket?: string): Promise<Buffer> {
     try {
       return await fs.readFile(filePath);
     } catch (error) {
@@ -80,5 +80,5 @@ export const storage: StorageService = useSupabase
 // Re-export convenience functions
 export const uploadFile = (file: File, folder: string = 'submissions') => storage.uploadFile(file, folder);
 export const saveBuffer = (buffer: Buffer, name: string, folder: string = 'submissions') => storage.saveBuffer(buffer, name, folder);
-export const readFile = (path: string) => storage.readFile(path);
+export const readFile = (path: string, bucket?: string) => storage.readFile(path, bucket);
 export const deleteFile = (path: string) => storage.deleteFile(path);

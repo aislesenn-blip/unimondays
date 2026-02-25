@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Copy, FileText, Clock, Upload, PenTool, Plus, Trash2, Users, CheckCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, FileText, Clock, Upload, CheckCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,12 +28,14 @@ export default function CreateWorkPage() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [workMode, setWorkMode] = useState("upload");
   const [isGroupWork, setIsGroupWork] = useState(false);
   const [languageStrictness, setLanguageStrictness] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [rubricFileUrl, setRubricFileUrl] = useState<string | null>(null);
+  const [ocrStatus, setOcrStatus] = useState<string | null>(null);
 
   // Form State
   const [title, setTitle] = useState("");
@@ -67,27 +69,47 @@ export default function CreateWorkPage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setUploading(true);
+      setError(null);
+      setOcrStatus("Uploading...");
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('folder', 'rubrics');
       formData.append('bucket', 'exam_pdfs');
 
       try {
+        // 1. Upload File
         const res = await fetch('/api/upload', {
           method: 'POST',
           body: formData,
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          setRubricFileUrl(data.path);
-          setRubric(`[RUBRIC_FILE_URL]: ${data.path}\n\n${rubric}`);
+        if (!res.ok) throw new Error("Failed to upload rubric");
+
+        const data = await res.json();
+        setRubricFileUrl(data.path);
+
+        // 2. Perform OCR
+        setOcrStatus("Processing OCR (this may take a moment)...");
+        const ocrRes = await fetch('/api/ocr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: data.path, bucket: 'exam_pdfs' })
+        });
+
+        if (ocrRes.ok) {
+            const ocrData = await ocrRes.json();
+            setRubric(prev => `[RUBRIC DOCUMENT]\n${ocrData.text}\n\n${prev}`);
+            setOcrStatus("Rubric processed successfully.");
         } else {
-          alert("Failed to upload rubric");
+             console.warn("OCR failed, falling back to manual entry.");
+             setOcrStatus("Upload complete, but OCR failed. Please paste rubric text manually.");
         }
-      } catch (error) {
+
+      } catch (error: any) {
         console.error("Rubric upload failed", error);
-        alert("Upload failed");
+        setError(error.message || "Upload failed");
+        setOcrStatus(null);
       } finally {
         setUploading(false);
       }
@@ -97,6 +119,7 @@ export default function CreateWorkPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       const deadline = deadlineDate ? new Date(`${deadlineDate}T${deadlineTime || "23:59"}`) : null;
@@ -107,7 +130,7 @@ export default function CreateWorkPage() {
         type: workMode === 'upload' ? 'ASSIGNMENT' : 'QUIZ',
         mode: workMode === 'upload' ? 'UPLOAD' : 'ONLINE',
         isGroupWork,
-        rubric: rubricFileUrl ? `${rubric} (File: ${rubricFileUrl})` : rubric,
+        rubric: rubric, // Send the FULL text (including OCR'd content)
         timer: parseInt(timer),
         deadline,
         gradingConfig: JSON.stringify({
@@ -126,11 +149,12 @@ export default function CreateWorkPage() {
         const data = await res.json();
         setGeneratedCode(data.code);
       } else {
-        alert("Failed to create assessment");
+        const err = await res.json();
+        setError(err.error || "Failed to create assessment");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Error creating assessment");
+      setError("Network error creating assessment");
     } finally {
       setLoading(false);
     }
@@ -139,7 +163,6 @@ export default function CreateWorkPage() {
   const handleCopyCode = () => {
     if (generatedCode) {
       navigator.clipboard.writeText(generatedCode);
-      alert("Code copied to clipboard!");
     }
   };
 
@@ -171,6 +194,7 @@ export default function CreateWorkPage() {
               <Copy className="h-4 w-4" />
               Copy Code
             </Button>
+            <p className="text-xs text-muted-foreground">Click to copy</p>
           </CardContent>
           <CardFooter className="bg-emerald-500/10 border-t border-emerald-500/10">
             <div className="text-sm text-emerald-800 flex items-center gap-2 w-full justify-center">
@@ -205,33 +229,27 @@ export default function CreateWorkPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        {error && (
+            <div className="bg-destructive/15 text-destructive p-4 rounded-md flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                {error}
+            </div>
+        )}
+
         <Tabs defaultValue="upload" className="space-y-6" onValueChange={setWorkMode}>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-             <TabsList className="grid w-full md:w-[400px] grid-cols-2">
+             <TabsList className="grid w-full md:w-[400px] grid-cols-1">
               <TabsTrigger value="upload">
-                <Upload className="mr-2 h-4 w-4" /> Upload / Physical
+                <Upload className="mr-2 h-4 w-4" /> Upload / Physical Assignment
               </TabsTrigger>
-              <TabsTrigger value="digital">
-                <PenTool className="mr-2 h-4 w-4" /> Digital Creation
-              </TabsTrigger>
+              {/* Removed Digital Creation Tab per instructions (Fake UI) */}
             </TabsList>
-
-            <div className="flex items-center space-x-2 border px-3 py-1.5 rounded-lg bg-background">
-               <Switch
-                 id="group-mode"
-                 checked={isGroupWork}
-                 onCheckedChange={setIsGroupWork}
-               />
-               <Label htmlFor="group-mode" className="cursor-pointer flex items-center gap-2 font-medium">
-                 <Users className="h-4 w-4 text-muted-foreground" /> Group Work
-               </Label>
-            </div>
           </div>
 
           <TabsContent value="upload" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Upload Assessment Materials</CardTitle>
+                <CardTitle>Upload Question Paper</CardTitle>
                 <CardDescription>Upload PDF question papers or scanned scripts for students to reference.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -239,15 +257,22 @@ export default function CreateWorkPage() {
                   <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
                     <Upload className="h-6 w-6 text-muted-foreground" />
                   </div>
-                  <h3 className="font-medium text-lg">Drag & drop files here</h3>
-                  <p className="text-sm text-muted-foreground mt-1">PDF, DOCX, or Images up to 10MB</p>
-                  <Button variant="secondary" className="mt-4" onClick={() => (document.getElementById('file-upload') as HTMLInputElement)?.click()}>
+                  <h3 className="font-medium text-lg">Upload Marking Guide / Rubric</h3>
+                  <p className="text-sm text-muted-foreground mt-1">PDF, DOCX, or Images. AI will extract text.</p>
+                  <Button variant="secondary" className="mt-4" onClick={() => (document.getElementById('file-upload') as HTMLInputElement)?.click()} type="button">
                     {uploading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                    Select Files
+                    Select File
                   </Button>
                   <Input id="file-upload" type="file" className="hidden" onChange={handleRubricUpload} accept=".pdf,.docx,.png,.jpg,.jpeg" />
                 </div>
-                {rubricFileUrl && (
+
+                {ocrStatus && (
+                   <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded">
+                     <Loader2 className={cn("h-4 w-4", uploading ? "animate-spin" : "")} /> {ocrStatus}
+                   </div>
+                )}
+
+                {rubricFileUrl && !uploading && (
                   <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 p-2 rounded">
                     <CheckCircle className="h-4 w-4" /> Uploaded: {rubricFileUrl}
                   </div>
@@ -273,53 +298,6 @@ export default function CreateWorkPage() {
               </CardContent>
             </Card>
           </TabsContent>
-
-          <TabsContent value="digital" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Digital Editor</CardTitle>
-                <CardDescription>Compose your assessment directly in the platform.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-2">
-                  <Label>Instructions / Preamble</Label>
-                  <div className="min-h-[150px] border rounded-md p-4 bg-muted/10 font-mono text-sm text-muted-foreground">
-                    [Rich Text Editor Placeholder]
-                    <br/><br/>
-                    • Bold, Italic, Lists support...
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Questions</Label>
-                    <Button size="sm" variant="outline"><Plus className="mr-2 h-3 w-3" /> Add Question</Button>
-                  </div>
-
-                  {/* Mock Question Item */}
-                  <div className="border rounded-lg p-4 space-y-3 relative group">
-                    <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
-                    </div>
-                    <div className="flex gap-4">
-                      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center font-bold text-sm shrink-0">1</div>
-                      <div className="flex-1 space-y-2">
-                        <Input placeholder="Enter question text..." defaultValue="Explain the significance of the 1964 Union." />
-                        <div className="flex gap-4">
-                           <Input type="number" placeholder="Marks" className="w-24" />
-                           <Select>
-                               <option value="essay">Essay</option>
-                               <option value="short">Short Answer</option>
-                               <option value="mcq">Multiple Choice</option>
-                           </Select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
 
         {/* Rubric Builder Section */}
@@ -327,35 +305,20 @@ export default function CreateWorkPage() {
            <CardHeader>
              <CardTitle className="flex items-center gap-2">
                <FileText className="h-5 w-5 text-blue-600" />
-               Marking Scheme / Rubric
+               Marking Scheme Content
              </CardTitle>
-             <CardDescription>Provide the correct answers or grading guide for DeepSeek to use.</CardDescription>
+             <CardDescription>Edit the extracted text below to ensure DeepSeek understands the grading criteria.</CardDescription>
            </CardHeader>
            <CardContent className="space-y-4">
              <div className="grid w-full gap-2">
-               <Label htmlFor="rubric-text">Rubric Content</Label>
+               <Label htmlFor="rubric-text">Rubric Content (Extracted from Upload)</Label>
                <Textarea
                  id="rubric-text"
                  placeholder="Paste your marking scheme, key facts, or model answers here..."
-                 className="min-h-[150px] font-mono text-sm"
+                 className="min-h-[300px] font-mono text-sm"
                  value={rubric}
                  onChange={(e) => setRubric(e.target.value)}
                />
-             </div>
-             <div className="flex items-center gap-4">
-               <div className="text-xs text-muted-foreground uppercase font-bold">OR</div>
-               <div className="relative">
-                 <Input
-                    type="file"
-                    id="rubric-upload-secondary"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    onChange={handleRubricUpload}
-                    accept=".pdf,.docx,.txt"
-                 />
-                 <Button variant="outline" size="sm" type="button">
-                   <Upload className="mr-2 h-3 w-3" /> Upload Rubric Document
-                 </Button>
-               </div>
              </div>
            </CardContent>
         </Card>

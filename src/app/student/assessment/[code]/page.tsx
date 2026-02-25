@@ -4,23 +4,56 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Clock, AlertTriangle, FileText, Upload, CheckCircle2, Play, Info, Loader2, CheckCircle } from "lucide-react";
+import { Clock, AlertTriangle, FileText, Upload, CheckCircle2, Play, Info, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface QuizDetails {
+  id: string;
+  title: string;
+  deadline: string | null;
+  totalMarks: number;
+  lecturer: {
+    fullName: string | null;
+  };
+}
 
 export default function AssessmentPage() {
   const params = useParams();
   const router = useRouter();
   const code = params.code as string;
 
+  const [quiz, setQuiz] = useState<QuizDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [started, setStarted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(3600); // 1 hour in seconds
+  const [timeLeft, setTimeLeft] = useState(3600); // Default 60 mins
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submissionFileUrl, setSubmissionFileUrl] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    async function fetchQuiz() {
+      try {
+        const res = await fetch(`/api/quiz/${code}`);
+        if (res.ok) {
+          const data = await res.json();
+          setQuiz(data);
+          // Calculate time left based on deadline if exists, else default
+          // For now, sticking to a session timer or deadline
+        } else {
+          setError("Invalid Assessment Code");
+        }
+      } catch (e) {
+        setError("Failed to load assessment details");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchQuiz();
+  }, [code]);
 
   // Timer logic
   useEffect(() => {
@@ -49,7 +82,7 @@ export default function AssessmentPage() {
       setUploading(true);
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('folder', 'submissions'); // Folder in exam_pdfs bucket
+      formData.append('folder', 'submissions');
       formData.append('bucket', 'exam_pdfs');
 
       try {
@@ -62,11 +95,11 @@ export default function AssessmentPage() {
           const data = await res.json();
           setSubmissionFileUrl(data.path);
         } else {
-          alert("Failed to upload submission");
+          // Use console or UI error state, no alert
+          console.error("Upload failed");
         }
       } catch (error) {
         console.error("Submission upload failed", error);
-        alert("Upload failed");
       } finally {
         setUploading(false);
       }
@@ -75,24 +108,59 @@ export default function AssessmentPage() {
 
   const handleSubmit = async () => {
     if (!submissionFileUrl) {
-      // If no file uploaded, maybe check if they answered questions?
-      // For this simplified flow, assuming either questions OR upload.
-      // But prompt demanded "file MUST upload".
-      // Let's assume file upload is mandatory if present or strictly required.
-      // If "Diagram Submission" is optional, we proceed.
-      // But if this is a "Upload Submission" flow, we need a file.
-      // I'll make it proceed but prefer file.
+       // Require file
+       return;
     }
 
-    setSubmitted(true);
-    // Here we would call the submission API to save the record
-    // e.g. POST /api/submissions with { quizId, fileUrl, answers }
+    setSubmitting(true);
 
-    // Simulate submission delay
-    setTimeout(() => {
-      router.push("/student/dashboard");
-    }, 3000);
+    try {
+        const res = await fetch('/api/submissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code,
+                fileUrl: submissionFileUrl,
+                // answers: {} // No structured answers for now
+            })
+        });
+
+        if (res.ok) {
+            setSubmitted(true);
+            setTimeout(() => {
+                router.push("/student/dashboard");
+            }, 2000);
+        } else {
+            console.error("Submission failed");
+        }
+    } catch (e) {
+        console.error("Error submitting", e);
+    } finally {
+        setSubmitting(false);
+    }
   };
+
+  if (loading) {
+      return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  }
+
+  if (error || !quiz) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-muted/20 p-4">
+             <Card className="max-w-md w-full border-destructive">
+                 <CardHeader>
+                     <CardTitle className="text-destructive flex items-center gap-2">
+                         <AlertCircle className="h-5 w-5" /> Error
+                     </CardTitle>
+                     <CardDescription>{error || "Quiz not found"}</CardDescription>
+                 </CardHeader>
+                 <CardFooter>
+                     <Button onClick={() => router.push('/student/dashboard')}>Return to Dashboard</Button>
+                 </CardFooter>
+             </Card>
+        </div>
+      );
+  }
 
   if (!started && !submitted) {
       return (
@@ -103,8 +171,8 @@ export default function AssessmentPage() {
                         <FileText className="h-4 w-4" />
                         <span className="text-xs font-mono tracking-widest uppercase">{code}</span>
                     </div>
-                    <CardTitle className="text-2xl">Mid-Semester Quiz 1</CardTitle>
-                    <CardDescription>CS 101 • Introduction to Computer Science</CardDescription>
+                    <CardTitle className="text-2xl">{quiz.title}</CardTitle>
+                    <CardDescription>Lecturer: {quiz.lecturer.fullName || "Unknown"}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="grid grid-cols-2 gap-4">
@@ -115,9 +183,9 @@ export default function AssessmentPage() {
                             </span>
                         </div>
                         <div className="border p-4 rounded-lg bg-secondary/10">
-                            <span className="text-xs text-muted-foreground uppercase font-bold block mb-1">Questions</span>
+                            <span className="text-xs text-muted-foreground uppercase font-bold block mb-1">Marks</span>
                             <span className="text-xl font-bold flex items-center gap-2">
-                                <Info className="h-5 w-5 text-primary" /> 2 Items
+                                <Info className="h-5 w-5 text-primary" /> {quiz.totalMarks || 100}
                             </span>
                         </div>
                     </div>
@@ -127,8 +195,7 @@ export default function AssessmentPage() {
                         <ul className="text-sm text-muted-foreground space-y-2 list-disc pl-4">
                             <li>Ensure you have a stable internet connection.</li>
                             <li>Do not refresh the page once the assessment starts.</li>
-                            <li>You can save your progress as a draft.</li>
-                            <li>Upload diagrams where requested.</li>
+                            <li>Upload your script (PDF/Images) when ready.</li>
                         </ul>
                     </div>
                 </CardContent>
@@ -170,7 +237,7 @@ export default function AssessmentPage() {
             <FileText className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="font-bold text-lg">Mid-Semester Quiz 1</h1>
+            <h1 className="font-bold text-lg">{quiz.title}</h1>
             <p className="text-xs text-muted-foreground font-mono">CODE: {code}</p>
           </div>
         </div>
@@ -185,70 +252,27 @@ export default function AssessmentPage() {
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full p-6 space-y-8">
-        {/* Instructions */}
         <Card className="bg-blue-50/50 border-blue-100">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-blue-900 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" /> Instructions
+              <AlertTriangle className="h-4 w-4" /> Assessment Started
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-blue-800">
-            <p>1. This assessment is timed. You have 60 minutes.</p>
-            <p>2. Answer all questions securely.</p>
-            <p>3. Do not refresh the browser.</p>
+            <p>Please refer to the question paper provided by your lecturer or displayed in class.</p>
+            <p>Upload your written answer script below.</p>
           </CardContent>
         </Card>
 
-        {/* Questions Area (Mock Digital) */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between">
-                <span className="font-bold text-lg">Question 1</span>
-                <span className="text-sm text-muted-foreground">10 Marks</span>
-              </div>
-              <p className="text-lg mt-2">Explain the core principles of Object-Oriented Programming (OOP).</p>
-            </CardHeader>
-            <CardContent>
-              <Textarea placeholder="Type your answer here..." className="min-h-[200px]" />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between">
-                <span className="font-bold text-lg">Question 2</span>
-                <span className="text-sm text-muted-foreground">5 Marks</span>
-              </div>
-              <p className="text-lg mt-2">Which of the following is NOT a valid HTTP method?</p>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup>
-                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-secondary/50 cursor-pointer">
-                  <RadioGroupItem value="get" id="q2-get" />
-                  <Label htmlFor="q2-get" className="flex-1 cursor-pointer">GET</Label>
-                </div>
-                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-secondary/50 cursor-pointer">
-                  <RadioGroupItem value="post" id="q2-post" />
-                  <Label htmlFor="q2-post" className="flex-1 cursor-pointer">POST</Label>
-                </div>
-                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-secondary/50 cursor-pointer">
-                  <RadioGroupItem value="jump" id="q2-jump" />
-                  <Label htmlFor="q2-jump" className="flex-1 cursor-pointer">JUMP</Label>
-                </div>
-              </RadioGroup>
-            </CardContent>
-          </Card>
-
-          {/* Upload Section (Hybrid Mode) */}
-          <Card>
+        {/* Upload Section */}
+        <Card>
              <CardHeader>
-                <CardTitle>Diagram Submission</CardTitle>
+                <CardTitle>Script Submission</CardTitle>
              </CardHeader>
              <CardContent>
                <div className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center bg-muted/10">
                   <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm font-medium">Upload diagram (Optional)</p>
+                  <p className="text-sm font-medium">Upload your answer script (Required)</p>
                   <Button variant="secondary" className="mt-4" onClick={() => (document.getElementById('submission-upload') as HTMLInputElement)?.click()} disabled={uploading}>
                     {uploading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
                     Choose File
@@ -261,13 +285,14 @@ export default function AssessmentPage() {
                   </div>
                )}
              </CardContent>
-          </Card>
-        </div>
+        </Card>
       </main>
 
       <footer className="sticky bottom-0 bg-background border-t p-6 flex justify-end gap-4 shadow-2xl">
-        <Button variant="outline">Save Draft</Button>
-        <Button size="lg" className="px-8" onClick={handleSubmit}>Submit Assessment</Button>
+        <Button size="lg" className="px-8" onClick={handleSubmit} disabled={!submissionFileUrl || submitting}>
+            {submitting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+            Submit Assessment
+        </Button>
       </footer>
     </div>
   );
