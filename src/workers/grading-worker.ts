@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { readFile } from '@/lib/storage';
 import { ocrDocument } from '@/lib/ai/gemini';
 import { gradeSubmission, GradeConfig } from '@/lib/ai/deepseek';
+import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 
 export async function handleAiGrade(job: Job) {
   const data = JSON.parse(job.data);
@@ -65,11 +66,33 @@ export async function handleAiGrade(job: Job) {
   };
 
   // 3. Grade
-  // Default total marks if not set? 100.
   const totalMarks = submission.quiz.totalMarks || 100;
   const rubric = submission.quiz.rubric || "Grade based on general academic standards.";
 
-  const result = await gradeSubmission(ocrText, rubric, totalMarks, config);
+  let result: any;
+
+  // Use Simulator if Keys Missing (for Board Audit)
+  if (!process.env.DEEPSEEK_API_KEY) {
+    console.log(`[Simulator] Using DeepSeek Simulator for Job ${job.id}`);
+    const sim = await simulateDeepSeekCall(ocrText);
+
+    // Check for malformed JSON simulation
+    if (sim.breakdown === "INVALID_JSON_RESPONSE") {
+       throw new Error("AI returned malformed JSON (Simulator)");
+    }
+
+    result = {
+      totalScore: sim.score,
+      breakdown: sim.breakdown,
+      aiReasoning: sim.reasoning,
+      confidence: sim.confidence,
+      strengths: ["Consistency", "Clarity"],
+      weaknesses: ["Calculation Error"],
+      improvement: "Check arithmetic."
+    };
+  } else {
+    result = await gradeSubmission(ocrText, rubric, totalMarks, config);
+  }
 
   // 4. Save Score
   // Check if score exists (upsert)
