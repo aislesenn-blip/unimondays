@@ -73,7 +73,7 @@ export default async function StudentDashboard() {
                             <CardTitle className="text-xl group-hover:text-primary transition-colors">{work.title}</CardTitle>
                             <CardDescription className="mt-1">{work.class?.name || "Session"}</CardDescription>
                         </div>
-                        <span className="text-xs font-bold uppercase tracking-wider bg-secondary px-2 py-1 rounded text-muted-foreground">{work.mode}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider bg-secondary px-2 py-1 rounded text-muted-foreground">Assessment</span>
                         </div>
                     </CardHeader>
                     <CardContent>

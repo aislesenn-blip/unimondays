@@ -65,11 +65,9 @@ export async function POST(request: NextRequest) {
     await prisma.auditLog.create({
       data: {
         universityId: user.universityId,
-        submissionId: undefined, // Not a submission yet
         action: 'BULK_UPLOAD',
         details: `Bulk upload started for Quiz ${quizId}, Job ${job.id}`,
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        // userAgent: request.headers.get('user-agent'),
         severity: 'INFO'
       }
     });
