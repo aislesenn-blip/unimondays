@@ -15,11 +15,30 @@ export async function POST(req: NextRequest) {
     // 1. Find Quiz by Code
     const quiz = await prisma.quiz.findUnique({
       where: { code },
-      include: { university: true } // Need universityId for submission
+      include: {
+        university: true,
+        class: true
+      }
     });
 
     if (!quiz) {
       return NextResponse.json({ error: 'Invalid Assessment Code' }, { status: 404 });
+    }
+
+    // 1b. Enforce Business Rules (Feature Consumption Audit)
+    // Check Quiz Status
+    if (quiz.status !== 'PUBLISHED' && quiz.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'Assessment is not active.' }, { status: 403 });
+    }
+
+    // Check Class Status
+    if (quiz.class && quiz.class.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'Session is archived or locked.' }, { status: 403 });
+    }
+
+    // Check Deadline
+    if (quiz.deadline && new Date() > quiz.deadline) {
+      return NextResponse.json({ error: 'Submission deadline has passed.' }, { status: 403 });
     }
 
     // 2. Check if already submitted? (Optional strictness)

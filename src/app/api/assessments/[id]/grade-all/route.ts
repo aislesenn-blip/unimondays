@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const submissions = await prisma.submission.findMany({
       where: {
         quizId: quizId,
-        status: { in: ['PENDING', 'SUBMITTED'] } // Don't re-grade PROCESSING/GRADED unless forced (not implemented)
+        status: { in: ['PENDING', 'LATE'] } // Don't re-grade PROCESSING/GRADED unless forced (not implemented)
       }
     });
 
