@@ -44,7 +44,7 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
     where: { id: sessionId },
     include: {
       _count: {
-        select: { enrollments: true, quizzes: true }
+        select: { quizzes: true }
       }
     }
   });
@@ -113,7 +113,8 @@ export default async function SessionDetailsPage({ params }: { params: Promise<{
                         <Link href={`/dashboard/sessions/${session.id}/work/${work.id}`} className="hover:underline">
                           <CardTitle className="text-base">{work.title}</CardTitle>
                         </Link>
-                        <Badge variant="outline">{work.mode}</Badge>
+                        {/* mode is removed from schema, assuming Online/Upload or handled differently */}
+                        <Badge variant="outline">Assessment</Badge>
                         {work.status === "DRAFT" && <Badge variant="secondary">Draft</Badge>}
                         {work.status === "PUBLISHED" && <Badge className="bg-blue-500">Published</Badge>}
                         {work.status === "GRADING" && <Badge className="bg-yellow-500">Grading</Badge>}

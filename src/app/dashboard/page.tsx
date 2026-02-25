@@ -41,24 +41,16 @@ export default async function DashboardPage() {
     take: 3,
     include: {
       _count: {
-        select: { enrollments: true }
+        select: { quizzes: true }
       }
     }
   });
 
-  // Recent Activity: Fetch from AuditLog or Submissions
+  // Recent Activity: Fetch from AuditLog
   const recentActivity = await prisma.auditLog.findMany({
-    where: { submission: { quiz: { lecturerId: user.id } } },
+    where: { universityId: user.universityId }, // Tenant scoped
     orderBy: { timestamp: "desc" },
-    take: 4,
-    include: {
-      submission: {
-        include: {
-          quiz: true,
-          // student info?
-        }
-      }
-    }
+    take: 4
   });
 
   // If no audit logs, show empty or welcome message
@@ -154,11 +146,10 @@ export default async function DashboardPage() {
                   <div key={log.id} className="flex items-center">
                     <div className="space-y-1">
                       <p className="text-sm font-medium leading-none">
-                        {log.action} <span className="text-muted-foreground font-normal">
-                          {log.submission?.quiz?.title ? `on ${log.submission.quiz.title}` : ''}
-                        </span>
+                        {log.action}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">{log.details}</p>
+                      <p className="text-[10px] text-muted-foreground">
                         {log.timestamp ? log.timestamp.toLocaleTimeString() : 'N/A'}
                       </p>
                     </div>
@@ -190,7 +181,7 @@ export default async function DashboardPage() {
                       <p className="text-sm text-muted-foreground">{session.name}</p>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {session._count.enrollments} Students
+                      {session._count.quizzes} Assessments
                     </div>
                   </div>
                 </Link>
