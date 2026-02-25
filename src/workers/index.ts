@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { claimJob, completeJob, failJob, JobData, JobType } from '@/lib/queue';
+import { claimJob, completeJob, failJob, JobType } from '@/lib/queue';
 import { Job } from '@prisma/client';
 import { handleOcrSplit } from './ocr-worker';
 import { handleAiGrade } from './grading-worker';
@@ -16,7 +16,12 @@ const handlers: Record<string, JobHandler> = {
 };
 
 export async function processJobs() {
-  console.log("Worker started...");
+  console.log("Worker started. Monitoring queue...");
+
+  // Basic metrics
+  let processedCount = 0;
+  let errorCount = 0;
+
   while (true) {
     try {
       // 1. Claim a job
@@ -24,7 +29,13 @@ export async function processJobs() {
       const job = await claimJob(jobTypeKeys);
 
       if (job) {
-        console.log(`Claimed job ${job.id} (${job.type})`);
+        const startTime = Date.now();
+        console.log(JSON.stringify({
+          event: "JOB_STARTED",
+          jobId: job.id,
+          type: job.type,
+          timestamp: new Date().toISOString()
+        }));
 
         try {
           const handler = handlers[job.type];
@@ -32,17 +43,33 @@ export async function processJobs() {
 
           const result = await handler(job);
           await completeJob(job.id, result);
-          console.log(`Completed job ${job.id}`);
+
+          const duration = Date.now() - startTime;
+          console.log(JSON.stringify({
+            event: "JOB_COMPLETED",
+            jobId: job.id,
+            duration,
+            timestamp: new Date().toISOString()
+          }));
+          processedCount++;
         } catch (error: any) {
-          console.error(`Job ${job.id} failed:`, error);
+          const duration = Date.now() - startTime;
+          console.error(JSON.stringify({
+            event: "JOB_FAILED",
+            jobId: job.id,
+            error: error.message || String(error),
+            duration,
+            timestamp: new Date().toISOString()
+          }));
           await failJob(job.id, error.message || String(error));
+          errorCount++;
         }
       } else {
-        // No job found, sleep for a bit
+        // No job found, sleep for a bit (Exponential backoff could be added here)
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
-      console.error("Worker loop error:", error);
+      console.error("Worker loop fatal error:", error);
       // Sleep to prevent tight loop on error
       await new Promise(resolve => setTimeout(resolve, 5000));
     }

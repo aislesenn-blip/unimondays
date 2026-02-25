@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import * as XLSX from 'xlsx';
 import { Submission, Score, Quiz, User } from '@prisma/client';
-import { readFile } from './storage';
+import { readFile } from '@/lib/storage';
 
 type FullSubmission = Submission & {
   score: Score | null;

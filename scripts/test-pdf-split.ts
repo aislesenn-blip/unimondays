@@ -2,9 +2,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { splitPdfBatch } from '../src/lib/pdf-service';
 import fs from 'fs/promises';
 import path from 'path';
-
-// Mock Gemini response by overriding analyzePdfStructure?
-// Or we can rely on the mock inside analyzePdfStructure if API key is missing.
+import { readFile } from '../src/lib/storage'; // Use our new storage abstraction
 // src/lib/ai/gemini.ts returns a mock if no key.
 // Mock: [{ regNo: "REG001", startPage: 1, endPage: 2 }, { regNo: "REG002", startPage: 3, endPage: 5 }]
 
@@ -71,13 +69,10 @@ async function main() {
 
     // Verify files exist
     for (const res of results) {
-      let fullPath = res.filePath;
-      if (fullPath.startsWith('/uploads/')) {
-        fullPath = path.join(process.cwd(), 'public', fullPath);
-      }
-      const exists = await fs.stat(fullPath).then(() => true).catch(() => false);
-      if (!exists) throw new Error(`File ${fullPath} does not exist`);
-      console.log(`Verified file: ${fullPath}`);
+      // With new storage, filePath is absolute or resolvable by storage.readFile
+      const buffer = await readFile(res.filePath).catch(() => null);
+      if (!buffer) throw new Error(`File ${res.filePath} does not exist`);
+      console.log(`Verified file: ${res.filePath}`);
     }
 
     console.log("Test PASSED");

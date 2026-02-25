@@ -1,6 +1,7 @@
 import { prisma } from '../src/lib/prisma';
 import { enqueueJob } from '../src/lib/queue';
 import { handleExportZip } from '../src/workers/export-worker';
+import { readFile, saveBuffer } from '../src/lib/storage';
 import fs from 'fs/promises';
 import JSZip from 'jszip';
 import path from 'path';
@@ -8,24 +9,22 @@ import path from 'path';
 async function main() {
   console.log("Setting up test data for Export...");
 
-  // 1. Create Quiz
-  const quiz = await prisma.quiz.create({
-    data: {
-      title: 'Export Test Quiz',
-      code: `EXP_${Date.now()}`,
-      lecturerId: 1, // Assume user 1 exists or create one. Wait, user 1 might not exist if DB clean.
-      // But I ran test-grading-worker which created user. Hopefully IDs align or I create one.
-    }
-  });
-
-  // Ensure Lecturer
+  // Ensure Lecturer first
   const lecturer = await prisma.user.upsert({
       where: { email: 'lecturer@test.com' },
       update: {},
       create: { email: 'lecturer@test.com', role: 'lecturer', fullName: 'Dr. Test' }
   });
 
-  await prisma.quiz.update({ where: { id: quiz.id }, data: { lecturerId: lecturer.id } });
+  // 1. Create Quiz
+  const quiz = await prisma.quiz.create({
+    data: {
+      title: 'Export Test Quiz',
+      code: `EXP_${Date.now()}`,
+      lecturerId: lecturer.id,
+      totalMarks: 100
+    }
+  });
 
   // 2. Create Submission & Score
   const sub = await prisma.submission.create({
@@ -33,14 +32,18 @@ async function main() {
       quizId: quiz.id,
       studentRegNo: 'REG_EXP_1',
       status: 'GRADED',
-      // Provide a dummy PDF path?
-      // I'll create a dummy file
-      filePath: '/tmp/dummy_script.pdf'
+      filePath: '' // Will be set below
     }
   });
 
-  // Create dummy file
-  await fs.writeFile('/tmp/dummy_script.pdf', 'Dummy PDF Content');
+  // Create dummy file via Storage Service to ensure path validity
+  const dummyBuffer = Buffer.from('Dummy PDF Content');
+  const dummyPath = await saveBuffer(dummyBuffer, 'dummy_script.pdf', 'submissions');
+
+  await prisma.submission.update({
+    where: { id: sub.id },
+    data: { filePath: dummyPath }
+  });
 
   await prisma.score.create({
     data: {
@@ -66,12 +69,8 @@ async function main() {
     if (!result || !result.filePath) throw new Error("No filePath returned");
 
     // Verify ZIP
-    let zipPath = result.filePath;
-    if (zipPath.startsWith('/uploads/')) {
-        zipPath = path.join(process.cwd(), 'public', zipPath);
-    }
-
-    const zipContent = await fs.readFile(zipPath);
+    // We use readFile from storage abstraction
+    const zipContent = await readFile(result.filePath);
     const zip = await JSZip.loadAsync(zipContent);
 
     console.log("ZIP Contents:");
