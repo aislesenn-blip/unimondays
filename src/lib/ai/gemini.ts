@@ -29,3 +29,52 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
     throw new Error("Failed to perform OCR on document.");
   }
 }
+
+export interface PdfSplit {
+  regNo: string;
+  name?: string;
+  startPage: number; // 1-based
+  endPage: number;   // 1-based
+}
+
+export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn("GEMINI_API_KEY is not set. Returning mock structure.");
+    return [
+      { regNo: "REG001", startPage: 1, endPage: 2 },
+      { regNo: "REG002", startPage: 3, endPage: 5 }
+    ];
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const base64Data = buffer.toString("base64");
+
+    const prompt = `
+      Analyze this PDF containing multiple student scripts.
+      Identify the start and end page numbers for each student's script.
+      Look for Registration Numbers (RegNo) or Names at the top of the first page of a script.
+      Scripts are continuous.
+
+      Return a STRICT JSON array of objects with keys: "regNo", "startPage" (1-based integer), "endPage" (1-based integer).
+      Do not include any markdown formatting. Just the JSON.
+    `;
+
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: "application/pdf",
+        },
+      },
+      prompt,
+    ]);
+
+    const response = await result.response;
+    const text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(text) as PdfSplit[];
+  } catch (error) {
+    console.error("Gemini Structure Analysis Error:", error);
+    throw new Error("Failed to analyze PDF structure.");
+  }
+}

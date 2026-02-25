@@ -14,9 +14,8 @@ const ensureDir = async (dir: string) => {
   }
 };
 
-export async function uploadFile(file: File, folder: string = 'submissions'): Promise<string> {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const ext = path.extname(file.name);
+export async function saveBuffer(buffer: Buffer, originalName: string, folder: string = 'submissions'): Promise<string> {
+  const ext = path.extname(originalName) || '.pdf'; // Default to .pdf if missing
   const uuid = crypto.randomUUID();
   const filename = `${uuid}${ext}`;
 
@@ -31,6 +30,11 @@ export async function uploadFile(file: File, folder: string = 'submissions'): Pr
   } else {
     return `/uploads/${folder}/${filename}`;
   }
+}
+
+export async function uploadFile(file: File, folder: string = 'submissions'): Promise<string> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return saveBuffer(buffer, file.name, folder);
 }
 
 export async function readFile(fileUrl: string): Promise<Buffer> {
