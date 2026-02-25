@@ -1,5 +1,5 @@
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import fs from 'fs';
 
@@ -26,9 +26,8 @@ async function main() {
     create: {
       email: "lecturer@nu.edu",
       fullName: "Prof. Pilot",
-      role: "lecturer",
-      universityId: uni.id,
-      password: "password123"
+      role: "LECTURER",
+      universityId: uni.id
     }
   });
 
@@ -58,7 +57,8 @@ async function main() {
       classId: semester.id,
       status: "PUBLISHED",
       totalMarks: 100,
-      rubric: "Grade based on clarity, depth of understanding, and critical thinking."
+      rubric: "Grade based on clarity, depth of understanding, and critical thinking.",
+      universityId: uni.id
     }
   });
 
@@ -67,14 +67,14 @@ async function main() {
   // 5. Create 1000 Students
   console.log("Creating 1000 Students...");
   // Clear existing students to avoid conflicts
-  await prisma.user.deleteMany({ where: { role: 'student', universityId: uni.id } });
+  await prisma.user.deleteMany({ where: { role: 'STUDENT', universityId: uni.id } });
 
   const students = [];
   for (let i = 1; i <= 1000; i++) {
     students.push({
       email: `student${i}@nu.edu`,
       fullName: `Student ${i}`,
-      role: "student",
+      role: UserRole.STUDENT,
       universityId: uni.id,
       quota: 100
     });

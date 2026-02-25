@@ -14,20 +14,20 @@ async function main() {
   });
 
   const lecturerA = await prisma.user.create({
-    data: { email: 'auditorA@auditA.edu', role: 'lecturer', universityId: uniA.id }
+    data: { email: 'auditorA@auditA.edu', role: 'LECTURER', universityId: uniA.id }
   });
   const lecturerB = await prisma.user.create({
-    data: { email: 'auditorB@auditB.edu', role: 'lecturer', universityId: uniB.id }
+    data: { email: 'auditorB@auditB.edu', role: 'LECTURER', universityId: uniB.id }
   });
   const studentA = await prisma.user.create({
-    data: { email: 'auditStudentA@auditA.edu', role: 'student', universityId: uniA.id }
+    data: { email: 'auditStudentA@auditA.edu', role: 'STUDENT', universityId: uniA.id }
   });
   const adminA = await prisma.user.create({
-    data: { email: 'auditAdminA@auditA.edu', role: 'admin', universityId: uniA.id }
+    data: { email: 'auditAdminA@auditA.edu', role: 'ADMIN', universityId: uniA.id }
   });
 
   const quizA = await prisma.quiz.create({
-    data: { title: 'Quiz A', code: 'Q_AUDIT_A', lecturerId: lecturerA.id }
+    data: { title: 'Quiz A', code: 'Q_AUDIT_A', lecturerId: lecturerA.id, universityId: uniA.id }
   });
 
   // --- TEST 1: Tenant Isolation (Access Check) ---
@@ -65,8 +65,8 @@ async function main() {
   console.log("\n[TEST 2] Role Enforcement Logic...");
   {
     // Simulate: Student A tries to export (Role check)
-    // Route Logic: if (user.role !== 'lecturer' && user.role !== 'admin')
-    const canExport = studentA.role === 'lecturer' || studentA.role === 'admin';
+    // Route Logic: if (user.role !== 'LECTURER' && user.role !== 'ADMIN')
+    const canExport = studentA.role === 'LECTURER' || studentA.role === 'ADMIN';
     if (canExport) {
       console.error("❌ FAILED: Student A allowed to export!");
     } else {
@@ -74,7 +74,7 @@ async function main() {
     }
 
     // Admin A?
-    const adminCanExport = adminA.role === 'lecturer' || adminA.role === 'admin';
+    const adminCanExport = adminA.role === 'LECTURER' || adminA.role === 'ADMIN';
     if (adminCanExport) {
       console.log("✅ PASSED: Admin A allowed to export");
     } else {
@@ -89,11 +89,9 @@ async function main() {
     // Enqueue a job for Quiz A (Uni A)
     const job = await prisma.job.create({
       data: {
-        type: 'TEST_JOB',
-        data: '{}',
+        type: 'AI_GRADE',
+        payload: { quizId: quizA.id },
         status: 'PENDING',
-        priority: 0,
-        quizId: quizA.id,
         universityId: uniA.id
       }
     });

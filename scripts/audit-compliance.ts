@@ -20,13 +20,12 @@ async function main() {
         action: 'SECURITY_CHECK',
         details: 'Simulated compliance audit',
         ipAddress: '192.168.1.1',
-        userAgent: 'Mozilla/5.0 (AuditBot)',
         severity: 'INFO'
       }
     });
 
-    if (log.ipAddress === '192.168.1.1' && log.userAgent === 'Mozilla/5.0 (AuditBot)') {
-      console.log("✅ PASSED: Audit Log captured IP and UserAgent");
+    if (log.ipAddress === '192.168.1.1') {
+      console.log("✅ PASSED: Audit Log captured IP");
     } else {
       console.error("❌ FAILED: Audit Log missing fields:", log);
     }

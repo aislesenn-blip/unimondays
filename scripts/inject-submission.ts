@@ -34,19 +34,17 @@ async function main() {
         upsert: {
           update: {
             totalMarks: 85,
-            breakdown: JSON.stringify([
+            breakdown: [
               { question: "Q1", score: 85, max: 100, feedback: "Great essay on AI." }
-            ]),
-            remarks: "Excellent work despite API limits.",
-            confidence: 95.0
+            ],
+            remarks: "Excellent work despite API limits."
           },
           create: {
             totalMarks: 85,
-            breakdown: JSON.stringify([
+            breakdown: [
               { question: "Q1", score: 85, max: 100, feedback: "Great essay on AI." }
-            ]),
-            remarks: "Excellent work despite API limits.",
-            confidence: 95.0
+            ],
+            remarks: "Excellent work despite API limits."
           }
         }
       }
@@ -54,6 +52,7 @@ async function main() {
     create: {
       quizId: quiz.id,
       userId: student.id,
+      universityId: student.universityId!,
       studentRegNo: 'STU-001',
       studentName: 'Student 1',
       status: 'GRADED',
@@ -61,11 +60,10 @@ async function main() {
       score: {
         create: {
           totalMarks: 85,
-          breakdown: JSON.stringify([
+          breakdown: [
             { question: "Q1", score: 85, max: 100, feedback: "Great essay on AI." }
-          ]),
-          remarks: "Excellent work despite API limits.",
-          confidence: 95.0
+          ],
+          remarks: "Excellent work despite API limits."
         }
       }
     }

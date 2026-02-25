@@ -31,7 +31,6 @@ export default async function SessionsPage() {
     include: {
       _count: {
         select: {
-          enrollments: true,
           quizzes: true,
         }
       }
@@ -68,10 +67,6 @@ export default async function SessionsPage() {
             </CardHeader>
             <CardContent className="pb-2">
               <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                <div className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  {session._count.enrollments} Students
-                </div>
                 <div className="flex items-center gap-1">
                   <BookOpen className="h-4 w-4" />
                   {session._count.quizzes} Works

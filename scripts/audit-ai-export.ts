@@ -20,18 +20,18 @@ async function main() {
   const lecturer = await prisma.user.upsert({
     where: { email: 'ai@ai.edu' },
     update: {},
-    create: { email: 'ai@ai.edu', role: 'lecturer', universityId: uni.id }
+    create: { email: 'ai@ai.edu', role: 'LECTURER', universityId: uni.id }
   });
 
   const quiz = await prisma.quiz.upsert({
     where: { code: 'AI_Q' },
     update: {},
-    create: { title: 'AI Quiz', code: 'AI_Q', lecturerId: lecturer.id, totalMarks: 100 }
+    create: { title: 'AI Quiz', code: 'AI_Q', lecturerId: lecturer.id, totalMarks: 100, universityId: uni.id }
   });
 
   const dummyFile = '/tmp/ai_test.pdf';
   const submission = await prisma.submission.create({
-    data: { quizId: quiz.id, studentRegNo: 'AI_S1', status: 'PENDING', filePath: dummyFile, ocrText: "Student Answer..." }
+    data: { quizId: quiz.id, studentRegNo: 'AI_S1', status: 'PENDING', filePath: dummyFile, ocrText: "Student Answer...", universityId: uni.id }
   });
 
   // --- TEST 1: AI Grade Structure (Mocked) ---
@@ -55,9 +55,9 @@ async function main() {
 
         // Validate JSON Structure
         try {
-            const breakdown = JSON.parse(score.breakdown);
+            const breakdown = score.breakdown as any[];
             if (!Array.isArray(breakdown)) throw new Error("Breakdown is not an array");
-            if (typeof breakdown[0].score !== 'number') throw new Error("Score is not a number");
+            if (typeof breakdown[0]?.score !== 'number') throw new Error("Score is not a number");
             console.log("✅ PASSED: Score JSON structure is valid");
         } catch (e) {
             console.error("❌ FAILED: Invalid Score JSON:", e);

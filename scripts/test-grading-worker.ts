@@ -5,14 +5,22 @@ import { handleAiGrade } from '../src/workers/grading-worker';
 async function main() {
   console.log("Setting up test data...");
 
+  // Ensure University
+  const uni = await prisma.university.upsert({
+      where: { code: 'TEST_GW' },
+      update: {},
+      create: { name: 'Test GW Uni', code: 'TEST_GW' }
+  });
+
   // 1. Create Lecturer
   const lecturer = await prisma.user.upsert({
     where: { email: 'lecturer@test.com' },
     update: {},
     create: {
       email: 'lecturer@test.com',
-      role: 'lecturer',
-      fullName: 'Dr. Test'
+      role: 'LECTURER',
+      fullName: 'Dr. Test',
+      universityId: uni.id
     }
   });
 
@@ -25,7 +33,8 @@ async function main() {
       totalMarks: 100,
       rubric: "Q1: 5 marks for definition, 5 marks for example.",
       markingScheme: "Q1 Answer: Polymorphism is...",
-      status: 'PUBLISHED'
+      status: 'PUBLISHED',
+      universityId: uni.id
     }
   });
 
@@ -33,8 +42,9 @@ async function main() {
   const submission = await prisma.submission.create({
     data: {
       quizId: quiz.id,
+      universityId: uni.id,
       studentRegNo: 'REG_TEST_1',
-      status: 'PENDING_OCR',
+      status: 'PENDING',
       ocrText: "Student Answer: Polymorphism allows objects to be treated as instances of their parent class. Example: A generic 'Shape' class.",
       filePath: '/tmp/dummy.pdf' // Won't be read because ocrText exists
     }

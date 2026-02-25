@@ -46,7 +46,7 @@ export default async function GradePage({ params }: { params: Promise<{ id: stri
         score: submission.score?.totalMarks || 0,
         maxScore: submission.quiz.totalMarks || 100,
         aiReasoning: submission.score?.remarks || "",
-        confidence: submission.score?.confidence || 0,
+        confidence: submission.confidenceScore || 0,
         fileUrl: submission.filePath,
         ocrText: submission.ocrText,
         breakdown
