@@ -72,6 +72,14 @@ export async function handleAiGrade(job: Job) {
   const totalMarks = submission.quiz.totalMarks || 100;
   const rubric = submission.quiz.rubric || "Grade based on general academic standards.";
 
+  // Zero-Trust Tracing: Log Configuration
+  console.log(`[AI_GRADE] Job ${job.id} Configuration Trace:`);
+  console.log(`- Quiz ID: ${submission.quiz.id}`);
+  console.log(`- Strictness (DB): ${submission.quiz.strictness} -> Multiplier: ${strictnessVal}`);
+  console.log(`- Rubric Present: ${!!submission.quiz.rubric} (Length: ${submission.quiz.rubric?.length || 0})`);
+  console.log(`- Marking Scheme Present: ${!!submission.quiz.markingScheme} (Length: ${submission.quiz.markingScheme?.length || 0})`);
+  console.log(`- Total Marks: ${totalMarks}`);
+
   let result: any;
 
   // Use Simulator if Keys Missing (for Board Audit)
@@ -94,6 +102,7 @@ export async function handleAiGrade(job: Job) {
       improvement: "Check arithmetic."
     };
   } else {
+    console.log(`[AI_GRADE] Invoking DeepSeek with constrained context...`);
     result = await gradeSubmission(ocrText, rubric, totalMarks, config);
   }
 
