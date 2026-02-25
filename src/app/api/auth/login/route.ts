@@ -32,10 +32,17 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       // Data inconsistency: Auth exists but public user missing.
-      // In a strict system, this is a critical error.
-      // We could try to auto-heal here if we had university info, but we don't.
-      console.error(`Data Inconsistency: User ${userId} exists in Auth but not in public.users`);
-      return NextResponse.json({ error: 'Account setup incomplete. Please contact support.' }, { status: 500 });
+      // This is an "Orphaned User" scenario.
+      // Gracefully handle by returning 400, not 500.
+      console.warn(`[Login] Orphaned User Detected: ${userId} (Email: ${email})`);
+
+      // We could try to auto-repair if we had university info, but we don't.
+      // Return a clean error prompting them to contact support or re-register.
+      // If we delete the auth user here, they could re-signup. But that deletes password.
+      // Safest: Tell them to contact support.
+      return NextResponse.json({
+        error: 'Account setup incomplete. Please contact support at 0745780988.'
+      }, { status: 400 });
     }
 
     // 3. Set Session Cookie
@@ -56,8 +63,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, user });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login Error:", error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
   }
 }

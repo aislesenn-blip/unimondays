@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
       where: { code },
       include: {
         university: true,
-        class: true
+        class: true,
+        lecturer: true
       }
     });
 
@@ -26,6 +27,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 1b. Enforce Business Rules (Feature Consumption Audit)
+    // Check Lecturer Quota (Dead Logic Fix)
+    if (quiz.lecturer.quota && quiz.lecturer.used !== null && quiz.lecturer.used >= quiz.lecturer.quota) {
+       return NextResponse.json({ error: 'Submission limit exceeded for this assessment (Quota).' }, { status: 403 });
+    }
+
     // Check Quiz Status
     if (quiz.status !== 'PUBLISHED' && quiz.status !== 'ACTIVE') {
       return NextResponse.json({ error: 'Assessment is not active.' }, { status: 403 });
