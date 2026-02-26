@@ -23,10 +23,19 @@ export interface GradingResult {
   improvement?: string;
 }
 
+export interface CalibrationSettings {
+  methodology: string;
+  grammar: string;
+  verbosity: string;
+  incomplete: string;
+  custom: string;
+}
+
 export interface GradeConfig {
   strictness: number; // 0.5 (lenient) to 1.5 (strict)
   markingScheme?: string;
   lecturerNotes?: string;
+  calibration?: CalibrationSettings;
 }
 
 export async function gradeSubmission(
@@ -43,8 +52,13 @@ export async function gradeSubmission(
 You are an expert academic grader. Your task is to grade a student's submission based STRICTLY on the provided rubric and marking scheme.
 You must follow the "Gold Standard" of academic grading: objective, consistent, and justifiable.
 
-Calibration:
+Calibration & Persona:
 - Strictness Level: ${config.strictness} (1.0 = Neutral, <1.0 = Lenient, >1.0 = Strict).
+- Methodology: ${config.calibration?.methodology || "Standard"}
+- Grammar/Language: ${config.calibration?.grammar || "Ignore grammar errors unless critical"}
+- Verbosity: ${config.calibration?.verbosity || "Focus on facts"}
+- Incomplete Sections: ${config.calibration?.incomplete || "Grade what is present"}
+- Custom Expectations: ${config.calibration?.custom || "None"}
 - Lecturer Notes: ${config.lecturerNotes || "None"}
 
 You must output a valid JSON object with the following structure:

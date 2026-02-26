@@ -13,8 +13,27 @@ You can learn more, including how to opt-out if you'd not like to participate in
 https://nextjs.org/telemetry
 
 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-✓ Ready in 1488ms
-○ Compiling /login ...
- GET /login 200 in 5.5s (compile: 5.0s, proxy.ts: 144ms, render: 383ms)
- GET /student/login 200 in 924ms (compile: 697ms, proxy.ts: 9ms, render: 218ms)
- GET /signup 200 in 683ms (compile: 516ms, proxy.ts: 14ms, render: 153ms)
+✓ Ready in 1659ms
+○ Compiling /signup ...
+ GET /signup 200 in 6.0s (compile: 5.5s, proxy.ts: 149ms, render: 422ms)
+Missing Supabase environment variables!
+TypeError: fetch failed
+    at async POST (src/app/api/auth/signup/route.ts:15:50)
+  13 |
+  14 |     // 1. Create Supabase Auth User
+> 15 |     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+     |                                                  ^
+  16 |       email,
+  17 |       password,
+  18 |       email_confirm: true, // Auto-confirm {
+  [cause]: Error: getaddrinfo ENOTFOUND missing-env.supabase.co
+      at ignore-listed frames {
+    errno: -3008,
+    code: 'ENOTFOUND',
+    syscall: 'getaddrinfo',
+    hostname: 'missing-env.supabase.co'
+  }
+}
+Supabase Auth Create Failed: fetch failed
+ POST /api/auth/signup 400 in 1700ms (compile: 1147ms, render: 553ms)
+ GET /login 200 in 800ms (compile: 695ms, proxy.ts: 22ms, render: 82ms)

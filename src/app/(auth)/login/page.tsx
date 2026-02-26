@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -13,7 +13,8 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card";
-import { BackButton } from "@/components/ui/back-button";
+import { ArrowLeft } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function LoginForm() {
   const router = useRouter();
@@ -63,7 +64,10 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4 relative">
       <div className="absolute top-4 left-4">
-        <BackButton />
+        <Link href="/" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 text-muted-foreground hover:text-foreground")}>
+            <ArrowLeft className="h-4 w-4" />
+            Return Home
+        </Link>
       </div>
       <Card className="w-full max-w-md border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <CardHeader className="space-y-1">
