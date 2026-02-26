@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Download, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable"; // New Client Component
 
 export default async function WorkSessionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
@@ -72,55 +73,8 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
       </div>
 
       <div className="rounded-md border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Student</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Submitted At</TableHead>
-              <TableHead className="text-right">Score</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {session.submissions.length === 0 ? (
-                <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No submissions yet. Share code <span className="font-mono font-bold text-foreground">{session.workCode}</span> with students.
-                    </TableCell>
-                </TableRow>
-            ) : (
-                session.submissions.map((sub) => (
-                  <TableRow key={sub.id}>
-                    <TableCell>
-                        <div className="flex flex-col">
-                            <span className="font-medium">{sub.user?.fullName || sub.studentName || 'Unknown'}</span>
-                            <span className="text-xs text-muted-foreground">{sub.studentRegNo || sub.user?.email}</span>
-                        </div>
-                    </TableCell>
-                    <TableCell>
-                        <Badge variant={
-                            sub.status === 'GRADED' ? 'default' :
-                            sub.status === 'FLAGGED' ? 'destructive' :
-                            sub.status === 'PROCESSING' ? 'secondary' : 'outline'
-                        }>
-                            {sub.status}
-                        </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                        {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                        {sub.score ? sub.score.totalMarks : '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                        <SubmissionDrawer submission={{...sub, workSession: session}} />
-                    </TableCell>
-                  </TableRow>
-                ))
-            )}
-          </TableBody>
-        </Table>
+         {/* Live Client Component for "Magic" Updates */}
+         <LiveSubmissionTable initialSubmissions={session.submissions} workSession={session} />
       </div>
     </div>
   );

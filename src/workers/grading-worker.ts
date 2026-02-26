@@ -43,7 +43,6 @@ export async function handleAiGrade(job: Job) {
     try {
         console.log(`[AI_GRADE] Fetching submission file: ${submission.filePath}`);
         // Ensure bucket logic aligns with storage-supabase.ts
-        // If filePath is 'submissions/xyz', it's relative to 'exam_pdfs' bucket
         const buffer = await readFile(submission.filePath, 'exam_pdfs');
         const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
                          submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
@@ -58,12 +57,27 @@ export async function handleAiGrade(job: Job) {
         });
     } catch (ocrError: any) {
         console.error("[AI_GRADE] OCR Failed for Submission:", ocrError);
+        // CRITICAL: Write error to Feedback so it's visible in UI
+        await prisma.submission.update({
+            where: { id: submissionId },
+            data: {
+                status: 'FLAGGED',
+                feedback: JSON.stringify({ error: `OCR Processing Failed: ${ocrError.message}` })
+            }
+        });
         throw new Error(`OCR Processing Failed: ${ocrError.message}`);
     }
   }
 
   if (!ocrText) {
-    throw new Error("Failed to extract text from submission. File might be empty or unreadable.");
+      await prisma.submission.update({
+            where: { id: submissionId },
+            data: {
+                status: 'FLAGGED',
+                feedback: JSON.stringify({ error: "Failed to extract text from submission. File might be empty or unreadable." })
+            }
+      });
+      throw new Error("Failed to extract text from submission. File might be empty or unreadable.");
   }
 
   // 2. Prepare Grading Config & Rubric
@@ -86,10 +100,6 @@ export async function handleAiGrade(job: Job) {
           const rMime = submission.workSession.rubricUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
           rubricContent = await ocrDocument(rBuffer, rMime);
 
-          // Optionally cache this back to the WorkSession to save API calls?
-          // For now, let's just use it.
-          // Updating the WorkSession might be risky if multiple jobs run concurrently.
-          // Let's log it.
           console.log(`[AI_GRADE] Extracted Rubric Text (Length: ${rubricContent.length})`);
       } catch (e) {
           console.warn("[AI_GRADE] Failed to OCR Rubric File. Falling back to default.", e);
@@ -113,13 +123,6 @@ export async function handleAiGrade(job: Job) {
   const config: GradeConfig = {
     strictness: strictnessVal,
     markingScheme: submission.workSession.markingScheme || undefined, // URL
-    // If markingScheme is a URL, we might need to OCR it too?
-    // The prompt in deepseek.ts treats markingScheme as text.
-    // If it's a URL, the AI will just see a URL string which isn't helpful.
-    // TODO: OCR Marking Scheme if URL. For now, let's assume text or ignore.
-    // Actually, createWorkSession uses a file upload for markingScheme too.
-    // So 'markingScheme' field in DB might contain a URL (from API logic).
-    // Let's attempt to fetch it if it looks like a path.
     lecturerNotes: submission.workSession.instructions || undefined,
     calibration: calibrationSettings
   };
@@ -133,7 +136,7 @@ export async function handleAiGrade(job: Job) {
           config.markingScheme = msText;
        } catch (e) {
            console.warn("[AI_GRADE] Failed to OCR Marking Scheme file. Ignoring.", e);
-           config.markingScheme = undefined;
+           config.markingScheme = undefined; // Fallback to undefined so prompt ignores it
        }
   }
 
@@ -172,7 +175,19 @@ export async function handleAiGrade(job: Job) {
     }
   } catch (aiError: any) {
       console.error(`[AI_GRADE] FATAL AI ERROR for Job ${job.id}:`, aiError);
-      // Ensure we expose this error in the job result/logs so we can debug on Vercel
+
+      // CRITICAL: Write specific error to feedback so it's visible in UI
+      await prisma.submission.update({
+          where: { id: submission.id },
+          data: {
+              status: 'FLAGGED',
+              feedback: JSON.stringify({
+                  error: `AI Grading Failed: ${aiError.message}. Check API Keys or Quota.`,
+                  technical_details: aiError.stack
+              })
+          }
+      });
+
       throw new Error(`AI Grading Failed: ${aiError.message}`);
   }
 
