@@ -77,16 +77,25 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                     <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4" /> Original Submission
                     </h3>
-                    <a
-                        href={submission.filePath}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download
-                        className="flex items-center p-3 border rounded-lg hover:bg-accent transition-colors group"
-                    >
-                        <span className="text-sm truncate flex-1 text-blue-600 group-hover:underline">Download Script</span>
-                        <Download className="h-4 w-4 text-muted-foreground" />
-                    </a>
+                    <div className="flex gap-2">
+                        <a
+                            href={submission.filePath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center p-3 border rounded-lg hover:bg-accent transition-colors group"
+                        >
+                            <span className="text-sm text-blue-600 group-hover:underline">View Document</span>
+                            <Eye className="ml-2 h-4 w-4 text-blue-500" />
+                        </a>
+                        <a
+                            href={`/api/download?url=${encodeURIComponent(submission.filePath)}`}
+                            download
+                            className="flex-1 flex items-center justify-center p-3 border rounded-lg hover:bg-accent transition-colors group"
+                        >
+                            <span className="text-sm text-muted-foreground group-hover:text-foreground">Download</span>
+                            <Download className="ml-2 h-4 w-4 text-muted-foreground" />
+                        </a>
+                    </div>
                 </div>
             )}
 

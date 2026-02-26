@@ -74,6 +74,11 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
 
           toast.success("Grade Updated Successfully");
           setIsEditing(false);
+
+          // Trigger global notification update
+          window.dispatchEvent(new Event('notification-update'));
+
+          // Reload page data
           window.location.reload();
       } catch (e) {
           toast.error("Failed to update grade");
@@ -195,17 +200,25 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
             {submission.filePath && (
                 <div>
                     <h3 className="text-sm font-medium mb-2">Original Script</h3>
-                    <a
-                        href={submission.filePath}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download
-                        className="flex items-center p-3 border rounded-md hover:bg-accent transition-colors"
-                    >
-                        <FileText className="h-5 w-5 mr-3 text-blue-500" />
-                        <span className="text-sm truncate flex-1">{submission.filePath.split('/').pop()}</span>
-                        <Download className="h-4 w-4 text-muted-foreground" />
-                    </a>
+                    <div className="flex gap-2">
+                        <a
+                            href={submission.filePath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center p-3 border rounded-md hover:bg-accent transition-colors"
+                        >
+                            <Eye className="h-4 w-4 mr-2 text-blue-500" />
+                            <span className="text-sm">View Document</span>
+                        </a>
+                        <a
+                            href={`/api/download?url=${encodeURIComponent(submission.filePath)}`}
+                            download
+                            className="flex-1 flex items-center justify-center p-3 border rounded-md hover:bg-accent transition-colors"
+                        >
+                            <Download className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span className="text-sm">Download</span>
+                        </a>
+                    </div>
                 </div>
             )}
 
