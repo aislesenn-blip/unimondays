@@ -8,8 +8,8 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
   }
 
   try {
-    // Use gemini-1.5-flash-002 (Stable V1) as gemini-1.5-flash (v1beta) is deprecated/unstable
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-002" });
+    // Use gemini-2.5-flash (Aligning with Original Orchestrator Architecture)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const base64Data = buffer.toString("base64");
 
     const result = await model.generateContent([
@@ -43,7 +43,7 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-002" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const base64Data = buffer.toString("base64");
 
     const prompt = `
