@@ -117,8 +117,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid Work Session' }, { status: 404 });
     }
 
-    if (workSession.deadline && new Date() > workSession.deadline) {
-        return NextResponse.json({ error: 'Deadline has passed.' }, { status: 403 });
+    // V2.0 Strict Deadline Logic
+    if (workSession.deadline && new Date() > workSession.deadline && workSession.strictDeadline) {
+        return NextResponse.json({ error: 'Deadline has passed (Strict Mode Enabled).' }, { status: 403 });
     }
 
     // 6. Upload File (Securely)
