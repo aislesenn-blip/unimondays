@@ -148,9 +148,9 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
               const detectedName = sub.score?.detectedIdentity;
               const studentName = detectedName || sub.user?.fullName || sub.studentName || 'Unknown Identity';
 
-              // Reg No: Prioritize Student Reg No -> Email -> 'N/A'
-              // Note: If detectedName was used, we might still want the formal RegNo if available.
-              const regNo = sub.studentRegNo || sub.user?.email || 'N/A';
+              // Reg No: Prioritize Student Reg No -> AI Detected Identity -> 'Unidentified'
+              // MANDATE 2: NEVER show email in Reg No column.
+              const regNo = sub.studentRegNo || sub.score?.detectedIdentity || 'Unidentified';
 
               return (
               <TableRow key={sub.id} className="transition-colors hover:bg-muted/50">
