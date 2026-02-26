@@ -77,39 +77,43 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
   };
 
   return (
-      <Table>
+    <div className="overflow-x-auto rounded-md border">
+      <Table className="whitespace-nowrap">
         <TableHeader>
           <TableRow>
-            <TableHead>Student</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Submitted At</TableHead>
-            <TableHead className="text-right">Score</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="min-w-[180px] font-bold">Student Name</TableHead>
+            <TableHead className="min-w-[120px] font-bold">Reg No</TableHead>
+            <TableHead className="min-w-[140px]">Status</TableHead>
+            <TableHead className="min-w-[140px]">Submitted At</TableHead>
+            <TableHead className="text-right font-bold min-w-[80px]">Score</TableHead>
+            <TableHead className="text-right min-w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {submissions.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                 No submissions yet. Share code <span className="font-mono font-bold text-foreground bg-muted px-2 py-1 rounded">{workSession.workCode}</span> with students.
               </TableCell>
             </TableRow>
           ) : (
             submissions.map((sub) => {
-              // Identity Logic: Prioritize AI Detected Name
+              // Identity Separation Logic
+              // Name: Prioritize AI Detected -> User FullName -> Fallback
               const detectedName = sub.score?.detectedIdentity;
-              const primaryName = detectedName || sub.user?.fullName || sub.studentName || 'Unknown Identity';
-              const secondaryInfo = detectedName
-                 ? (sub.user?.email || sub.studentRegNo)
-                 : (sub.user?.email || sub.studentRegNo || '');
+              const studentName = detectedName || sub.user?.fullName || sub.studentName || 'Unknown Identity';
+
+              // Reg No: Prioritize Student Reg No -> Email -> 'N/A'
+              // Note: If detectedName was used, we might still want the formal RegNo if available.
+              const regNo = sub.studentRegNo || sub.user?.email || 'N/A';
 
               return (
               <TableRow key={sub.id} className="transition-colors hover:bg-muted/50">
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-bold text-foreground">{primaryName}</span>
-                    <span className="text-xs text-muted-foreground">{secondaryInfo}</span>
-                  </div>
+                <TableCell className="font-bold text-foreground">
+                    {studentName}
+                </TableCell>
+                <TableCell className="font-mono text-sm text-muted-foreground">
+                    {regNo}
                 </TableCell>
                 <TableCell>
                   {/* Status Logic with Resilience UI */}
@@ -214,5 +218,6 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
           )}
         </TableBody>
       </Table>
+    </div>
   );
 }

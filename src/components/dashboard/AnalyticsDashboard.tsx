@@ -40,50 +40,50 @@ export function AnalyticsDashboard({ classHealth, bottlenecks, studentTimeline }
     <div className="space-y-8">
 
       {/* Metric B: Class Health Pulse */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Class Average</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
+            <CardTitle className="text-xs md:text-sm font-medium">Class Avg</CardTitle>
+            <Activity className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{classHealth.average.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">Overall performance</p>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl md:text-2xl font-bold">{classHealth.average.toFixed(1)}%</div>
+            <p className="text-[10px] md:text-xs text-muted-foreground">Overall</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pass Rate</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
+            <CardTitle className="text-xs md:text-sm font-medium">Pass Rate</CardTitle>
+            <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{classHealth.passRate.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">Students passing (&gt;50%)</p>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl md:text-2xl font-bold">{classHealth.passRate.toFixed(1)}%</div>
+            <p className="text-[10px] md:text-xs text-muted-foreground">&gt;50% Score</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Highest Score</CardTitle>
-            <ArrowUpRight className="h-4 w-4 text-green-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
+            <CardTitle className="text-xs md:text-sm font-medium">Highest</CardTitle>
+            <ArrowUpRight className="h-3 w-3 md:h-4 md:w-4 text-green-500" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{classHealth.highest}%</div>
-            <p className="text-xs text-muted-foreground">Best performer</p>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl md:text-2xl font-bold">{classHealth.highest}%</div>
+            <p className="text-[10px] md:text-xs text-muted-foreground">Top Score</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Lowest Score</CardTitle>
-            <ArrowDownRight className="h-4 w-4 text-red-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
+            <CardTitle className="text-xs md:text-sm font-medium">Lowest</CardTitle>
+            <ArrowDownRight className="h-3 w-3 md:h-4 md:w-4 text-red-500" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{classHealth.lowest}%</div>
-            <p className="text-xs text-muted-foreground">Needs attention</p>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl md:text-2xl font-bold">{classHealth.lowest}%</div>
+            <p className="text-[10px] md:text-xs text-muted-foreground">Min Score</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-7">
 
         {/* Metric A: Bottleneck Finder */}
         <Card className="col-span-4">

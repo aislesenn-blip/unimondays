@@ -8,15 +8,8 @@
 
 ✓ Starting...
 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-✓ Ready in 2.2s
+✓ Ready in 3.8s
 ○ Compiling /verification ...
- GET /verification 200 in 5.1s (compile: 4.1s, proxy.ts: 127ms, render: 806ms)
- GET /api/work-sessions/ws-123/submissions 401 in 2.3s (compile: 2.3s, render: 29ms)
- GET /api/work-sessions/ws-123/submissions 401 in 57ms (compile: 47ms, render: 10ms)
- GET /api/work-sessions/ws-123/submissions 401 in 36ms (compile: 28ms, render: 8ms)
- GET /api/work-sessions/ws-123/submissions 401 in 37ms (compile: 27ms, render: 10ms)
- GET /api/work-sessions/ws-123/submissions 401 in 32ms (compile: 24ms, render: 8ms)
- GET /api/work-sessions/ws-123/submissions 401 in 32ms (compile: 23ms, render: 9ms)
- GET /api/work-sessions/ws-123/submissions 401 in 31ms (compile: 23ms, render: 8ms)
- GET /verification 200 in 122ms (compile: 8ms, proxy.ts: 16ms, render: 99ms)
+ GET /verification 200 in 6.8s (compile: 5.9s, proxy.ts: 119ms, render: 708ms)
+ GET /api/work-sessions/ws-123/submissions 200 in 1223ms
 [?25h
