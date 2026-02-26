@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SubmissionDrawer } from "@/components/dashboard/SubmissionDrawer";
-import { Loader2, CheckCircle2, AlertTriangle, FileText, RotateCw, XCircle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, FileText, RotateCw, XCircle, ShieldCheck, ShieldAlert, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -28,7 +28,8 @@ interface Submission {
 }
 
 export function LiveSubmissionTable({ initialSubmissions, workSession }: { initialSubmissions: any[], workSession: any }) {
-  const [submissions, setSubmissions] = useState<any[]>(initialSubmissions);
+  // Ensure initialSubmissions is an array to prevent undefined map crash
+  const [submissions, setSubmissions] = useState<any[]>(initialSubmissions || []);
   const [retrying, setRetrying] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,7 +39,10 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
         const res = await fetch(`/api/work-sessions/${workSession.id}/submissions`);
         if (res.ok) {
           const data = await res.json();
-          setSubmissions(data);
+          // Ensure data is array
+          if (Array.isArray(data)) {
+            setSubmissions(data);
+          }
         }
       } catch (e) {
         console.error("Polling failed", e);
@@ -76,6 +80,46 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
       }
   };
 
+  // Helper for Confidence Badge
+  const getConfidenceBadge = (confidence: number | null) => {
+      if (confidence === null || confidence === undefined) return null;
+
+      let colorClass = "";
+      let icon = <Shield className="h-3 w-3" />;
+      let label = "";
+
+      if (confidence >= 80) {
+          colorClass = "bg-green-100 text-green-700 border-green-200 hover:bg-green-200";
+          icon = <ShieldCheck className="h-3 w-3" />;
+          label = "High Trust";
+      } else if (confidence >= 50) {
+          colorClass = "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200";
+          icon = <ShieldAlert className="h-3 w-3" />;
+          label = "Medium Trust";
+      } else {
+          colorClass = "bg-red-100 text-red-700 border-red-200 hover:bg-red-200";
+          icon = <ShieldAlert className="h-3 w-3" />;
+          label = "Low Trust";
+      }
+
+      return (
+          <TooltipProvider>
+              <Tooltip>
+                  <TooltipTrigger>
+                      <Badge variant="outline" className={`flex items-center gap-1 cursor-help ${colorClass}`}>
+                          {icon}
+                          {Math.round(confidence)}%
+                      </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                      <p className="font-semibold">AI Confidence: {label}</p>
+                      <p className="text-xs">Based on OCR clarity and reasoning.</p>
+                  </TooltipContent>
+              </Tooltip>
+          </TooltipProvider>
+      );
+  };
+
   return (
     <div className="overflow-x-auto rounded-md border">
       <Table className="whitespace-nowrap">
@@ -84,20 +128,21 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
             <TableHead className="min-w-[180px] font-bold">Student Name</TableHead>
             <TableHead className="min-w-[120px] font-bold">Reg No</TableHead>
             <TableHead className="min-w-[140px]">Status</TableHead>
+            <TableHead className="min-w-[100px]">Confidence</TableHead>
             <TableHead className="min-w-[140px]">Submitted At</TableHead>
             <TableHead className="text-right font-bold min-w-[80px]">Score</TableHead>
             <TableHead className="text-right min-w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {submissions.length === 0 ? (
+          {(!submissions || submissions.length === 0) ? (
             <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                 No submissions yet. Share code <span className="font-mono font-bold text-foreground bg-muted px-2 py-1 rounded">{workSession.workCode}</span> with students.
               </TableCell>
             </TableRow>
           ) : (
-            submissions.map((sub) => {
+            submissions?.map((sub) => {
               // Identity Separation Logic
               // Name: Prioritize AI Detected -> User FullName -> Fallback
               const detectedName = sub.score?.detectedIdentity;
@@ -120,7 +165,7 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                   {(sub.status === 'PENDING' || sub.status === 'PROCESSING') ? (
                     <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200 flex items-center gap-1.5 w-fit animate-pulse transition-all">
                         <Loader2 className="h-3 w-3 animate-spin" />
-                        Grading in Progress...
+                        Grading...
                     </Badge>
                   ) : (sub.status === 'GRADED' || sub.status === 'RELEASED') ? (
                     <Badge variant="default" className="bg-green-50 text-green-700 hover:bg-green-50 border-green-200 flex items-center gap-1.5 w-fit shadow-sm">
@@ -133,12 +178,12 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                             <TooltipTrigger>
                                 <Badge variant="destructive" className="bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200 cursor-help">
                                     <AlertTriangle className="mr-1 h-3 w-3" />
-                                    Appeal Pending
+                                    Appeal
                                 </Badge>
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p className="font-bold">Reason:</p>
-                                <p className="text-xs max-w-xs">{sub.appeals[0]?.reason}</p>
+                                <p className="text-xs max-w-xs">{sub.appeals && sub.appeals[0]?.reason}</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
@@ -199,6 +244,9 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                   ) : (
                     <Badge variant="outline">{sub.status}</Badge>
                   )}
+                </TableCell>
+                <TableCell>
+                    {getConfidenceBadge(sub.confidenceScore)}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '-'}
