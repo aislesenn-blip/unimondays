@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-const deepseek = process.env.DEEPSEEK_API_KEY
+export const deepseek = process.env.DEEPSEEK_API_KEY
   ? new OpenAI({
       apiKey: process.env.DEEPSEEK_API_KEY,
       baseURL: "https://api.deepseek.com",
@@ -48,60 +48,50 @@ export async function gradeSubmission(
     throw new Error("DEEPSEEK_API_KEY is not set. Grading service unavailable.");
   }
 
-  const systemPrompt = `
-You are an expert academic grader. Your task is to grade a student's submission based STRICTLY on the provided rubric and marking scheme.
-You must follow the "Gold Standard" of academic grading: objective, consistent, and justifiable.
+  // Optimize prompt: Remove excessive whitespace, focus on JSON strictness
+  const systemPrompt = `You are an expert academic grader. Grade the student's submission strictly based on the provided rubric and marking scheme.
+Follow the "Gold Standard": objective, consistent, justifiable.
 
-Calibration & Persona:
-- Strictness Level: ${config.strictness} (1.0 = Neutral, <1.0 = Lenient, >1.0 = Strict).
+Config:
+- Strictness: ${config.strictness} (1.0=Neutral).
 - Methodology: ${config.calibration?.methodology || "Standard"}
-- Grammar/Language: ${config.calibration?.grammar || "Ignore grammar errors unless critical"}
-- Verbosity: ${config.calibration?.verbosity || "Focus on facts"}
-- Incomplete Sections: ${config.calibration?.incomplete || "Grade what is present"}
-- Custom Expectations: ${config.calibration?.custom || "None"}
-- Lecturer Notes: ${config.lecturerNotes || "None"}
+- Grammar: ${config.calibration?.grammar || "Ignore unless critical"}
+- Verbosity: ${config.calibration?.verbosity || "Concise"}
+- Incomplete: ${config.calibration?.incomplete || "Grade present work"}
+- Custom: ${config.calibration?.custom || "None"}
+- Notes: ${config.lecturerNotes || "None"}
 
-You must output a valid JSON object with the following structure:
+Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    {
-      "question": "Q1",
-      "score": number,
-      "max": number,
-      "feedback": "string",
-      "rubricReference": "quote specific rubric criteria met/missed"
-    },
-    ...
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string" }
   ],
-  "aiReasoning": "Detailed explanation of the overall grade and any specific deductions.",
-  "confidence": number (0-100),
-  "strengths": ["string", ...],
-  "weaknesses": ["string", ...],
-  "improvement": "Actionable advice for the student"
+  "aiReasoning": "string",
+  "confidence": number,
+  "strengths": ["string"],
+  "weaknesses": ["string"],
+  "improvement": "string"
 }
-
-The total score must not exceed ${totalMarks}.
-`;
+Total score max: ${totalMarks}.`;
 
   try {
     const completion = await deepseek.chat.completions.create({
       model: "deepseek-chat",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `
-Marking Scheme:
-${config.markingScheme || "Not provided"}
+        { role: "user", content: `Marking Scheme:
+${config.markingScheme || "None"}
 
 Rubric:
 ${rubric}
 
-Student Submission (OCR):
-${ocrText}
-        ` }
+Student Submission:
+${ocrText}` }
       ],
       response_format: { type: "json_object" },
       temperature: 0.1,
+      max_tokens: 4000, // Prevent infinite loops
     });
 
     const content = completion.choices[0].message.content;
@@ -109,8 +99,12 @@ ${ocrText}
 
     const result = JSON.parse(content);
     return result as GradingResult;
-  } catch (error) {
+  } catch (error: any) {
     console.error("DeepSeek Grading Error:", error);
-    throw new Error("Failed to grade submission.");
+    // Add more context to error
+    if (error.status === 429) {
+        throw new Error("DeepSeek Rate Limit Exceeded. Please try again later.");
+    }
+    throw new Error(`Failed to grade submission: ${error.message}`);
   }
 }

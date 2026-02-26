@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleAiGrade } from '@/workers/grading-worker';
 
-export const maxDuration = 60; // Allow 60 seconds for AI grading on Vercel
+export const maxDuration = 300; // Allow 5 minutes for AI grading (increased from 60s)
 
 export async function POST(req: NextRequest) {
   try {

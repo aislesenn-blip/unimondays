@@ -37,115 +37,125 @@ export async function handleAiGrade(job: Job) {
     throw new Error(`WorkSession not found for submission ${submissionId}.`);
   }
 
-  // 1. Ensure OCR (Student Script)
-  let ocrText = submission.ocrText;
-  if (!ocrText && submission.filePath) {
-    try {
-        console.log(`[AI_GRADE] Fetching submission file: ${submission.filePath}`);
-        // Ensure bucket logic aligns with storage-supabase.ts
-        const buffer = await readFile(submission.filePath, 'exam_pdfs');
-        const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
-                         submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
-                         'application/pdf';
+  console.log(`[AI_GRADE] Starting Parallel Processing for Submission ${submissionId}`);
 
-        ocrText = await ocrDocument(buffer, mimeType);
+  // PARALLEL TASK 1: Submission OCR
+  const submissionOcrTask = async (): Promise<string> => {
+      if (submission.ocrText) return submission.ocrText;
+      if (!submission.filePath) throw new Error("No file path and no OCR text for submission.");
 
-        // Save OCR text immediately
-        await prisma.submission.update({
-        where: { id: submissionId },
-        data: { ocrText, status: 'PROCESSING' }
-        });
-    } catch (ocrError: any) {
-        console.error("[AI_GRADE] OCR Failed for Submission:", ocrError);
-        // CRITICAL: Write error to Feedback so it's visible in UI
-        await prisma.submission.update({
-            where: { id: submissionId },
-            data: {
-                status: 'FLAGGED',
-                feedback: JSON.stringify({ error: `OCR Processing Failed: ${ocrError.message}` })
-            }
-        });
-        throw new Error(`OCR Processing Failed: ${ocrError.message}`);
-    }
+      try {
+          console.log(`[AI_GRADE] OCR Submission: ${submission.filePath}`);
+          const buffer = await readFile(submission.filePath, 'exam_pdfs');
+          const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
+                           submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+                           'application/pdf';
+
+          const text = await ocrDocument(buffer, mimeType);
+
+          // Save immediately
+          await prisma.submission.update({
+              where: { id: submissionId },
+              data: { ocrText: text, status: 'PROCESSING' }
+          });
+          return text;
+      } catch (ocrError: any) {
+          console.error("[AI_GRADE] OCR Failed:", ocrError);
+          await prisma.submission.update({
+              where: { id: submissionId },
+              data: {
+                  status: 'FLAGGED',
+                  feedback: JSON.stringify({ error: `OCR Processing Failed: ${ocrError.message}` })
+              }
+          });
+          throw ocrError;
+      }
+  };
+
+  // PARALLEL TASK 2: Rubric OCR (with Caching)
+  const rubricOcrTask = async (): Promise<string> => {
+      if (submission.workSession.rubric) return submission.workSession.rubric;
+      if (!submission.workSession.rubricUrl) return "Grade based on general academic standards and common sense.";
+
+      try {
+          console.log(`[AI_GRADE] OCR Rubric: ${submission.workSession.rubricUrl}`);
+          const buffer = await readFile(submission.workSession.rubricUrl, 'exam_pdfs');
+          const mimeType = submission.workSession.rubricUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+          const text = await ocrDocument(buffer, mimeType);
+
+          // Cache logic: Save back to WorkSession so we don't re-OCR for every student
+          if (text && text.length > 50) {
+              await prisma.workSession.update({
+                  where: { id: submission.workSession.id },
+                  data: { rubric: text }
+              }).catch(e => console.warn("[AI_GRADE] Failed to cache rubric text", e));
+          }
+          return text;
+      } catch (e) {
+          console.warn("[AI_GRADE] Failed to OCR Rubric. Using default.", e);
+          return "Grade based on general academic standards and common sense.";
+      }
+  };
+
+  // PARALLEL TASK 3: Marking Scheme OCR
+  const markingSchemeOcrTask = async (): Promise<string | undefined> => {
+      const ms = submission.workSession.markingScheme;
+      if (!ms) return undefined;
+
+      // Check if it's a file path (heuristic)
+      if (ms.startsWith('rubrics/') || ms.includes('/') || ms.toLowerCase().endsWith('.pdf')) {
+          try {
+              console.log(`[AI_GRADE] OCR Marking Scheme: ${ms}`);
+              const buffer = await readFile(ms, 'exam_pdfs');
+              const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+              const text = await ocrDocument(buffer, mimeType);
+              return text;
+          } catch (e) {
+              console.warn("[AI_GRADE] Failed to OCR Marking Scheme. Ignoring.", e);
+              return undefined;
+          }
+      }
+      // Assuming it's already text if not a file path
+      return ms;
+  };
+
+  // EXECUTE PARALLEL TASKS
+  let ocrText: string;
+  let rubricContent: string;
+  let markingSchemeText: string | undefined;
+
+  try {
+      [ocrText, rubricContent, markingSchemeText] = await Promise.all([
+          submissionOcrTask(),
+          rubricOcrTask(),
+          markingSchemeOcrTask()
+      ]);
+  } catch (e: any) {
+      throw new Error(`Prerequisite Check Failed: ${e.message}`);
   }
 
-  if (!ocrText) {
-      await prisma.submission.update({
-            where: { id: submissionId },
-            data: {
-                status: 'FLAGGED',
-                feedback: JSON.stringify({ error: "Failed to extract text from submission. File might be empty or unreadable." })
-            }
-      });
-      throw new Error("Failed to extract text from submission. File might be empty or unreadable.");
-  }
-
-  // 2. Prepare Grading Config & Rubric
+  // Prepare Config
   const strictnessMap: Record<string, number> = {
-    'LENIENT': 0.8,
-    'MODERATE': 1.0,
-    'STRICT': 1.2
+    'LENIENT': 0.8, 'MODERATE': 1.0, 'STRICT': 1.2
   };
   const strictnessVal = strictnessMap[submission.workSession.strictness || 'MODERATE'] || 1.0;
 
-  // Retrieve Rubric Content (Text or File)
-  let rubricContent = submission.workSession.rubric;
-
-  // If rubric text is empty but a file URL exists, try to OCR it
-  if (!rubricContent && submission.workSession.rubricUrl) {
-      try {
-          console.log(`[AI_GRADE] Fetching Rubric URL: ${submission.workSession.rubricUrl}`);
-          const rBuffer = await readFile(submission.workSession.rubricUrl, 'exam_pdfs');
-          // Simple mime detection
-          const rMime = submission.workSession.rubricUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-          rubricContent = await ocrDocument(rBuffer, rMime);
-
-          console.log(`[AI_GRADE] Extracted Rubric Text (Length: ${rubricContent.length})`);
-      } catch (e) {
-          console.warn("[AI_GRADE] Failed to OCR Rubric File. Falling back to default.", e);
-      }
-  }
-
-  if (!rubricContent) {
-      rubricContent = "Grade based on general academic standards and common sense.";
-  }
-
-  // Parse Calibration Settings
   let calibrationSettings;
-  if (submission.workSession.calibration) {
-      try {
-          calibrationSettings = JSON.parse(submission.workSession.calibration);
-      } catch (e) {
-          console.warn("[AI_GRADE] Failed to parse calibration JSON", e);
-      }
-  }
+  try {
+      calibrationSettings = submission.workSession.calibration ? JSON.parse(submission.workSession.calibration) : undefined;
+  } catch (e) {}
 
   const config: GradeConfig = {
     strictness: strictnessVal,
-    markingScheme: submission.workSession.markingScheme || undefined, // URL
+    markingScheme: markingSchemeText,
     lecturerNotes: submission.workSession.instructions || undefined,
     calibration: calibrationSettings
   };
-
-  // OCR Marking Scheme if it's a file path
-  if (config.markingScheme && (config.markingScheme.startsWith('rubrics/') || config.markingScheme.includes('/'))) {
-       try {
-          const msBuffer = await readFile(config.markingScheme, 'exam_pdfs'); // rubrics are in exam_pdfs bucket too?
-          const msMime = config.markingScheme.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-          const msText = await ocrDocument(msBuffer, msMime);
-          config.markingScheme = msText;
-       } catch (e) {
-           console.warn("[AI_GRADE] Failed to OCR Marking Scheme file. Ignoring.", e);
-           config.markingScheme = undefined; // Fallback to undefined so prompt ignores it
-       }
-  }
-
 
   // 3. Grade (Zero-Trust Tracing)
   const totalMarks = submission.workSession.totalMarks || 100;
 
   console.log(`[AI_GRADE] Job ${job.id} Execution Trace:`);
-  console.log(`- Submission ID: ${submission.id}`);
   console.log(`- Config: Strictness=${config.strictness}, Calibrated=${!!config.calibration}`);
   console.log(`- Rubric Length: ${rubricContent.length}`);
   console.log(`- OCR Text Length: ${ocrText.length}`);
@@ -176,7 +186,6 @@ export async function handleAiGrade(job: Job) {
   } catch (aiError: any) {
       console.error(`[AI_GRADE] FATAL AI ERROR for Job ${job.id}:`, aiError);
 
-      // CRITICAL: Write specific error to feedback so it's visible in UI
       await prisma.submission.update({
           where: { id: submission.id },
           data: {
@@ -192,7 +201,6 @@ export async function handleAiGrade(job: Job) {
   }
 
   // 4. Save Score & Feedback
-  // Validate result structure
   if (typeof result.totalScore !== 'number') {
       throw new Error("Invalid AI Result: Missing totalScore");
   }
