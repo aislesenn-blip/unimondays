@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string; subId: string } }
+  { params }: { params: Promise<{ id: string; subId: string }> }
 ) {
   try {
     // 1. Authenticate (Lecturer Only)
