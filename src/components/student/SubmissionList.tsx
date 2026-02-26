@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { StudentResultDrawer } from "./ResultDrawer";
 import { AppealModal } from "./AppealModal";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 
 export function SubmissionList() {
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -60,18 +60,22 @@ export function SubmissionList() {
               <TableCell className="text-muted-foreground">{sub.lecturerName}</TableCell>
               <TableCell>{new Date(sub.submittedAt).toLocaleDateString()}</TableCell>
               <TableCell>
-                <Badge variant={
-                    sub.status === 'GRADED' ? 'default' :
-                    sub.status === 'FLAGGED' ? 'outline' :
-                    sub.status === 'FAILED' ? 'destructive' :
-                    sub.status === 'APPEALED' ? 'outline' :
-                    sub.status === 'WAITING_RELEASE' ? 'secondary' : 'outline'
-                } className={
-                    sub.status === 'FLAGGED' ? 'border-amber-200 bg-amber-50 text-amber-800' :
-                    sub.status === 'APPEALED' ? 'border-yellow-500 text-yellow-600' : ''
-                }>
-                  {sub.status === 'WAITING_RELEASE' ? 'Processing' : sub.status}
-                </Badge>
+                {sub.status === 'APPEALED' ? (
+                  <Badge variant="outline" className="border-orange-500 text-orange-600 bg-orange-50 flex items-center gap-1 w-fit">
+                    <AlertTriangle className="h-3 w-3" /> Appeal Pending
+                  </Badge>
+                ) : (
+                  <Badge variant={
+                      sub.status === 'GRADED' ? 'default' :
+                      sub.status === 'FLAGGED' ? 'outline' :
+                      sub.status === 'FAILED' ? 'destructive' :
+                      sub.status === 'WAITING_RELEASE' ? 'secondary' : 'outline'
+                  } className={
+                      sub.status === 'FLAGGED' ? 'border-amber-200 bg-amber-50 text-amber-800' : ''
+                  }>
+                    {sub.status === 'WAITING_RELEASE' ? 'Processing' : sub.status}
+                  </Badge>
+                )}
               </TableCell>
               <TableCell className="text-right font-bold">
                 {sub.isReleased ? sub.score : '-'}
