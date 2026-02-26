@@ -207,9 +207,12 @@ export async function handleAiGrade(job: Job) {
         }
       });
 
-      // 5. Update Submission Status (Fix Ghost Bug: Trust the Grade)
-      // If we have a score, it is GRADED. Low confidence is just a warning, not a failure state.
-      const status = 'GRADED';
+      // 5. Update Submission Status (Dynamic Confidence Threshold)
+      // Check result.confidence against workSession.confidenceThreshold
+      const threshold = submission.workSession.confidenceThreshold ?? 85;
+      const status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+
+      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status}`);
 
       const feedbackStr = JSON.stringify({
         strengths: result.strengths || [],
