@@ -51,6 +51,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing file' }, { status: 400 });
     }
 
+    if (file.size === 0) {
+        return NextResponse.json({ error: 'File is empty.' }, { status: 400 });
+    }
+
     let targetWorkSessionId = workSessionId;
 
     if (!targetWorkSessionId && workCode) {
