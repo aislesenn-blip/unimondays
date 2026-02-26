@@ -75,7 +75,6 @@ export async function POST(req: NextRequest) {
             data: {
                 workSessionId,
                 userId,
-                universityId: workSession.universityId,
                 studentName: session.email, // Or fetch full name
                 filePath: fileUrl,
                 status: 'PENDING'
@@ -88,8 +87,7 @@ export async function POST(req: NextRequest) {
         data: {
             type: 'AI_GRADE',
             payload: JSON.stringify({ submissionId: submission.id }),
-            status: 'PENDING',
-            universityId: workSession.universityId
+            status: 'PENDING'
         }
     });
 

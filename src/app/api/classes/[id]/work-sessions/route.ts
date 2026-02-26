@@ -32,7 +32,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let attempts = 0;
 
     while (!isUnique && attempts < 5) {
-        workCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        // Simple 6-char random string
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 for clarity
+        let result = '';
+        for (let i = 0; i < 6; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        workCode = result;
+
         const existing = await prisma.workSession.findUnique({ where: { workCode } });
         if (!existing) {
             isUnique = true;
@@ -42,7 +49,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (!isUnique) {
-        return NextResponse.json({ error: 'Failed to generate unique code' }, { status: 500 });
+        // Fallback to timestamp based
+        workCode = `WK-${Date.now().toString().slice(-4)}`;
     }
 
     const session = await prisma.workSession.create({
@@ -50,7 +58,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         title,
         workCode,
         classId,
-        universityId: user.universityId!,
         lecturerId: user.id,
         deadline: deadline ? new Date(deadline) : null,
         rubric: rubric || '',

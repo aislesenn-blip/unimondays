@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
                 email,
                 fullName,
                 role: 'STUDENT',
-                universityId: null, // Will be linked when they submit to a class
             },
         });
     } else {
@@ -54,8 +53,7 @@ export async function POST(req: NextRequest) {
     const sessionData = {
         userId: publicUser.id,
         email: publicUser.email,
-        role: publicUser.role,
-        universityId: publicUser.universityId
+        role: publicUser.role
     };
 
     const cookieStore = await cookies();

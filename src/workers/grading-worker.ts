@@ -150,7 +150,6 @@ export async function handleAiGrade(job: Job) {
   await prisma.auditLog.create({
     data: {
       userId: submission.userId,
-      universityId: submission.universityId,
       action: 'GRADED',
       details: `Submission for ${submission.workSession.title} has been graded.`,
       severity: 'INFO'

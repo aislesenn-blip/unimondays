@@ -40,10 +40,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name and Code are required' }, { status: 400 });
     }
 
-    if (!user.universityId) {
-      return NextResponse.json({ error: 'User has no university' }, { status: 400 });
-    }
-
     const newClass = await prisma.classes.create({
       data: {
         name,
@@ -51,7 +47,6 @@ export async function POST(req: NextRequest) {
         semester,
         mode,
         lecturerId: user.id,
-        universityId: user.universityId,
         status: 'ACTIVE'
       }
     });
