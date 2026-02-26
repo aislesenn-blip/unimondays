@@ -49,15 +49,18 @@ export async function POST(
         return NextResponse.json({ error: "Unauthorized access to this session" }, { status: 403 });
     }
 
-    // 3. Reset State for Retry
+    // 3. Reset State for Retry (Safe Deletion)
+    // First, delete any existing score (idempotent: safe even if no score exists)
+    await prisma.score.deleteMany({
+        where: { submissionId: submission.id }
+    });
+
+    // Then, reset the submission status
     await prisma.submission.update({
         where: { id: submissionId },
         data: {
             status: 'PENDING',
-            feedback: null, // Clear error logs
-            score: {
-                delete: true // Delete associated score if exists
-            }
+            feedback: null // Clear error logs
         }
     });
 
