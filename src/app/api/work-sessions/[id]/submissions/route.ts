@@ -15,7 +15,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { workSessionId: id },
       include: {
         user: true,
-        score: true
+        score: true,
+        appeals: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
+        }
       },
       orderBy: { submittedAt: 'desc' }
     });

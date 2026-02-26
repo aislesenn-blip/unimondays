@@ -73,6 +73,13 @@ model WorkSession {
   strictness   String?   // 'LENIENT', 'MODERATE', 'STRICT'
   totalMarks   Int?      @map("total_marks")
   releaseMode  String?   @default("MANUAL") @map("release_mode")
+
+  // V2.0 Enterprise Logic
+  strictDeadline Boolean? @default(false) @map("strict_deadline")
+  areGradesReleased Boolean? @default(false) @map("are_grades_released")
+  includeInCalculation Boolean? @default(true) @map("include_in_calculation")
+  allowAppeals Boolean? @default(false) @map("allow_appeals")
+
   type         String?   @default("WORK_SESSION")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
@@ -118,6 +125,7 @@ model Score {
   totalMarks   Float     @map("total_marks")
   breakdown    String    @map("breakdown") // Stored as string
   remarks      String?
+  detectedIdentity String? @map("detected_identity") // AI extracted name/ID
   isOverridden Boolean?  @default(false) @map("is_overridden")
   gradedAt     DateTime? @default(now()) @map("graded_at")
 

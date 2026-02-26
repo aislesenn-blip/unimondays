@@ -114,6 +114,21 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                         <CheckCircle2 className="h-3 w-3" />
                         Graded
                     </Badge>
+                  ) : (sub.status === 'APPEALED' || (sub.appeals && sub.appeals.length > 0 && sub.appeals[0].status === 'PENDING')) ? (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <Badge variant="destructive" className="bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200 cursor-help">
+                                    <AlertTriangle className="mr-1 h-3 w-3" />
+                                    Appeal Pending
+                                </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p className="font-bold">Reason:</p>
+                                <p className="text-xs max-w-xs">{sub.appeals[0]?.reason}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                   ) : (sub.status === 'FAILED' || sub.status === 'FLAGGED') ? (
                      <div className="flex items-center gap-2">
                          <TooltipProvider>

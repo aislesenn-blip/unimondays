@@ -26,7 +26,7 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
   } catch (e) { console.warn(e); }
 
   const isReleased = submission.isReleased; // Assuming API returns this flag or based on status
-  const canAppeal = submission.status === 'GRADED' || submission.status === 'RELEASED'; // Allow appeal if graded/released
+  const canAppeal = (submission.status === 'GRADED' || submission.status === 'RELEASED') && submission.allowAppeals;
 
   return (
     <Sheet>

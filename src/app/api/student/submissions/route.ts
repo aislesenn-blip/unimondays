@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
                     status: true,
                     deadline: true,
                     releaseMode: true,
+                    areGradesReleased: true, // V2.0
+                    allowAppeals: true, // V2.0
                     totalMarks: true,
                     lecturer: {
                         select: { fullName: true }
@@ -58,7 +60,7 @@ export async function GET(req: NextRequest) {
 
         let isReleased = false;
 
-        // Release Logic
+        // Release Logic (V2.0)
         if (workSession.releaseMode === 'AUTO') {
             isReleased = true;
         } else if (workSession.releaseMode === 'DEADLINE') {
@@ -66,8 +68,9 @@ export async function GET(req: NextRequest) {
                 isReleased = true;
             }
         } else if (workSession.releaseMode === 'MANUAL') {
-            isReleased = false;
-        } else if (workSession.releaseMode === 'RELEASED') { // Case insensitive check?
+            // Check the explicit 'Publish' toggle
+            isReleased = !!workSession.areGradesReleased;
+        } else {
              isReleased = true;
         }
 
@@ -89,6 +92,7 @@ export async function GET(req: NextRequest) {
             feedback: isReleased ? sub.feedback : null,
             breakdown: isReleased ? score?.breakdown : null,
             filePath: sub.filePath,
+            allowAppeals: workSession.allowAppeals,
             isReleased
         };
     });

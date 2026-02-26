@@ -22,11 +22,17 @@ export async function POST(req: NextRequest) {
 
     // Verify ownership
     const submission = await prisma.submission.findUnique({
-        where: { id: submissionId }
+        where: { id: submissionId },
+        include: { workSession: true }
     });
 
     if (!submission || submission.userId !== userId) {
         return NextResponse.json({ error: 'Submission not found or unauthorized' }, { status: 404 });
+    }
+
+    // V2.0 Strict Logic: Check Settings
+    if (!submission.workSession.allowAppeals) {
+        return NextResponse.json({ error: 'Appeals are disabled for this session.' }, { status: 403 });
     }
 
     if (submission.status !== 'GRADED') {

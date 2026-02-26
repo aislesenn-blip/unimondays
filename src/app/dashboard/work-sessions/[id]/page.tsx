@@ -15,6 +15,7 @@ import { FileText, Download, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable"; // New Client Component
+import { WorkSessionControls } from "@/components/dashboard/WorkSessionControls";
 
 export default async function WorkSessionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
@@ -71,6 +72,9 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
              )}
         </div>
       </div>
+
+      {/* V2.0 Controls */}
+      <WorkSessionControls session={session} />
 
       <div className="rounded-md border bg-card">
          {/* Live Client Component for "Magic" Updates */}

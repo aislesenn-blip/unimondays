@@ -195,18 +195,21 @@ export async function handleAiGrade(job: Job) {
           totalMarks: result.totalScore,
           breakdown: breakdownStr,
           remarks: result.aiReasoning,
+          detectedIdentity: result.detectedIdentity,
           gradedAt: new Date()
         },
         create: {
           submissionId: submission.id,
           totalMarks: result.totalScore,
           breakdown: breakdownStr,
-          remarks: result.aiReasoning
+          remarks: result.aiReasoning,
+          detectedIdentity: result.detectedIdentity
         }
       });
 
-      // 5. Update Submission Status
-      const status = result.confidence < 70 ? 'FLAGGED' : 'GRADED';
+      // 5. Update Submission Status (Fix Ghost Bug: Trust the Grade)
+      // If we have a score, it is GRADED. Low confidence is just a warning, not a failure state.
+      const status = 'GRADED';
 
       const feedbackStr = JSON.stringify({
         strengths: result.strengths || [],

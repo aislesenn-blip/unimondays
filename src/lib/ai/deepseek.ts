@@ -18,6 +18,7 @@ export interface GradingResult {
   }>;
   aiReasoning: string;
   confidence: number;
+  detectedIdentity?: string | null;
   strengths?: string[];
   weaknesses?: string[];
   improvement?: string;
@@ -69,6 +70,7 @@ Output STRICT JSON:
   ],
   "aiReasoning": "string",
   "confidence": number,
+  "detectedIdentity": "string (Extract Student Name/ID if visible, else null)",
   "strengths": ["string"],
   "weaknesses": ["string"],
   "improvement": "string"

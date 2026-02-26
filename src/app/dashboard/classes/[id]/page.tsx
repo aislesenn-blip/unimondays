@@ -6,7 +6,7 @@ import { CAOverview } from "@/components/dashboard/CAOverview";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, FileText, CheckCircle2 } from "lucide-react";
+import { ChevronRight, Calendar, FileText, CheckCircle2, BarChart3, Table2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default async function ClassDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -79,7 +79,21 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
             <h1 className="text-3xl font-bold tracking-tight">{classItem.code}</h1>
             <p className="text-muted-foreground mt-1">{classItem.name}</p>
         </div>
-        <CreateWorkSessionSheet classId={id} />
+        <div className="flex gap-2">
+            <Link href={`/dashboard/classes/${id}/analytics`}>
+                <Button variant="outline">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Analytics
+                </Button>
+            </Link>
+            <Link href={`/dashboard/classes/${id}/ca`}>
+                <Button variant="outline">
+                    <Table2 className="mr-2 h-4 w-4" />
+                    Master CA
+                </Button>
+            </Link>
+            <CreateWorkSessionSheet classId={id} />
+        </div>
       </div>
 
       <div className="grid gap-8 md:grid-cols-3">
