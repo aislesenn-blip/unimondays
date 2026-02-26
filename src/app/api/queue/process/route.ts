@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
 
   let processedCount = 0;
   let errors = 0;
+  let rateLimitHit = false;
 
   try {
     // 1. Fetch Pending Jobs (Leaky Bucket / Batch Processing)
@@ -38,8 +39,8 @@ export async function POST(req: NextRequest) {
 
     console.log(`[QUEUE] Processing ${jobs.length} jobs...`);
 
-    // 2. Process Jobs
-    const results = await Promise.allSettled(jobs.map(async (job) => {
+    // 2. Process Jobs (SERIAL EXECUTION)
+    for (const job of jobs) {
         // Mark as PROCESSING (Optimistic Locking)
         await prisma.job.update({
             where: { id: job.id },
@@ -55,43 +56,59 @@ export async function POST(req: NextRequest) {
                 where: { id: job.id },
                 data: { status: 'COMPLETED', result: 'Success' }
             });
-            return { id: job.id, status: 'Success' };
+            processedCount++;
 
         } catch (error: any) {
             console.error(`[QUEUE] Job ${job.id} Failed:`, error);
 
-            // Handle Rate Limits (429) specifically
-            const isRateLimit = error.message?.includes('429') || error.message?.includes('Rate Limit');
+            // RATE LIMIT ARMOR (Handling 429s/503s)
+            const isRateLimit = error.message?.includes('RATE_LIMIT_HIT') || error.message?.includes('429');
 
+            if (isRateLimit) {
+                console.warn(`[QUEUE] Rate Limit Hit on Job ${job.id}. Pausing batch.`);
+
+                // Revert status to PENDING so it's picked up later
+                await prisma.job.update({
+                    where: { id: job.id },
+                    data: {
+                        status: 'PENDING',
+                        error: error.message,
+                        // Do NOT increment retry count for rate limits, or increment responsibly
+                        // For now, we won't increment to prevent dead-lettering due to API congestion
+                    }
+                });
+
+                rateLimitHit = true;
+                break; // STOP PROCESSING THE BATCH
+            }
+
+            // GENERIC FAILURE
             await prisma.job.update({
                 where: { id: job.id },
                 data: {
-                    status: isRateLimit ? 'PENDING' : 'FAILED', // Retry if rate limit
+                    status: 'FAILED',
                     error: error.message,
                     retryCount: { increment: 1 }
                 }
             });
-            throw error;
+            errors++;
         }
-    }));
+    }
 
-    // 3. Summarize
-    results.forEach(r => {
-        if (r.status === 'fulfilled') processedCount++;
-        else errors++;
-    });
-
-    // 4. Recursive Trigger (The "Hydraulic Press")
-    // If we processed a full batch, there might be more. Trigger self.
-    if (jobs.length === 5) {
+    // 3. Recursive Trigger (The "Hydraulic Press")
+    // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
+    // If rate limit hit, we STOP to let the API cool down.
+    if (!rateLimitHit && jobs.length === 5) {
         const protocol = req.headers.get('x-forwarded-proto') || 'http';
         const host = req.headers.get('host');
         const baseUrl = `${protocol}://${host}`;
 
+        console.log(`[QUEUE] Batch full & healthy. Triggering recursion: ${baseUrl}/api/queue/process`);
+
         // Fire and forget next batch
         fetch(`${baseUrl}/api/queue/process`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' } // Add auth if needed
+            headers: { 'Content-Type': 'application/json' }
         }).catch(e => console.error("Failed to trigger next batch", e));
     }
 
@@ -99,7 +116,8 @@ export async function POST(req: NextRequest) {
         success: true,
         processed: processedCount,
         failed: errors,
-        message: `Processed ${processedCount} jobs. ${errors} failed.`
+        rateLimitHit,
+        message: `Processed ${processedCount} jobs. ${errors} failed. Rate Limit: ${rateLimitHit}`
     });
 
   } catch (error: any) {
