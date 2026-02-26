@@ -24,8 +24,7 @@ export async function GET(request: NextRequest) {
     prisma.job.count({ where: { status: 'COMPLETED' } }),
     prisma.auditLog.findMany({
       take: 20,
-      orderBy: { timestamp: 'desc' },
-      include: { university: true }
+      orderBy: { timestamp: 'desc' }
     })
   ]);
 

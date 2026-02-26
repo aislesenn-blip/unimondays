@@ -13,24 +13,21 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card";
-import { toast } from "sonner"; // Assuming sonner is installed or use alerts
-import { BackButton } from "@/components/ui/back-button";
 
 export default function SignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const formData = new FormData(e.currentTarget);
     const firstName = formData.get("first-name") as string;
     const lastName = formData.get("last-name") as string;
     const email = formData.get("email") as string;
-    const institutionName = formData.get("institution") as string;
     const password = formData.get("password") as string;
 
     const fullName = `${firstName} ${lastName}`.trim();
@@ -42,8 +39,7 @@ export default function SignupPage() {
         body: JSON.stringify({
           email,
           password,
-          fullName,
-          institutionName
+          fullName
         }),
       });
 
@@ -51,23 +47,20 @@ export default function SignupPage() {
 
       if (!res.ok) {
         setError(data.error || "Signup failed");
+        setLoading(false);
         return;
       }
 
       // Success
-      router.push("/onboarding"); // Or /dashboard directly if onboarding is just a welcome
+      router.push("/dashboard");
     } catch (err) {
       setError("An unexpected error occurred");
-    } finally {
       setLoading(false);
     }
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4 relative">
-      <div className="absolute top-4 left-4">
-        <BackButton />
-      </div>
       <Card className="w-full max-w-md border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight">Create an account</CardTitle>
@@ -95,10 +88,6 @@ export default function SignupPage() {
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Email</label>
               <Input id="email" name="email" type="email" placeholder="john.doe@university.edu" required />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="institution" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Institution</label>
-              <Input id="institution" name="institution" placeholder="University of Dar es Salaam" required />
             </div>
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Password</label>

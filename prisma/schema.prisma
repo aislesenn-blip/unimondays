@@ -6,37 +6,17 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// 1. ENUMS (SQLite doesn't support enums natively, handled by Prisma)
+// 1. ENUMS (PostgreSQL supports enums natively, but Prisma handles them as strings here to keep it simple if needed, or we can use native enums. Keeping as String for now as per previous pattern)
 
-// 2. UNIVERSITIES
-model University {
-  id        String   @id @default(uuid())
-  name      String
-  domain    String?  @unique
-  code      String   @unique
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-
-  users     User[]
-  classes   Classes[]
-  workSessions WorkSession[]
-  submissions Submission[]
-  jobs      Job[]
-  auditLogs AuditLog[]
-
-  @@map("universities")
-}
-
-// 3. USERS
+// 2. USERS
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
   fullName     String?   @map("full_name")
-  universityId String?   @map("university_id")
   role         String    @default("STUDENT") // UserRole enum
   tier         String?   @default("Lite")
   quota        Int?      @default(100)
@@ -45,22 +25,19 @@ model User {
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
 
-  university   University? @relation(fields: [universityId], references: [id])
   classes      Classes[] // As lecturer
   workSessions WorkSession[] // As lecturer
   submissions  Submission[]
   auditLogs    AuditLog[]
 
   @@map("users")
-  @@index([universityId])
 }
 
-// 4. CLASSES
+// 3. CLASSES
 model Classes {
   id           String    @id @default(uuid())
   name         String
   code         String    @unique
-  universityId String    @map("university_id")
   lecturerId   String    @map("lecturer_id")
   status       String?   @default("ACTIVE")
   semester     String?
@@ -69,20 +46,17 @@ model Classes {
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
 
-  university   University @relation(fields: [universityId], references: [id])
   lecturer     User       @relation(fields: [lecturerId], references: [id])
   workSessions WorkSession[]
 
   @@map("classes")
-  @@index([universityId])
 }
 
-// 5. WORK SESSIONS (ex-QUIZZES)
+// 4. WORK SESSIONS (ex-QUIZZES)
 model WorkSession {
   id           String    @id @default(uuid())
   title        String
   workCode     String    @unique @map("work_code")
-  universityId String    @map("university_id")
   lecturerId   String    @map("lecturer_id")
   classId      String?   @map("class_id")
   deadline     DateTime?
@@ -99,21 +73,18 @@ model WorkSession {
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
 
-  university   University @relation(fields: [universityId], references: [id])
   lecturer     User       @relation(fields: [lecturerId], references: [id])
   class        Classes?   @relation(fields: [classId], references: [id])
   submissions  Submission[]
 
   @@map("work_sessions")
-  @@index([universityId])
 }
 
-// 6. SUBMISSIONS
+// 5. SUBMISSIONS
 model Submission {
   id             String           @id @default(uuid())
   workSessionId  String           @map("work_session_id")
   userId         String?          @map("user_id")
-  universityId   String           @map("university_id")
   studentRegNo   String?          @map("student_reg_no")
   studentName    String?          @map("student_name")
   filePath       String?          @map("file_path")
@@ -123,12 +94,9 @@ model Submission {
   confidenceScore Float?          @map("confidence_score")
   submittedAt    DateTime?        @default(now()) @map("submitted_at")
   deletedAt      DateTime?        @map("deleted_at")
-  groupId        String?          @map("group_id")
-  groupSnapshot  String?          @map("group_snapshot") // Stored as string
 
   workSession  WorkSession @relation(fields: [workSessionId], references: [id])
   user         User?       @relation(fields: [userId], references: [id])
-  university   University  @relation(fields: [universityId], references: [id])
   score        Score?
   appeals      Appeal[]
 
@@ -136,11 +104,10 @@ model Submission {
   @@unique([workSessionId, userId])
 
   @@map("submissions")
-  @@index([universityId])
   @@index([workSessionId])
 }
 
-// 7. SCORES
+// 6. SCORES
 model Score {
   id           String    @id @default(uuid())
   submissionId String    @unique @map("submission_id")
@@ -155,7 +122,7 @@ model Score {
   @@map("scores")
 }
 
-// 8. JOBS
+// 7. JOBS
 model Job {
   id           String    @id @default(uuid())
   type         String // JobType enum
@@ -164,23 +131,18 @@ model Job {
   result       String?     @map("result") // Stored as string
   error        String?
   retryCount   Int?      @default(0) @map("retry_count")
-  universityId String?   @map("university_id")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
   processedAt  DateTime? @map("processed_at")
 
-  university   University? @relation(fields: [universityId], references: [id])
-
   @@map("jobs")
   @@index([status, type])
-  @@index([universityId])
 }
 
-// 9. AUDIT LOGS
+// 8. AUDIT LOGS
 model AuditLog {
   id           String    @id @default(uuid())
   userId       String?   @map("user_id")
-  universityId String?   @map("university_id")
   action       String
   details      String?
   ipAddress    String?   @map("ip_address")
@@ -188,12 +150,11 @@ model AuditLog {
   timestamp    DateTime? @default(now())
 
   user         User?       @relation(fields: [userId], references: [id])
-  university   University? @relation(fields: [universityId], references: [id])
 
   @@map("audit_logs")
 }
 
-// 10. APPEALS
+// 9. APPEALS
 model Appeal {
   id           String   @id @default(uuid())
   submissionId String   @map("submission_id")

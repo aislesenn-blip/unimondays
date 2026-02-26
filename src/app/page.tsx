@@ -32,10 +32,10 @@ export default function LandingPage() {
                 Now Live: Auto-Grading v2.0
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
-                The Intelligent Dropbox for <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400">Modern Lecturers.</span>
+                Intelligent Grading Assistance for <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400">Modern Educators.</span>
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-                Stop grading manually. Create a Work Session, upload your Gold Standard Rubric, and let our AI grade hundreds of student submissions in seconds with human-level accuracy.
+                Empower your teaching with unmatched accuracy. Create a Work Session, upload your Gold Standard Rubric, and let our AI provide precise, fair feedback to hundreds of students in seconds.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center md:justify-start">
                 <Link href="/login" className={cn(buttonVariants({ size: "lg" }), "h-12 px-8 text-base rounded-full")}>
@@ -48,10 +48,16 @@ export default function LandingPage() {
             </div>
 
             <div className="relative lg:h-[500px] w-full rounded-2xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-right-8 duration-1000 delay-200 border bg-muted/50 flex items-center justify-center">
-               {/* Simplified visual representation */}
-               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-violet-500/10 z-0"></div>
-               <div className="z-10 text-center space-y-4 p-8">
-                  <div className="bg-background rounded-xl shadow-lg p-6 max-w-sm mx-auto border">
+               {/* Hero Image */}
+               <img
+                 src="https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=1000&q=80"
+                 alt="Modern digital workspace"
+                 className="absolute inset-0 w-full h-full object-cover opacity-80"
+               />
+               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent"></div>
+
+               <div className="z-10 text-center space-y-4 p-8 relative">
+                  <div className="bg-background/90 backdrop-blur-sm rounded-xl shadow-lg p-6 max-w-sm mx-auto border border-border/50">
                       <div className="flex items-center gap-3 mb-4">
                           <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">AI</div>
                           <div className="text-left">
@@ -69,43 +75,44 @@ export default function LandingPage() {
                           <span className="text-xs bg-secondary px-2 py-1 rounded">View Feedback</span>
                       </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">Processed 250 scripts in 3 minutes.</div>
+                  <div className="text-sm font-medium bg-background/80 inline-block px-3 py-1 rounded-full backdrop-blur-sm">Processed 250 scripts in 3 minutes.</div>
                </div>
             </div>
           </div>
         </section>
 
         {/* Feature Section */}
-        <section id="how-it-works" className="py-24 bg-secondary/30">
-          <div className="max-w-7xl mx-auto px-6 md:px-12">
+        <section id="how-it-works" className="py-24 bg-secondary/30 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=2000&q=20')] bg-cover bg-center opacity-5"></div>
+          <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
             <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-              <h2 className="text-3xl font-bold tracking-tight">Three Steps to Freedom</h2>
+              <h2 className="text-3xl font-bold tracking-tight">Focus on Teaching, Not Administrative Tasks</h2>
               <p className="text-muted-foreground text-lg">
-                Your workflow remains simple. We handle the heavy lifting.
+                Your workflow remains simple, but your impact multiplies. We handle the heavy lifting of assessment.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                <div className="bg-card border rounded-2xl p-8 shadow-sm">
+                <div className="bg-card border rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow">
                     <div className="mx-auto h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center mb-6 text-blue-600">
                         <Upload className="h-8 w-8" />
                     </div>
                     <h3 className="text-xl font-bold mb-3">1. Create Session</h3>
-                    <p className="text-muted-foreground">Define your class, set a deadline, and upload your marking scheme or rubric.</p>
+                    <p className="text-muted-foreground">Define your class, set a deadline, and upload your marking scheme. Precision starts with your criteria.</p>
                 </div>
-                <div className="bg-card border rounded-2xl p-8 shadow-sm">
+                <div className="bg-card border rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow">
                     <div className="mx-auto h-16 w-16 rounded-full bg-violet-100 flex items-center justify-center mb-6 text-violet-600">
                         <Zap className="h-8 w-8" />
                     </div>
-                    <h3 className="text-xl font-bold mb-3">2. Students Submit</h3>
-                    <p className="text-muted-foreground">Students upload their work (PDF/Images) to your secure digital dropbox using a simple code.</p>
+                    <h3 className="text-xl font-bold mb-3">2. Frictionless Submission</h3>
+                    <p className="text-muted-foreground">Students upload their work via a simple, secure link. No complex sign-ups, just instant delivery.</p>
                 </div>
-                <div className="bg-card border rounded-2xl p-8 shadow-sm">
+                <div className="bg-card border rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow">
                     <div className="mx-auto h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mb-6 text-green-600">
                         <CheckCircle2 className="h-8 w-8" />
                     </div>
-                    <h3 className="text-xl font-bold mb-3">3. AI Grades It</h3>
-                    <p className="text-muted-foreground">Review auto-generated scores and feedback. Release results with one click.</p>
+                    <h3 className="text-xl font-bold mb-3">3. Instant Feedback</h3>
+                    <p className="text-muted-foreground">Review auto-generated scores and detailed feedback. Release results with confidence and transparency.</p>
                 </div>
             </div>
           </div>
@@ -115,7 +122,7 @@ export default function LandingPage() {
         <section id="features" className="py-24">
              <div className="max-w-7xl mx-auto px-6 md:px-12">
                 <div className="text-center mb-16">
-                    <h2 className="text-3xl font-bold tracking-tight">Built for Production</h2>
+                    <h2 className="text-3xl font-bold tracking-tight">Built for Academic Excellence</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {[
@@ -127,7 +134,7 @@ export default function LandingPage() {
                     {
                       icon: FileText,
                       title: "Rubric Alignment",
-                      desc: "Upload your exact marking scheme. The AI adheres strictly to your criteria, ensuring fairness."
+                      desc: "Upload your exact marking scheme. The AI adheres strictly to your criteria, ensuring absolute fairness."
                     },
                     {
                       icon: ShieldCheck,
@@ -150,7 +157,7 @@ export default function LandingPage() {
                       desc: "Download all annotated scripts and a master gradebook Excel file for administrative filing."
                     }
                   ].map((feature, idx) => (
-                    <div key={idx} className="flex gap-4 items-start p-4 hover:bg-secondary/50 rounded-xl transition-colors">
+                    <div key={idx} className="flex gap-4 items-start p-4 hover:bg-secondary/50 rounded-xl transition-colors border border-transparent hover:border-border">
                       <div className="mt-1 bg-primary/10 p-2 rounded-lg">
                         <feature.icon className="h-5 w-5 text-primary" />
                       </div>

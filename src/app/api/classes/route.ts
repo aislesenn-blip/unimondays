@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser } from '@/lib/auth';
+import { validateRequest } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const user = await getAuthenticatedUser();
+  const user = await validateRequest(req);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getAuthenticatedUser();
+  const user = await validateRequest(req);
   if (!user || user.role !== 'LECTURER') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -40,10 +40,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name and Code are required' }, { status: 400 });
     }
 
-    if (!user.universityId) {
-      return NextResponse.json({ error: 'User has no university' }, { status: 400 });
-    }
-
     const newClass = await prisma.classes.create({
       data: {
         name,
@@ -51,7 +47,6 @@ export async function POST(req: NextRequest) {
         semester,
         mode,
         lecturerId: user.id,
-        universityId: user.universityId,
         status: 'ACTIVE'
       }
     });

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser } from '@/lib/auth';
+import { validateRequest } from '@/lib/auth';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getAuthenticatedUser();
+  const user = await validateRequest(req);
   if (!user || user.role !== 'LECTURER') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -38,11 +38,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             isUnique = true;
         } else {
             attempts++;
+            workCode = ''; // Retry
         }
     }
 
-    if (!isUnique) {
-        return NextResponse.json({ error: 'Failed to generate unique code' }, { status: 500 });
+    // Fallback if loop failed to find unique code
+    if (!workCode) {
+         workCode = Date.now().toString(36).substring(6).toUpperCase();
     }
 
     const session = await prisma.workSession.create({
@@ -50,7 +52,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         title,
         workCode,
         classId,
-        universityId: user.universityId!,
         lecturerId: user.id,
         deadline: deadline ? new Date(deadline) : null,
         rubric: rubric || '',
