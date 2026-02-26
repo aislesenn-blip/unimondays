@@ -4,11 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home,
-  BookOpen,
-  BarChart2,
-  FileText,
   LogOut,
-  MessageSquare,
   Menu,
   ChevronLeft
 } from "lucide-react";
@@ -19,10 +15,7 @@ import { Button } from "@/components/ui/button";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 const NAV_ITEMS = [
-  { name: "Home", href: "/dashboard", icon: Home },
-  { name: "Sessions", href: "/dashboard/sessions", icon: BookOpen },
-  { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
-  { name: "Appeals", href: "/dashboard/appeals", icon: MessageSquare },
+  { name: "My Classes", href: "/dashboard", icon: Home },
 ];
 
 interface DashboardSidebarProps {
@@ -88,7 +81,7 @@ export function DashboardSidebar({ className, collapsed = false, onToggleCollaps
 
           <nav className="space-y-1">
             {NAV_ITEMS.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
 
               if (collapsed) {
                  return (

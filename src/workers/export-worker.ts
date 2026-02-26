@@ -1,17 +1,22 @@
 import JSZip from 'jszip';
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { createFeedbackPage, createAnnotatedPdf, generateMasterExcel } from '@/lib/export-service';
+import { createFeedbackPage, createAnnotatedPdf, generateMasterExcel, FullSubmission } from '@/lib/export-service';
 import { saveBuffer, readFile } from '@/lib/storage';
 
 export async function handleExportZip(job: Job) {
-  const data = job.payload as any;
-  const { quizId } = data;
+  let data: any;
+  try {
+     data = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
+  } catch (e) {
+     throw new Error("Invalid job payload JSON");
+  }
+  const { workSessionId } = data;
 
-  if (!quizId) throw new Error("Missing quizId in job payload.");
+  if (!workSessionId) throw new Error("Missing workSessionId in job payload.");
 
   const submissions = await prisma.submission.findMany({
-    where: { quizId },
+    where: { workSessionId },
     include: { score: true, user: true }
   });
 
@@ -24,7 +29,7 @@ export async function handleExportZip(job: Job) {
 
     try {
       // Feedback Page
-      const feedbackPdf = await createFeedbackPage(sub);
+      const feedbackPdf = await createFeedbackPage(sub as FullSubmission);
       zip.file(`${safeRegNo}_Feedback.pdf`, feedbackPdf);
 
       // Original & Annotated
@@ -33,7 +38,7 @@ export async function handleExportZip(job: Job) {
            const originalBuffer = await readFile(sub.filePath);
            zip.file(`${safeRegNo}_Script.pdf`, originalBuffer);
 
-           const annotatedPdf = await createAnnotatedPdf(sub, feedbackPdf);
+           const annotatedPdf = await createAnnotatedPdf(sub as FullSubmission, feedbackPdf);
            zip.file(`${safeRegNo}_Annotated.pdf`, annotatedPdf);
          } catch (e) {
            console.warn(`Could not read/process file for ${regNo}`, e);
@@ -45,12 +50,12 @@ export async function handleExportZip(job: Job) {
   }
 
   // 2. Master Excel
-  const excelBuffer = await generateMasterExcel(submissions);
-  zip.file(`Master_Grades_${quizId}.xlsx`, excelBuffer);
+  const excelBuffer = await generateMasterExcel(submissions as FullSubmission[]);
+  zip.file(`Master_Grades_${workSessionId}.xlsx`, excelBuffer);
 
   // 3. Save ZIP
   const content = await zip.generateAsync({ type: "nodebuffer" });
-  const zipPath = await saveBuffer(content, `Export_${quizId}.zip`, 'exports');
+  const zipPath = await saveBuffer(content, `Export_${workSessionId}.zip`, 'exports');
 
   return { filePath: zipPath };
 }

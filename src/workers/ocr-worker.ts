@@ -5,11 +5,16 @@ import { prisma } from '@/lib/prisma';
 import { enqueueJob } from '@/lib/queue';
 
 export async function handleOcrSplit(job: Job) {
-  const jobData = job.payload as any;
-  const { filePath, quizId } = jobData;
+  let jobData: any;
+  try {
+     jobData = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
+  } catch (e) {
+     throw new Error("Invalid job payload JSON");
+  }
+  const { filePath, workSessionId } = jobData;
 
-  if (!filePath || !quizId) {
-    throw new Error("Missing filePath or quizId in job payload.");
+  if (!filePath || !workSessionId) {
+    throw new Error("Missing filePath or workSessionId in job payload.");
   }
 
   // 1. Read file
@@ -22,11 +27,10 @@ export async function handleOcrSplit(job: Job) {
 
   // 3. Create Submissions and Enqueue Grading
   for (const split of splits) {
-    // Check if submission already exists for this student and quiz
-    // Use studentRegNo for matching
+    // Check if submission already exists for this student and workSession
     let submission = await prisma.submission.findFirst({
       where: {
-        quizId,
+        workSessionId,
         studentRegNo: split.regNo
       }
     });
@@ -40,23 +44,22 @@ export async function handleOcrSplit(job: Job) {
         where: { id: submission.id },
         data: {
           filePath: split.filePath,
-          status: 'PROCESSING', // PENDING_OCR mapped to PROCESSING
-          ocrText: null, // Reset OCR text
+          status: 'PROCESSING',
+          ocrText: null,
           submittedAt: new Date()
         }
       });
     } else {
       // Create new
-      // Submission requires universityId. Use job's universityId.
       if (!job.universityId) {
-          // Try to fetch from quiz
-          const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
-          if (!quiz) throw new Error("Quiz not found to infer University ID");
+          // Try to fetch from workSession
+          const session = await prisma.workSession.findUnique({ where: { id: workSessionId } });
+          if (!session) throw new Error("WorkSession not found to infer University ID");
 
           submission = await prisma.submission.create({
             data: {
-              quizId,
-              universityId: quiz.universityId,
+              workSessionId,
+              universityId: session.universityId,
               studentRegNo: split.regNo,
               filePath: split.filePath,
               status: 'PROCESSING'
@@ -65,7 +68,7 @@ export async function handleOcrSplit(job: Job) {
       } else {
           submission = await prisma.submission.create({
             data: {
-              quizId,
+              workSessionId,
               universityId: job.universityId,
               studentRegNo: split.regNo,
               filePath: split.filePath,
@@ -77,7 +80,7 @@ export async function handleOcrSplit(job: Job) {
 
     if (submission) {
       // Enqueue Grading
-      await enqueueJob('AI_GRADE', { submissionId: submission.id }, 0, undefined, job.universityId || undefined);
+      await enqueueJob('AI_GRADE', { submissionId: submission.id }, 0, job.universityId || undefined);
       createdSubmissionIds.push(submission.id);
     }
   }
