@@ -45,7 +45,6 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const workSessionId = formData.get('workSessionId') as string;
-    // Also support workCode if provided (Student Portal logic might send code)
     const workCode = formData.get('workCode') as string;
 
     if (!file) {
@@ -68,7 +67,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing Work Session ID or Code' }, { status: 400 });
     }
 
-    // 3. Security: Rate Limiting (Throttling)
+    // 3. Security: Rate Limiting
     const lastSubmission = await prisma.submission.findFirst({
         where: {
             userId,
@@ -90,8 +89,7 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // 4. Security: File Validation (Magic Bytes & MIME)
-    // Read buffer ONCE
+    // 4. Security: File Validation
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -120,8 +118,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. Upload File (Securely)
-    // Use saveBuffer with the buffer we already read
-    // Pass 'submissions' folder
     const fileUrl = await saveBuffer(buffer, file.name, 'submissions');
 
     // 7. Create or Update Submission (Idempotent)
@@ -161,20 +157,30 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. Trigger AI Grading Worker
-    await prisma.job.create({
-        data: {
-            type: 'AI_GRADE',
-            payload: JSON.stringify({ submissionId: submission.id }),
-            status: 'PENDING'
-        }
-    });
+    // 8. ASYNC TRIGGER: Fire-and-Forget AI Grading (Vercel Magic)
+    // We do NOT await this. We let it float in the background.
+    // However, in serverless, if the main request ends, the runtime *might* kill floating promises.
+    // Vercel's `waitUntil` (Edge) or `after` (experimental) is ideal, but for Node runtime:
+    // A fetch to a separate endpoint (which has extended timeout) is safer.
 
-    return NextResponse.json({ success: true, submissionId: submission.id });
+    // Construct the absolute URL for the webhook
+    const protocol = req.headers.get('x-forwarded-proto') || 'http';
+    const host = req.headers.get('host');
+    const webhookUrl = `${protocol}://${host}/api/webhooks/grade`;
+
+    console.log(`[SUBMIT] Triggering Async Grading via Webhook: ${webhookUrl}`);
+
+    // Fire and forget
+    fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: submission.id })
+    }).catch(err => console.error("[SUBMIT] Failed to trigger async grading:", err));
+
+    return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission received. AI grading started." });
 
   } catch (error: any) {
     console.error("Submit Error:", error);
-    // Return generic error to client, log specific error on server
     return NextResponse.json({ error: 'Submission failed due to an internal error. Please try again.' }, { status: 500 });
   }
 }
