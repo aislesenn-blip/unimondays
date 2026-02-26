@@ -26,6 +26,18 @@ export function NotificationsPopover() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
+  const fetchNotifications = () => {
+      // Don't set loading for background refreshes to avoid UI flicker
+      fetch('/api/notifications')
+        .then(res => res.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                setNotifications(data);
+            }
+        })
+        .catch(() => {});
+  };
+
   useEffect(() => {
     if (open) {
       setLoading(true);
@@ -40,16 +52,15 @@ export function NotificationsPopover() {
     }
   }, [open]);
 
-  // Initial Poll for Badge
+  // Initial Poll & Event Listener for Real-time Updates
   useEffect(() => {
-      fetch('/api/notifications')
-        .then(res => res.json())
-        .then(data => {
-            if (Array.isArray(data)) {
-                setNotifications(data);
-            }
-        })
-        .catch(() => {});
+      fetchNotifications();
+
+      // Listen for global update events (e.g. from SubmissionDrawer)
+      const handleUpdate = () => fetchNotifications();
+      window.addEventListener('notification-update', handleUpdate);
+
+      return () => window.removeEventListener('notification-update', handleUpdate);
   }, []);
 
   const getIcon = (type: string) => {
