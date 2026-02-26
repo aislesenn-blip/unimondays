@@ -39,28 +39,46 @@ export default async function CAPage({ params }: { params: Promise<{ id: string 
   const studentMap = new Map();
 
   submissions.forEach(sub => {
-    // Identity Priority: 1. User FullName (if linked), 2. AI Detected Identity, 3. Student Name (Submission)
-    // Keying by UserID is best if available, else Name/RegNo combo.
+    // Identity Priority: 1. AI Detected Identity (Top Priority per V2.3), 2. User FullName, 3. Student Name
     const userId = sub.userId;
     const key = userId || `${sub.studentName}-${sub.studentRegNo}`;
+
+    // Priority Logic for Name Display
+    const detectedName = sub.score?.detectedIdentity;
+    const primaryName = detectedName || sub.user?.fullName || sub.studentName || 'Unknown Identity';
+
+    // Secondary Info (Email or RegNo)
+    const secondaryInfo = detectedName
+        ? (sub.user?.email || sub.studentRegNo)
+        : (sub.user?.email || sub.studentRegNo || '');
 
     if (!studentMap.has(key)) {
       studentMap.set(key, {
         id: key,
-        name: sub.user?.fullName || sub.score?.detectedIdentity || sub.studentName || 'Unknown Student',
-        regNo: sub.studentRegNo || sub.user?.email || 'N/A',
+        name: primaryName,
+        secondaryInfo: secondaryInfo,
+        regNo: sub.studentRegNo || sub.user?.email || 'N/A', // Keep for compatibility if needed, but UI uses secondaryInfo now
         scores: {}
       });
     }
 
     const student = studentMap.get(key);
+
+    // If we encounter a submission with a detected identity, upgrade the name if the current one is just a fallback
+    // Or strictly enforce detectedIdentity if we want that to be supreme.
+    // The previous logic was: if (sub.score.detectedIdentity && !sub.user?.fullName)
+    // The NEW Mandate says: "PRIORITIZE the AI detectedIdentity." even over account name potentially?
+    // "The primary, bold text MUST be the score.detectedIdentity... The user's account email should only be displayed as a muted, secondary subtitle"
+    // This implies Detected Identity > User Full Name.
+    if (detectedName) {
+        student.name = detectedName;
+        student.secondaryInfo = sub.user?.email || sub.studentRegNo;
+    } else if (sub.user?.fullName && student.name === 'Unknown Identity') {
+        student.name = sub.user.fullName;
+    }
+
     if (sub.score) {
       student.scores[sub.workSessionId] = sub.score.totalMarks;
-
-      // Update name if we found a better one from AI and currently using fallback
-      if (sub.score.detectedIdentity && !sub.user?.fullName) {
-          student.name = sub.score.detectedIdentity;
-      }
     }
   });
 

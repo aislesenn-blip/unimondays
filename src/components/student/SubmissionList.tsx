@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StudentResultDrawer } from "./ResultDrawer";
+import { AppealModal } from "./AppealModal";
 import { Loader2 } from "lucide-react";
 
 export function SubmissionList() {
@@ -76,7 +77,12 @@ export function SubmissionList() {
                 {sub.isReleased ? sub.score : '-'}
               </TableCell>
               <TableCell className="text-right">
-                <StudentResultDrawer submission={sub} />
+                <div className="flex justify-end gap-2">
+                  {sub.isReleased && sub.allowAppeals && sub.status !== 'APPEALED' && (
+                     <AppealModal submissionId={sub.id} onSuccess={() => window.location.reload()} />
+                  )}
+                  <StudentResultDrawer submission={sub} />
+                </div>
               </TableCell>
             </TableRow>
           ))}

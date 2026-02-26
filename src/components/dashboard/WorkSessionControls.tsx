@@ -5,9 +5,10 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Lock, Unlock, AlertCircle, FileBarChart, ShieldAlert } from "lucide-react";
+import { Loader2, Lock, Unlock, AlertCircle, FileBarChart, ShieldAlert, HelpCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface WorkSessionControlsProps {
   session: {
@@ -66,6 +67,16 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 Strict Deadline
                 {loading === 'strictDeadline' && <Loader2 className="h-3 w-3 animate-spin" />}
             </Label>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger>
+                        <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[200px]">
+                        <p className="text-xs">If enabled, submissions are blocked after the deadline. If disabled, they are marked as 'Late'.</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
         </div>
 
         {/* Allow Appeals */}
