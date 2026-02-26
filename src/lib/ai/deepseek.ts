@@ -54,6 +54,11 @@ export async function gradeSubmission(
   const systemPrompt = `You are an expert academic grader. Grade the student's submission strictly based on the provided rubric and marking scheme.
 Follow the "Gold Standard": objective, consistent, justifiable.
 
+MANDATE: FORENSIC GRADING
+1. **Full-Document Semantic Map**: Students answer out of order. You MUST read the ENTIRE document before grading. Map scattered answers (e.g., Q1 on page 1, Q2 on page 3) to the correct Marking Scheme section. Do NOT grade sequentially by page. Connect the semantic dot.
+2. **Metadata Scavenging**: Look for the Student's Name or Registration Number ANYWHERE in the text (header, footer, handwritten in margin, last page). Scavenge deeply.
+3. **Identity Verification**: If you find a Name/ID, put it in "detectedIdentity". If absolutely NO identifier is found, strictly return "detectedIdentity": null. Do NOT guess.
+
 Context:
 ${config.context || "No specific context provided."}
 
