@@ -27,10 +27,6 @@ export default function LandingPage() {
         <section className="relative overflow-hidden py-20 md:py-32 lg:py-40 px-6 md:px-12 max-w-7xl mx-auto text-center md:text-left">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <div className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium bg-secondary text-secondary-foreground">
-                <span className="flex h-2 w-2 rounded-full bg-blue-500 mr-2"></span>
-                Now Live: Auto-Grading v2.0
-              </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
                 Empower Your Teaching with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400">Intelligent Grading Assistance.</span>
               </h1>
@@ -169,6 +165,70 @@ export default function LandingPage() {
                     </div>
                 </div>
              </div>
+        </section>
+
+        {/* Outcomes Section */}
+        <section id="outcomes" className="py-24 bg-muted/30">
+          <div className="max-w-7xl mx-auto px-6 md:px-12 text-center">
+             <h2 className="text-3xl font-bold tracking-tight mb-8">Measurable Outcomes</h2>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="p-6 bg-background rounded-xl border shadow-sm">
+                   <div className="text-4xl font-extrabold text-blue-600 mb-2">90%</div>
+                   <p className="text-muted-foreground">Reduction in grading time</p>
+                </div>
+                <div className="p-6 bg-background rounded-xl border shadow-sm">
+                   <div className="text-4xl font-extrabold text-violet-600 mb-2">24/7</div>
+                   <p className="text-muted-foreground">Instant feedback availability</p>
+                </div>
+                <div className="p-6 bg-background rounded-xl border shadow-sm">
+                   <div className="text-4xl font-extrabold text-green-600 mb-2">100%</div>
+                   <p className="text-muted-foreground">Audit trail transparency</p>
+                </div>
+             </div>
+          </div>
+        </section>
+
+        {/* Partnerships Section */}
+        <section id="partnerships" className="py-24">
+          <div className="max-w-7xl mx-auto px-6 md:px-12 text-center">
+            <h2 className="text-3xl font-bold tracking-tight mb-12">Trusted By Leading Institutions</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+               {/* Placeholders as per memory */}
+               <div className="flex items-center justify-center p-4 border rounded-lg">
+                  <span className="font-bold text-xl">School of Engineering</span>
+               </div>
+               <div className="flex items-center justify-center p-4 border rounded-lg">
+                  <span className="font-bold text-xl">College of Business</span>
+               </div>
+               <div className="flex items-center justify-center p-4 border rounded-lg">
+                   <span className="font-bold text-xl">Institute of Technology</span>
+               </div>
+               <div className="flex items-center justify-center p-4 border rounded-lg">
+                   <span className="font-bold text-xl">Faculty of Sciences</span>
+               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQs Section */}
+        <section id="faqs" className="py-24 bg-secondary/20">
+           <div className="max-w-3xl mx-auto px-6 md:px-12">
+              <h2 className="text-3xl font-bold tracking-tight text-center mb-12">Frequently Asked Questions</h2>
+              <div className="space-y-6">
+                 <div className="bg-background p-6 rounded-xl border shadow-sm">
+                    <h3 className="font-bold text-lg mb-2">Is the grading really automated?</h3>
+                    <p className="text-muted-foreground">Yes, our AI engine analyzes student submissions against your specific rubric to generate grades and feedback, which you can then review and approve.</p>
+                 </div>
+                 <div className="bg-background p-6 rounded-xl border shadow-sm">
+                    <h3 className="font-bold text-lg mb-2">How secure is student data?</h3>
+                    <p className="text-muted-foreground">We adhere to strict data protection standards. All data is encrypted in transit and at rest, and we provide a full audit trail for every action.</p>
+                 </div>
+                 <div className="bg-background p-6 rounded-xl border shadow-sm">
+                    <h3 className="font-bold text-lg mb-2">Can I customize the grading strictness?</h3>
+                    <p className="text-muted-foreground">Absolutely. You can configure the AI to be Lenient, Moderate, or Strict depending on the nature of the assessment.</p>
+                 </div>
+              </div>
+           </div>
         </section>
       </main>
 
