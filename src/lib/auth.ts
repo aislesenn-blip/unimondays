@@ -1,9 +1,9 @@
 import { cookies } from 'next/headers';
 import { prisma } from './prisma';
 import { NextRequest } from 'next/server';
-import { User, University } from '@prisma/client';
+import { User } from '@prisma/client';
 
-export type AuthenticatedUser = User & { university: University | null };
+export type AuthenticatedUser = User;
 
 /**
  * Validates the session and returns the authenticated user with tenant context.
@@ -22,26 +22,21 @@ export async function validateRequest(req: NextRequest): Promise<AuthenticatedUs
     if (!session.userId) return null;
 
     const user = await prisma.user.findUnique({
-      where: { id: session.userId },
-      include: { university: true }
+      where: { id: session.userId }
     });
 
     if (!user) return null;
 
     // Audit Log (Async, don't block)
-    // In production, use a fire-and-forget queue or specialized logger
-    // For now, we write to DB but catch errors to avoid blocking auth
     const ip = req.headers.get('x-forwarded-for') || 'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
     const path = req.nextUrl.pathname;
 
-    prisma.auditLog.create({
+    await prisma.auditLog.create({
       data: {
-        universityId: user.universityId,
+        userId: user.id,
         action: 'API_ACCESS',
         details: `Access to ${path}`,
         ipAddress: ip,
-        // userAgent: userAgent, // Removed from schema
         severity: 'INFO'
       }
     }).catch(e => console.error("Audit Log Error:", e));

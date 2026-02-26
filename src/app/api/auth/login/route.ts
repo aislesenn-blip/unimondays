@@ -33,7 +33,6 @@ export async function POST(req: NextRequest) {
     if (!user) {
       if (isStudent) {
         // Auto-create Student Profile
-        // Note: University ID is unknown here. It will be null until they join a class/university via code.
         user = await prisma.user.create({
           data: {
             id: userId,
@@ -44,14 +43,7 @@ export async function POST(req: NextRequest) {
         });
       } else {
         // Data inconsistency: Auth exists but public user missing.
-        // This is an "Orphaned User" scenario.
-        // Gracefully handle by returning 400, not 500.
         console.warn(`[Login] Orphaned User Detected: ${userId} (Email: ${email})`);
-
-        // We could try to auto-repair if we had university info, but we don't.
-        // Return a clean error prompting them to contact support or re-register.
-        // If we delete the auth user here, they could re-signup. But that deletes password.
-        // Safest: Tell them to contact support.
         return NextResponse.json({
           error: 'Account setup incomplete. Please contact support at 0745780988.'
         }, { status: 400 });
@@ -62,8 +54,7 @@ export async function POST(req: NextRequest) {
     const sessionData = {
         userId: user.id,
         email: user.email,
-        role: user.role,
-        universityId: user.universityId
+        role: user.role
     };
 
     const cookieStore = await cookies();

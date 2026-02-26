@@ -5,50 +5,25 @@ import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, fullName, institutionName } = await req.json();
+    const { email, password, fullName } = await req.json();
 
-    if (!email || !password || !fullName || !institutionName) {
+    if (!email || !password || !fullName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Handle University (Find or Create)
-    // Normalize name for search
-    const normalizedName = institutionName.trim();
-    let university = await prisma.university.findFirst({
-      where: {
-        name: normalizedName,
-      },
-    });
-
-    if (!university) {
-      // Create new university
-      // Generate a code based on name (e.g., UOD for University of Dar...)
-      const codeBase = normalizedName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
-      const code = `${codeBase}-${Math.floor(Math.random() * 10000)}`;
-
-      university = await prisma.university.create({
-        data: {
-          name: normalizedName,
-          code: code,
-          domain: `${code.toLowerCase()}.edu`, // Placeholder domain
-        },
-      });
-    }
-
-    // 2. Create Supabase Auth User
+    // 1. Create Supabase Auth User
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // Auto-confirm for now to allow immediate login
+      email_confirm: true, // Auto-confirm
       user_metadata: { full_name: fullName },
     });
 
     let userId: string | undefined;
 
     if (authError) {
-      console.warn("Supabase Auth Create Failed (User likely exists):", authError.message);
-      // For now, return error asking to login
-      return NextResponse.json({ error: "User already exists or Auth failed. Please try logging in." }, { status: 400 });
+      console.warn("Supabase Auth Create Failed:", authError.message);
+      return NextResponse.json({ error: "User already exists or Auth failed." }, { status: 400 });
     }
 
     if (!authData.user) {
@@ -57,20 +32,17 @@ export async function POST(req: NextRequest) {
 
     userId = authData.user.id;
 
-    // 3. Create Public User Record
-    // Check if user already exists (might happen if auth succeeded but public failed previously - race condition?)
+    // 2. Create Public User Record
     const existingUser = await prisma.user.findUnique({ where: { id: userId } });
 
     let publicUser;
     if (!existingUser) {
-        // ENSURE SCHEMA COMPLIANCE: Use strict Enum and valid University ID
         publicUser = await prisma.user.create({
             data: {
                 id: userId,
                 email,
                 fullName,
-                universityId: university.id,
-                role: 'LECTURER', // Maps to 'LECTURER' in DB
+                role: 'LECTURER',
                 tier: 'Lite',
                 quota: 100,
             },
@@ -79,7 +51,7 @@ export async function POST(req: NextRequest) {
         publicUser = existingUser;
     }
 
-    // 4. Set Session Cookie
+    // 3. Set Session Cookie
     const sessionData = {
         userId: publicUser.id,
         email: publicUser.email,
@@ -98,7 +70,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("Signup Error:", error);
-    // Return a generic error message to user, but log the specific one
     return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
   }
 }

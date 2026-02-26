@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateRequest } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await validateRequest(req);
-
+    const user = await getAuthenticatedUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Return full user object including university (validateRequest includes it)
-    return NextResponse.json({ user });
-  } catch (error) {
-    console.error("Auth Me Error:", error);
+    return NextResponse.json({
+        user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            fullName: user.fullName,
+            tier: user.tier,
+            quota: user.quota,
+            used: user.used
+        }
+    });
+
+  } catch (error: any) {
+    console.error("Me API Error:", error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

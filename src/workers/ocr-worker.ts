@@ -51,36 +51,19 @@ export async function handleOcrSplit(job: Job) {
       });
     } else {
       // Create new
-      if (!job.universityId) {
-          // Try to fetch from workSession
-          const session = await prisma.workSession.findUnique({ where: { id: workSessionId } });
-          if (!session) throw new Error("WorkSession not found to infer University ID");
-
-          submission = await prisma.submission.create({
-            data: {
-              workSessionId,
-              universityId: session.universityId,
-              studentRegNo: split.regNo,
-              filePath: split.filePath,
-              status: 'PROCESSING'
-            }
-          });
-      } else {
-          submission = await prisma.submission.create({
-            data: {
-              workSessionId,
-              universityId: job.universityId,
-              studentRegNo: split.regNo,
-              filePath: split.filePath,
-              status: 'PROCESSING'
-            }
-          });
-      }
+      submission = await prisma.submission.create({
+        data: {
+          workSessionId,
+          studentRegNo: split.regNo,
+          filePath: split.filePath,
+          status: 'PROCESSING'
+        }
+      });
     }
 
     if (submission) {
       // Enqueue Grading
-      await enqueueJob('AI_GRADE', { submissionId: submission.id }, 0, job.universityId || undefined);
+      await enqueueJob('AI_GRADE', { submissionId: submission.id }, 0);
       createdSubmissionIds.push(submission.id);
     }
   }
