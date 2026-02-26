@@ -92,7 +92,29 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg"
                     className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                        const selected = e.target.files?.[0];
+                        if (selected) {
+                            // MANDATE 1: 15MB Limit
+                            if (selected.size > 15 * 1024 * 1024) {
+                                toast.error("File is too large. Please compress your PDF to under 15MB.");
+                                e.target.value = ""; // Clear input
+                                setFile(null);
+                                return;
+                            }
+                            // Strict Type Check
+                            const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+                            if (!allowedTypes.includes(selected.type)) {
+                                toast.error("Invalid file type. Only PDF, PNG, and JPG are allowed.");
+                                e.target.value = "";
+                                setFile(null);
+                                return;
+                            }
+                            setFile(selected);
+                        } else {
+                            setFile(null);
+                        }
+                    }}
                 />
                 <div className="flex flex-col items-center gap-3 pointer-events-none">
                     {file ? (
@@ -112,7 +134,7 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                             </div>
                             <div>
                                 <div className="font-medium text-foreground">Click to Upload</div>
-                                <div className="text-xs text-muted-foreground">PDF, PNG, JPG (Max 10MB)</div>
+                                <div className="text-xs text-muted-foreground">PDF, PNG, JPG (Max 15MB)</div>
                             </div>
                         </>
                     )}

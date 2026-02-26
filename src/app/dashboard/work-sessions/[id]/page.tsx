@@ -70,7 +70,7 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
         </div>
         <div className="flex gap-2">
              {markingSchemeUrl && (
-                 <a href={`/api/download?url=${encodeURIComponent(markingSchemeUrl)}`} target="_blank" rel="noopener noreferrer" download>
+                 <a href={`/api/download?url=${encodeURIComponent(markingSchemeUrl)}`} download>
                      <Button variant="outline">
                          <Download className="mr-2 h-4 w-4" />
                          Marking Scheme
@@ -78,7 +78,7 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
                  </a>
              )}
              {session.rubricUrl && (
-                <a href={session.rubricUrl} target="_blank" rel="noopener noreferrer">
+                <a href={`/api/download?url=${encodeURIComponent(session.rubricUrl)}&inline=true`} target="_blank" rel="noopener noreferrer">
                     <Button variant="outline">
                         <FileText className="mr-2 h-4 w-4" />
                         View Rubric
