@@ -6,6 +6,7 @@ import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 
 export async function handleAiGrade(job: Job) {
+  const t0 = performance.now();
   let data: any;
   try {
      data = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
@@ -92,6 +93,7 @@ export async function handleAiGrade(job: Job) {
   let rubricContent = submission.workSession.rubric;
 
   // If rubric text is empty but a file URL exists, try to OCR it
+  // OPTIMIZATION: Only fetch if needed.
   if (!rubricContent && submission.workSession.rubricUrl) {
       try {
           console.log(`[AI_GRADE] Fetching Rubric URL: ${submission.workSession.rubricUrl}`);
@@ -128,6 +130,9 @@ export async function handleAiGrade(job: Job) {
   };
 
   // OCR Marking Scheme if it's a file path
+  // OPTIMIZATION: Truncate very long OCR texts?
+  // DeepSeek Chat context is large (64k), but huge texts slow down generation.
+  // For now, assume < 20 pages.
   if (config.markingScheme && (config.markingScheme.startsWith('rubrics/') || config.markingScheme.includes('/'))) {
        try {
           const msBuffer = await readFile(config.markingScheme, 'exam_pdfs'); // rubrics are in exam_pdfs bucket too?
@@ -169,9 +174,12 @@ export async function handleAiGrade(job: Job) {
             improvement: "Check arithmetic."
         };
     } else {
-        console.log(`[AI_GRADE] Invoking DeepSeek API...`);
+        console.log(`[AI_GRADE] Invoking DeepSeek API (High Performance Mode)...`);
+        // We use gradeSubmission which calls deepseek-chat (faster model)
         result = await gradeSubmission(ocrText, rubricContent, totalMarks, config);
-        console.log(`[AI_GRADE] Success. Score: ${result.totalScore}/${totalMarks}`);
+
+        const t1 = performance.now();
+        console.log(`[AI_GRADE] Success. Score: ${result.totalScore}/${totalMarks}. Time: ${(t1 - t0).toFixed(2)}ms`);
     }
   } catch (aiError: any) {
       console.error(`[AI_GRADE] FATAL AI ERROR for Job ${job.id}:`, aiError);
@@ -183,7 +191,8 @@ export async function handleAiGrade(job: Job) {
               status: 'FLAGGED',
               feedback: JSON.stringify({
                   error: `AI Grading Failed: ${aiError.message}. Check API Keys or Quota.`,
-                  technical_details: aiError.stack
+                  technical_details: aiError.stack,
+                  provider_response: aiError.response?.data
               })
           }
       });
@@ -199,7 +208,8 @@ export async function handleAiGrade(job: Job) {
 
   const breakdownStr = JSON.stringify(result.breakdown);
 
-  await prisma.score.upsert({
+  // Parallelize DB writes (slight optimization)
+  const scorePromise = prisma.score.upsert({
     where: { submissionId: submission.id },
     update: {
       totalMarks: result.totalScore,
@@ -215,16 +225,14 @@ export async function handleAiGrade(job: Job) {
     }
   });
 
-  // 5. Update Submission Status
   const status = result.confidence < 70 ? 'FLAGGED' : 'GRADED';
-
   const feedbackStr = JSON.stringify({
     strengths: result.strengths || [],
     weaknesses: result.weaknesses || [],
     improvement: result.improvement || "No specific advice."
   });
 
-  await prisma.submission.update({
+  const submissionPromise = prisma.submission.update({
     where: { id: submission.id },
     data: {
       status,
@@ -233,8 +241,7 @@ export async function handleAiGrade(job: Job) {
     }
   });
 
-  // Create Audit Log
-  await prisma.auditLog.create({
+  const auditPromise = prisma.auditLog.create({
     data: {
       userId: submission.userId,
       action: 'GRADED',
@@ -243,9 +250,12 @@ export async function handleAiGrade(job: Job) {
     }
   });
 
-  // Increment Lecturer Quota
+  // Execute writes in parallel
+  await Promise.all([scorePromise, submissionPromise, auditPromise]);
+
+  // Increment Lecturer Quota (Fire and forget, or non-critical)
   if (submission.workSession.lecturerId) {
-    await prisma.user.update({
+    prisma.user.update({
         where: { id: submission.workSession.lecturerId },
         data: { used: { increment: 1 } }
     }).catch(e => console.warn(`[AI_GRADE] Failed to increment quota for user ${submission.workSession.lecturerId}`, e));
