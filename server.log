@@ -12,35 +12,9 @@ This information is used to shape Next.js' roadmap and prioritize features.
 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
 https://nextjs.org/telemetry
 
-✓ Ready in 1378ms
- GET /api/admin/monitoring 401 in 956ms (compile: 916ms, render: 40ms)
-Dev Login Error: Error [PrismaClientInitializationError]:
-Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].university.upsert()` invocation in
-/app/.next/dev/server/chunks/[root-of-the-server]__3d617dec._.js:74:167
-
-  71 async function POST(req) {
-  72     try {
-  73         // 1. Ensure University
-→ 74         const uni = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].university.upsert(
-error: Environment variable not found: DATABASE_URL.
-  -->  schema.prisma:10
-   |
- 9 |   provider = "postgresql"
-10 |   url      = env("DATABASE_URL")
-   |
-
-Validation Error Count: 1
-    at <unknown> (src/app/api/dev/login/route.ts:8:41)
-    at <unknown> (-->  schema.prisma:10)
-    at async POST (src/app/api/dev/login/route.ts:8:17)
-   6 |   try {
-   7 |     // 1. Ensure University
->  8 |     const uni = await prisma.university.upsert({
-     |                                         ^
-   9 |       where: { code: 'TEST_UNI' },
-  10 |       update: {},
-  11 |       create: { {
-  clientVersion: '5.22.0',
-  errorCode: undefined
-}
- POST /api/dev/login 500 in 852ms (compile: 393ms, render: 459ms)
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 1599ms
+○ Compiling /verification ...
+ GET /verification 200 in 6.8s (compile: 5.9s, proxy.ts: 105ms, render: 787ms)
+ GET /verification 200 in 346ms (compile: 168ms, proxy.ts: 26ms, render: 153ms)
+[?25h
