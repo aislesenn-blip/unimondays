@@ -79,6 +79,7 @@ model WorkSession {
   areGradesReleased Boolean? @default(false) @map("are_grades_released")
   includeInCalculation Boolean? @default(true) @map("include_in_calculation")
   allowAppeals Boolean? @default(false) @map("allow_appeals")
+  confidenceThreshold Int? @default(85) @map("confidence_threshold") // 0-100
 
   type         String?   @default("WORK_SESSION")
   createdAt    DateTime  @default(now()) @map("created_at")

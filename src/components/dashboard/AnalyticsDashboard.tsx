@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Users, Activity, AlertTriangle } from "lucide-react";
@@ -58,7 +58,7 @@ export function AnalyticsDashboard({ classHealth, bottlenecks, studentTimeline }
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{classHealth.passRate.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">Students passing (>50%)</p>
+            <p className="text-xs text-muted-foreground">Students passing (&gt;50%)</p>
           </CardContent>
         </Card>
         <Card>
@@ -117,17 +117,12 @@ export function AnalyticsDashboard({ classHealth, bottlenecks, studentTimeline }
               Track individual performance over time.
             </CardDescription>
             <div className="pt-2">
-                <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select Student" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {studentTimeline.map(s => (
-                            <SelectItem key={s.studentName} value={s.studentName}>
-                                {s.studentName}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
+                <Select value={selectedStudent} onChange={(e: any) => setSelectedStudent(e.target.value)}>
+                    {studentTimeline.map(s => (
+                        <option key={s.studentName} value={s.studentName}>
+                            {s.studentName}
+                        </option>
+                    ))}
                 </Select>
             </div>
           </CardHeader>

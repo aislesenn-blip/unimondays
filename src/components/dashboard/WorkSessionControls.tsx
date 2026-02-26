@@ -5,27 +5,29 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Lock, Unlock, AlertCircle, FileBarChart } from "lucide-react";
+import { Loader2, Lock, Unlock, AlertCircle, FileBarChart, ShieldAlert } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface WorkSessionControlsProps {
   session: {
     id: string;
-    strictDeadline: boolean;
-    allowAppeals: boolean;
-    areGradesReleased: boolean;
-    releaseMode: string;
+    strictDeadline: boolean | null;
+    allowAppeals: boolean | null;
+    areGradesReleased: boolean | null;
+    releaseMode: string | null;
+    confidenceThreshold: number | null;
   };
 }
 
 export function WorkSessionControls({ session }: WorkSessionControlsProps) {
-  const [strictDeadline, setStrictDeadline] = useState(session.strictDeadline);
-  const [allowAppeals, setAllowAppeals] = useState(session.allowAppeals);
-  const [areGradesReleased, setAreGradesReleased] = useState(session.areGradesReleased);
+  const [strictDeadline, setStrictDeadline] = useState(session.strictDeadline || false);
+  const [allowAppeals, setAllowAppeals] = useState(session.allowAppeals || false);
+  const [areGradesReleased, setAreGradesReleased] = useState(session.areGradesReleased || false);
+  const [confidenceThreshold, setConfidenceThreshold] = useState(session.confidenceThreshold || 85);
   const [loading, setLoading] = useState<string | null>(null);
 
-  const updateSetting = async (key: string, value: boolean) => {
+  const updateSetting = async (key: string, value: boolean | number) => {
     setLoading(key);
     try {
       const res = await fetch(`/api/work-sessions/${session.id}`, {
@@ -35,9 +37,10 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
       });
       if (!res.ok) throw new Error("Update failed");
 
-      if (key === 'strictDeadline') setStrictDeadline(value);
-      if (key === 'allowAppeals') setAllowAppeals(value);
-      if (key === 'areGradesReleased') setAreGradesReleased(value);
+      if (key === 'strictDeadline') setStrictDeadline(value as boolean);
+      if (key === 'allowAppeals') setAllowAppeals(value as boolean);
+      if (key === 'areGradesReleased') setAreGradesReleased(value as boolean);
+      if (key === 'confidenceThreshold') setConfidenceThreshold(value as number);
 
       toast.success(`${key} updated`);
     } catch (error) {
@@ -77,6 +80,28 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 Allow Appeals
                 {loading === 'allowAppeals' && <Loader2 className="h-3 w-3 animate-spin" />}
             </Label>
+        </div>
+
+        {/* AI Confidence Threshold */}
+        <div className="flex items-center gap-3 border-l pl-6">
+             <div className="flex flex-col gap-1">
+                 <Label htmlFor="confidence" className="text-xs font-semibold flex items-center gap-1 text-muted-foreground">
+                    <ShieldAlert className="h-3 w-3" />
+                    AI Flagging Threshold
+                 </Label>
+                 <div className="flex items-center gap-2">
+                    <input
+                        id="confidence"
+                        type="number"
+                        min="50" max="100"
+                        value={confidenceThreshold}
+                        onChange={(e) => setConfidenceThreshold(parseInt(e.target.value))}
+                        onBlur={(e) => updateSetting('confidenceThreshold', parseInt(e.target.value))}
+                        className="w-14 h-8 text-sm border rounded px-2"
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                 </div>
+             </div>
         </div>
 
         {/* Manual Release Toggle */}
