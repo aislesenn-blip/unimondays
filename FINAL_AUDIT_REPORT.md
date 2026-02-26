@@ -1,48 +1,52 @@
-# Final Audit Report
+# FINAL AUDIT REPORT: Playbook EdTech Vision
 
-**Date:** 2024-05-22
-**Auditor:** Jules (AI Lead Architect)
+## Executive Summary
 
-## 1. System Sync Status: **PASSED**
-The Prisma schema (`prisma/schema.prisma`) has been rigorously synchronized with the provided Supabase PostgreSQL schema.
-- **IDs:** All `Int` IDs have been migrated to `String` (UUID) to match `gen_random_uuid()` in the database.
-- **Enums:** `UserRole`, `JobStatus`, `JobType`, `SubmissionStatus` are correctly mapped to database enums.
-- **Tables:** Mapped `User` -> `users`, `Quiz` -> `quizzes`, etc. using `@@map`.
-- **Breaking Changes:** Fixed widespread usage of `parseInt(id)` in the codebase to support UUID strings.
+**Date:** October 26, 2023
+**Auditor:** Jules, Staff Software Engineer
+**Status:** CRITICAL BUGS FIXED / PRODUCTION HARDENING REQUIRED
 
-## 2. Feature Completeness
+The "Playbook" system has been audited against the "Ultra-Simple Dropbox" vision. While the core architecture is sound and the recent critical bug fixes (Ghost Logic, Auth Routing) have stabilized the platform, several key areas require immediate attention before onboarding the first 100 users.
 
-### A. AI Grading Engine & Calibration
-- **Status:** **OPERATIONAL**
-- **Worker Logic:** The `grading-worker.ts` correctly retrieves `lecturerCalibration` (Strictness, Notes) and injects it into the DeepSeek prompt.
-- **Output:** Grades are saved to `Score` table with full JSON breakdown.
-- **Audit:** Grading completion now triggers an `AuditLog` entry ("GRADED"), which feeds the Notification system.
+### 1. Vision Completeness: ~75%
 
-### B. Context-Aware AI Chat ("The Oracle")
-- **Status:** **IMPLEMENTED**
-- **Endpoint:** `/api/chat`
-- **Logic:** Authenticates user and fetches role-specific context (Recent Submissions for Students, Recent Grading for Lecturers) before calling DeepSeek.
-- **Fallback:** Gracefully handles missing API keys with a mock response.
+The core "Happy Path" is functional:
+- **Lecturer Workflow:** Create Class -> Create Session -> View Results. (Verified)
+- **Student Workflow:** Enter Code -> Submit File. (Verified)
+- **AI Grading:** The pipeline exists (Job Queue, Worker), but relies on external AI services which need robust error handling.
 
-### C. Notifications System
-- **Status:** **WIRED**
-- **UI:** The "Bell Icon" in the Dashboard TopNav is no longer a dead button. It opens a `NotificationsPopover`.
-- **Backend:** `/api/notifications` fetches real-time alerts from the `audit_logs` table (filtered by `userId` and relevant actions like `GRADED`, `FLAGGED`).
+However, the "Frictionless" aspect is compromised by:
+- Lack of explicit Drag-and-Drop UI for students (currently just a file input).
+- Missing feedback loops during submission (e.g., upload progress is basic).
 
-### D. Session & Assessment Management
-- **Status:** **VERIFIED**
-- **Flow:** User -> Session (Classes) -> Assessment (Quiz) -> Submission flow is supported by the refactored UUID schema.
-- **UI:** Dashboard pages for Sessions and Work Details have been updated to handle UUIDs and prevent type errors.
+### 2. Critical Missing Pieces (Pre-100 Users)
 
-## 3. Dead Button / Dead Link Eradication
-- **Bell Icon:** Fixed (Now functional).
-- **Export PDF:** Wired to `export-worker` via Job Queue.
-- **Create Session/Work:** Forms connected to API routes (mock simulation removed/updated where applicable).
-- **Links:** Landing page navigation updated. Branding updated to "Playbook by Uni Monday".
+To ensure stability and security for the first cohort, the following must be addressed:
 
-## 4. Pending Items / Recommendations
-- **Frontend Mocks:** Some student pages (e.g., `assessment/[code]/page.tsx`) rely on mock data for the UI view. Ensure these are connected to the backend for production data fetching (currently safe as "Client Components" for MVP).
-- **Script Updates:** Utility scripts in `scripts/` were partially updated but may require further tweaking for full UUID support if used for administrative tasks.
+#### A. Security & Validation (High Priority)
+- **Backend File Validation:** The `/api/student/submit` endpoint relies on client-side restrictions. Malicious users could bypass this to upload executables. **Action:** Implement strict MIME-type and magic-number validation in `src/app/api/student/submit/route.ts` or `src/lib/storage.ts`.
+- **API Rate Limiting:** No rate limiting is visible in the API routes. A single student script could flood the submission endpoint. **Action:** Implement `upstash/ratelimit` or a similar middleware solution.
 
-## Conclusion
-The system is now structurally sound and aligned with the live production database. The core loop of **Submission -> AI Grading -> Notification -> Chat Insight** is fully wired.
+#### B. User Experience (Medium Priority)
+- **Drag-and-Drop Zone:** The "Intelligent Dropbox" vision demands a true drag-and-drop experience. The current file input is functional but lacks the polish of a modern "Dropbox".
+- **Real-time Status:** Students need to know if their submission is being graded. The current system relies on polling or manual refresh.
+
+#### C. System Robustness (High Priority)
+- **Error Handling:** The AI Worker (`scripts/start-worker.ts`) needs comprehensive error logging and retry mechanisms (exponential backoff) to handle AI API failures (e.g., 429 Rate Limits).
+- **Database Integrity:** The recent "Ghost Logic" bug highlights the need for automated schema validation in the CI/CD pipeline to prevent drift between Prisma and Supabase.
+
+### 3. Recent Fixes Executed
+
+1.  **Database Consistency:** Removed `groupId` and `groupSnapshot` from `prisma/schema.prisma` to align with the strict Supabase schema. Regenerated Prisma Client.
+2.  **Auth Routing:**
+    - Fixed Lecturer Signup redirect (was `/onboarding`, now `/dashboard`).
+    - Fixed Student Signup/Login UI by isolating the `StudentNavbar` (with Logout button) to the dashboard routes only. This prevents the "Logout" button from appearing on public auth pages and resolves potential session conflict hangs.
+
+### 4. Recommendation
+
+**GO / NO-GO Decision:** **NO-GO** for public launch until **Backend File Validation** and **Basic Rate Limiting** are implemented. The system is functional for a closed beta with trusted users, but exposed to abuse in a public setting.
+
+---
+*Signed,*
+*Jules*
+*Staff Software Engineer, EdTech Division*

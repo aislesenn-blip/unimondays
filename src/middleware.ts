@@ -79,7 +79,7 @@ export function middleware(request: NextRequest) {
 
   // 4. Public Routes Logic (General Login/Signup)
   // These are implicitly for Lecturers/Admins based on current design, or generic entry points.
-  if ((pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password') && hasSession) {
+  if ((pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password' || pathname === '/') && hasSession) {
     if (!searchParams.has('error')) {
       const url = request.nextUrl.clone();
       if (session?.role === 'STUDENT') {
@@ -89,6 +89,13 @@ export function middleware(request: NextRequest) {
       }
       return NextResponse.redirect(url);
     }
+  }
+
+  // 5. Normalization (Redirect /student/dashboard to /student)
+  if (pathname === '/student/dashboard') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/student';
+      return NextResponse.redirect(url);
   }
 
   return NextResponse.next();

@@ -96,9 +96,6 @@ model Submission {
   confidenceScore Float?          @map("confidence_score")
   submittedAt    DateTime?        @default(now()) @map("submitted_at")
   deletedAt      DateTime?        @map("deleted_at")
-  groupId        String?          @map("group_id")
-  groupSnapshot  String?          @map("group_snapshot") // Stored as string
-
   workSession  WorkSession @relation(fields: [workSessionId], references: [id])
   user         User?       @relation(fields: [userId], references: [id])
   score        Score?
