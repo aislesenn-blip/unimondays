@@ -4,16 +4,23 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // 1. Check for Session Cookie
+  // 1. Get Session
   const sessionCookie = request.cookies.get('auth-session');
-  const hasSession = !!sessionCookie?.value;
+  let session: any = null;
+
+  if (sessionCookie?.value) {
+    try {
+      session = JSON.parse(sessionCookie.value);
+    } catch (e) {
+      // Invalid cookie
+    }
+  }
+
+  const hasSession = !!session;
 
   // 2. Loop Destruction Logic: Handle "Orphaned User" error
-  // If user is redirected to /login with error=orphaned, clear the invalid session.
-  // This breaks the loop where Middleware redirects to Dashboard but Dashboard redirects back to Login.
   if (pathname === '/login' && searchParams.get('error') === 'orphaned') {
     if (hasSession) {
-      // Clear the invalid session cookie
       const response = NextResponse.next();
       response.cookies.delete('auth-session');
       return response;
@@ -22,22 +29,48 @@ export function middleware(request: NextRequest) {
   }
 
   // 3. Protected Routes Logic
-  // Dashboard routes require authentication
+
+  // A. Lecturer Dashboard (/dashboard)
+  // Strictly prevent Students
   if (pathname.startsWith('/dashboard')) {
     if (!hasSession) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';
       return NextResponse.redirect(url);
     }
+    if (session.role === 'STUDENT') {
+       const url = request.nextUrl.clone();
+       url.pathname = '/student/dashboard';
+       return NextResponse.redirect(url);
+    }
+  }
+
+  // B. Student Dashboard (/student/dashboard)
+  // Strictly prevent Lecturers (optional but cleaner)
+  if (pathname.startsWith('/student/dashboard')) {
+    if (!hasSession) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/student/login';
+      return NextResponse.redirect(url);
+    }
+    if (session.role === 'LECTURER' || session.role === 'ADMIN') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        return NextResponse.redirect(url);
+    }
   }
 
   // 4. Public Routes Logic (Login/Signup/Forgot Password)
-  // If authenticated, redirect to Dashboard (unless explicitly logging out or error present)
-  // We check for 'error' param to ensure we don't redirect if there's a login error being displayed
-  if ((pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password') && hasSession) {
+  // If authenticated, redirect to appropriate Dashboard
+  if ((pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password' || pathname === '/student/login') && hasSession) {
     if (!searchParams.has('error')) {
       const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
+      // Redirect based on role
+      if (session.role === 'STUDENT') {
+          url.pathname = '/student/dashboard';
+      } else {
+          url.pathname = '/dashboard';
+      }
       return NextResponse.redirect(url);
     }
   }
