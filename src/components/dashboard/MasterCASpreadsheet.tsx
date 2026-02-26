@@ -23,7 +23,8 @@ interface ScoreData {
 
 interface StudentRow {
   id: string; // User ID or unique key
-  name: string;
+  name: string; // Primary name (Detected Identity or FullName)
+  secondaryInfo?: string; // Email or RegNo
   regNo: string;
   scores: Record<string, number>; // workSessionId -> score
 }
@@ -156,8 +157,8 @@ export function MasterCASpreadsheet({ workSessions: initialSessions, students, c
                         <TableRow key={student.id} className="hover:bg-muted/50">
                         <TableCell className="sticky left-0 bg-background z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-medium">
                             <div className="flex flex-col">
-                                <span>{student.name}</span>
-                                <span className="text-xs text-muted-foreground">{student.regNo}</span>
+                                <span className="font-bold text-foreground">{student.name}</span>
+                                <span className="text-xs text-muted-foreground">{student.secondaryInfo || student.regNo}</span>
                             </div>
                         </TableCell>
                         {sessions.map(session => (

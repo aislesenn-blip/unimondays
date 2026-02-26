@@ -56,9 +56,13 @@ export function AppealModal({ submissionId, onSuccess }: AppealModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20">
+        <Button
+            variant="default"
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-sm transition-all"
+        >
             <AlertCircle className="mr-2 h-4 w-4" />
-            Appeal Grade
+            Request Appeal
         </Button>
       </DialogTrigger>
       <DialogContent>

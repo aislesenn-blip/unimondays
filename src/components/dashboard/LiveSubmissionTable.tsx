@@ -18,6 +18,7 @@ interface Submission {
   feedback?: string; // JSON string containing error details
   score?: {
     totalMarks: number;
+    detectedIdentity?: string; // OCR Extracted Name
   };
   user?: {
     fullName?: string;
@@ -94,12 +95,20 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
               </TableCell>
             </TableRow>
           ) : (
-            submissions.map((sub) => (
+            submissions.map((sub) => {
+              // Identity Logic: Prioritize AI Detected Name
+              const detectedName = sub.score?.detectedIdentity;
+              const primaryName = detectedName || sub.user?.fullName || sub.studentName || 'Unknown Identity';
+              const secondaryInfo = detectedName
+                 ? (sub.user?.email || sub.studentRegNo)
+                 : (sub.user?.email || sub.studentRegNo || '');
+
+              return (
               <TableRow key={sub.id} className="transition-colors hover:bg-muted/50">
                 <TableCell>
                   <div className="flex flex-col">
-                    <span className="font-medium">{sub.user?.fullName || sub.studentName || 'Unknown'}</span>
-                    <span className="text-xs text-muted-foreground">{sub.studentRegNo || sub.user?.email}</span>
+                    <span className="font-bold text-foreground">{primaryName}</span>
+                    <span className="text-xs text-muted-foreground">{secondaryInfo}</span>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -201,7 +210,7 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                   <SubmissionDrawer submission={{...sub, workSession}} />
                 </TableCell>
               </TableRow>
-            ))
+            )})
           )}
         </TableBody>
       </Table>
