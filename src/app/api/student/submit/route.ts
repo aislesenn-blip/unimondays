@@ -163,10 +163,11 @@ export async function POST(req: NextRequest) {
     // Vercel's `waitUntil` (Edge) or `after` (experimental) is ideal, but for Node runtime:
     // A fetch to a separate endpoint (which has extended timeout) is safer.
 
-    // Construct the absolute URL for the webhook
+    // Construct the absolute URL for the webhook (Vercel Fail-Safe)
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host');
-    const webhookUrl = `${protocol}://${host}/api/webhooks/grade`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+    const webhookUrl = `${baseUrl}/api/webhooks/grade`;
 
     console.log(`[SUBMIT] Triggering Async Grading via Webhook: ${webhookUrl}`);
 

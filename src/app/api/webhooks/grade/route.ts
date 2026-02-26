@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleAiGrade } from '@/workers/grading-worker';
+import { prisma } from '@/lib/prisma';
 
 export const maxDuration = 300; // Allow 5 minutes for AI grading (increased from 60s)
 
 export async function POST(req: NextRequest) {
+  let submissionId: string | null = null;
+
   try {
     const body = await req.json();
-    const { submissionId } = body;
+    submissionId = body.submissionId;
 
     if (!submissionId) {
       return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
@@ -32,6 +35,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (error: any) {
     console.error("[WEBHOOK] Grading Failed:", error);
+
+    // FAIL-SAFE: Update DB status if we have an ID
+    if (submissionId) {
+        try {
+            await prisma.submission.update({
+                where: { id: submissionId },
+                data: {
+                    status: 'FAILED',
+                    feedback: JSON.stringify({ error: `System Failure: ${error.message || 'Unknown Error'}` })
+                }
+            });
+            console.log(`[WEBHOOK] Fail-Safe: Updated Submission ${submissionId} to FAILED.`);
+        } catch (dbError) {
+            console.error("[WEBHOOK] Critical: Failed to update status to FAILED", dbError);
+        }
+    }
+
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
