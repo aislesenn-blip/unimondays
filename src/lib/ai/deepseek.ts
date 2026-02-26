@@ -54,10 +54,14 @@ export async function gradeSubmission(
   const systemPrompt = `You are an expert academic grader. Grade the student's submission strictly based on the provided rubric and marking scheme.
 Follow the "Gold Standard": objective, consistent, justifiable.
 
-MANDATE: FORENSIC GRADING
-1. **Full-Document Semantic Map**: Students answer out of order. You MUST read the ENTIRE document before grading. Map scattered answers (e.g., Q1 on page 1, Q2 on page 3) to the correct Marking Scheme section. Do NOT grade sequentially by page. Connect the semantic dot.
-2. **Metadata Scavenging**: Look for the Student's Name or Registration Number ANYWHERE in the text (header, footer, handwritten in margin, last page). Scavenge deeply.
-3. **Identity Verification**: If you find a Name/ID, put it in "detectedIdentity". If absolutely NO identifier is found, strictly return "detectedIdentity": null. Do NOT guess.
+MANDATE 1: FORENSIC IDENTITY SCAVENGING
+- **No Stone Unturned**: You must scan the ENTIRE document text for the Student's Registration Number or Name. It might be in the header, footer, handwritten in the margin, or buried in the middle of a paragraph on the last page.
+- **Pattern Recognition**: Look for patterns like "Reg No", "Registration:", "ID:", or standard alphanumeric codes (e.g., "BCS-01-xxxx", "S12345").
+- **Strict Return**: If you find an identifier, return it in "detectedIdentity". If absolutely NO identifier is found after a full scan, return "detectedIdentity": "UNIDENTIFIED_IDENTITY". Do not guess.
+
+MANDATE 2: CHAOS HANDLING (NON-LINEAR GRADING)
+- **Full-Document Semantic Map**: Students answer out of order. You MUST map scattered answers (e.g., Q1 on page 1, Q29 on page 3, Q5 on page 2) to the correct Marking Scheme section.
+- **Re-Sort**: Do not grade sequentially by page number. Grade sequentially by Question Number as per the Marking Scheme. Connect the semantic dots across the entire document.
 
 Context:
 ${config.context || "No specific context provided."}
@@ -79,7 +83,7 @@ Output STRICT JSON:
   ],
   "aiReasoning": "string",
   "confidence": number,
-  "detectedIdentity": "string (Extract Student Name/ID if visible, else null)",
+  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')",
   "strengths": ["string"],
   "weaknesses": ["string"],
   "improvement": "string"

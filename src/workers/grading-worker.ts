@@ -225,14 +225,27 @@ Student Identifier: ${studentId}.
       });
 
       // 5. Update Submission Status (Dynamic Confidence Threshold)
-      // UNIDENTIFIED FALLBACK: If AI returns null identity AND we have no user context (bulk upload), FLAG it.
+      // UNIDENTIFIED FALLBACK: If AI returns null identity OR 'UNIDENTIFIED_IDENTITY' literal, handle flagging.
+      // If we also lack local user context (bulk upload), this is CRITICAL FLAGGING.
       let status: string;
       const threshold = submission.workSession.confidenceThreshold ?? 85;
 
-      if (!result.detectedIdentity && !submission.userId && !submission.studentRegNo) {
-          status = 'FLAGGED';
-          result.confidence = 0; // Force low confidence
-          console.warn(`[AI_IDENTITY] Unidentified submission. Flagging for manual review.`);
+      const isIdentityMissing = !result.detectedIdentity || result.detectedIdentity === 'UNIDENTIFIED_IDENTITY';
+      const isContextMissing = !submission.userId && !submission.studentRegNo;
+
+      if (isIdentityMissing) {
+          if (isContextMissing) {
+              // GHOST SUBMISSION: No AI ID, No DB ID.
+              status = 'FLAGGED';
+              result.confidence = 0;
+              result.aiReasoning = `IDENTITY CRISIS: ${result.aiReasoning || "System could not identify student."} Please manually assign ownership.`;
+              console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
+          } else {
+              // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
+              // We proceed but maybe lower confidence? For now, we trust the auth context but log it.
+              console.log(`[AI_IDENTITY] AI missed identity, but using Auth Context: ${submission.user?.fullName}`);
+              status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+          }
       } else {
           status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
       }
