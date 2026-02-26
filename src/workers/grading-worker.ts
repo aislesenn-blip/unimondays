@@ -23,9 +23,11 @@ export async function handleAiGrade(job: Job) {
     include: {
       workSession: {
         include: {
-          lecturer: true
+          lecturer: true,
+          class: true
         }
-      }
+      },
+      user: true
     }
   });
 
@@ -146,11 +148,25 @@ export async function handleAiGrade(job: Job) {
           calibrationSettings = submission.workSession.calibration ? JSON.parse(submission.workSession.calibration) : undefined;
       } catch (e) {}
 
+      // Build Context String
+      const lecturerName = submission.workSession.lecturer.fullName || "Lecturer";
+      const className = submission.workSession.class ? `${submission.workSession.class.code} - ${submission.workSession.class.name}` : "Unknown Class";
+      const studentId = submission.studentRegNo || submission.user?.fullName || "Student";
+      const sessionTitle = submission.workSession.title;
+
+      const contextString = `
+You are grading on behalf of ${lecturerName}.
+Course: ${className}.
+Assessment: ${sessionTitle}.
+Student Identifier: ${studentId}.
+`;
+
       const config: GradeConfig = {
         strictness: strictnessVal,
         markingScheme: markingSchemeText,
         lecturerNotes: submission.workSession.instructions || undefined,
-        calibration: calibrationSettings
+        calibration: calibrationSettings,
+        context: contextString
       };
 
       // 3. Grade (Zero-Trust Tracing)
@@ -158,6 +174,7 @@ export async function handleAiGrade(job: Job) {
 
       console.log(`[AI_GRADE] Invoking DeepSeek for Job ${job.id}`);
       console.log(`- Config: Strictness=${config.strictness}`);
+      console.log(`- Context: ${contextString.trim()}`);
       console.log(`- Payload: Submission=${ocrText.length} chars, Rubric=${rubricContent.length} chars`);
 
       let result: GradingResult;
