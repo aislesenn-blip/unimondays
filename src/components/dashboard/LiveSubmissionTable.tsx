@@ -129,14 +129,41 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
-                  ) : (sub.status === 'FAILED' || sub.status === 'FLAGGED') ? (
+                  ) : (sub.status === 'FLAGGED') ? (
+                     <div className="flex items-center gap-2">
+                         <TooltipProvider>
+                           <Tooltip>
+                             <TooltipTrigger>
+                               <Badge variant="outline" className="flex items-center gap-1.5 w-fit cursor-help bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Flagged
+                               </Badge>
+                             </TooltipTrigger>
+                             <TooltipContent className="max-w-xs border-amber-200 bg-amber-50 text-amber-900">
+                               <p className="font-semibold mb-1">Manual Review Advised</p>
+                               <p className="text-xs">AI Confidence Low. Please review manually.</p>
+                             </TooltipContent>
+                           </Tooltip>
+                         </TooltipProvider>
+
+                         <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-full hover:bg-muted"
+                            onClick={() => handleRetry(sub.id)}
+                            disabled={retrying === sub.id}
+                         >
+                            <RotateCw className={`h-3 w-3 ${retrying === sub.id ? 'animate-spin' : ''}`} />
+                         </Button>
+                     </div>
+                  ) : (sub.status === 'FAILED') ? (
                      <div className="flex items-center gap-2">
                          <TooltipProvider>
                            <Tooltip>
                              <TooltipTrigger>
                                <Badge variant="destructive" className="flex items-center gap-1.5 w-fit cursor-help">
                                   <XCircle className="h-3 w-3" />
-                                  {sub.status === 'FAILED' ? 'Failed' : 'Flagged'}
+                                  Failed
                                </Badge>
                              </TooltipTrigger>
                              <TooltipContent className="max-w-xs bg-destructive text-destructive-foreground border-destructive">

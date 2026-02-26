@@ -12,14 +12,23 @@ import {
   SheetFooter
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, FileText, Download } from "lucide-react";
+import { Eye, FileText, Download, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 interface SubmissionDrawerProps {
   submission: any; // Ideally typed, but 'any' for speed/parsing
 }
 
 export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
+  // State for Editing
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedScore, setEditedScore] = useState(submission.score?.totalMarks || 0);
+  const [editedRemarks, setEditedRemarks] = useState(submission.score?.remarks || "");
+  const [isSaving, setIsSaving] = useState(false);
+
   // Parsing JSON fields if they are strings
   let feedback: any = {};
   let breakdown: any[] = [];
@@ -39,6 +48,30 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
       console.warn("Failed to parse breakdown JSON", e);
   }
 
+  const handleSave = async () => {
+      setIsSaving(true);
+      try {
+          const res = await fetch(`/api/work-sessions/${submission.workSessionId}/submissions/${submission.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  totalScore: editedScore,
+                  remarks: editedRemarks
+              })
+          });
+
+          if (!res.ok) throw new Error("Update failed");
+
+          toast.success("Grade Updated Successfully");
+          setIsEditing(false);
+          window.location.reload();
+      } catch (e) {
+          toast.error("Failed to update grade");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -56,18 +89,58 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
         </SheetHeader>
 
         <div className="space-y-6 py-6">
-            {/* Score Card */}
-            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                <div>
-                    <div className="text-sm text-muted-foreground">Total Score</div>
-                    <div className="text-2xl font-bold">
-                        {submission.score?.totalMarks || 0}
-                        <span className="text-sm text-muted-foreground font-normal"> / {submission.workSession?.totalMarks}</span>
+            {/* Score Card & Override Engine */}
+            <div className="flex flex-col gap-4 p-4 bg-muted rounded-lg">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <div className="text-sm text-muted-foreground">Total Score</div>
+                         {isEditing ? (
+                             <div className="flex items-center gap-2 mt-1">
+                                 <Input
+                                     type="number"
+                                     value={editedScore}
+                                     onChange={(e) => setEditedScore(e.target.value)}
+                                     className="w-24 h-9 bg-background"
+                                 />
+                                 <span className="text-sm text-muted-foreground">/ {submission.workSession?.totalMarks}</span>
+                             </div>
+                         ) : (
+                            <div className="text-2xl font-bold">
+                                {submission.score?.totalMarks || 0}
+                                <span className="text-sm text-muted-foreground font-normal"> / {submission.workSession?.totalMarks}</span>
+                            </div>
+                         )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                         {!isEditing && (
+                             <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                                 Override
+                             </Button>
+                         )}
+                         <Badge variant={submission.status === 'GRADED' ? 'default' : 'secondary'}>
+                            {submission.status}
+                        </Badge>
                     </div>
                 </div>
-                <Badge variant={submission.status === 'GRADED' ? 'default' : 'secondary'}>
-                    {submission.status}
-                </Badge>
+
+                {isEditing && (
+                    <div className="space-y-2 border-t pt-4 animate-in fade-in zoom-in-95 duration-200">
+                        <label className="text-sm font-medium">Lecturer Remarks</label>
+                        <Textarea
+                            value={editedRemarks}
+                            onChange={(e) => setEditedRemarks(e.target.value)}
+                            placeholder="Enter remarks explaining the override..."
+                            className="bg-background min-h-[80px]"
+                        />
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)} disabled={isSaving}>Cancel</Button>
+                            <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Changes
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Script Link */}
@@ -124,8 +197,8 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                 </div>
             )}
 
-            {/* Remarks */}
-            {submission.score?.remarks && (
+            {/* Remarks - Only show if NOT editing (since we show textarea when editing) */}
+            {!isEditing && submission.score?.remarks && (
                 <div>
                     <h3 className="text-sm font-medium mb-2">Overall Remarks</h3>
                     <p className="text-sm text-muted-foreground italic">

@@ -61,10 +61,14 @@ export function SubmissionList() {
               <TableCell>
                 <Badge variant={
                     sub.status === 'GRADED' ? 'default' :
-                    sub.status === 'FLAGGED' ? 'destructive' :
-                    sub.status === 'APPEALED' ? 'outline' : // Fallback
+                    sub.status === 'FLAGGED' ? 'outline' :
+                    sub.status === 'FAILED' ? 'destructive' :
+                    sub.status === 'APPEALED' ? 'outline' :
                     sub.status === 'WAITING_RELEASE' ? 'secondary' : 'outline'
-                } className={sub.status === 'APPEALED' ? 'border-yellow-500 text-yellow-600' : ''}>
+                } className={
+                    sub.status === 'FLAGGED' ? 'border-amber-200 bg-amber-50 text-amber-800' :
+                    sub.status === 'APPEALED' ? 'border-yellow-500 text-yellow-600' : ''
+                }>
                   {sub.status === 'WAITING_RELEASE' ? 'Processing' : sub.status}
                 </Badge>
               </TableCell>
