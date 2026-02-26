@@ -32,9 +32,11 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       if (isStudent) {
-        // Auto-create Student Profile
-        user = await prisma.user.create({
-          data: {
+        // Auto-create Student Profile (Robust Upsert)
+        user = await prisma.user.upsert({
+          where: { id: userId },
+          update: {}, // If exists, do nothing (use it)
+          create: {
             id: userId,
             email: authData.user.email!,
             role: 'STUDENT',
