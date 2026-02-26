@@ -33,7 +33,6 @@ export async function POST(req: NextRequest) {
     if (!user) {
       if (isStudent) {
         // Auto-create Student Profile
-        // Note: University ID is unknown here. It will be null until they join a class/university via code.
         user = await prisma.user.create({
           data: {
             id: userId,
@@ -62,8 +61,7 @@ export async function POST(req: NextRequest) {
     const sessionData = {
         userId: user.id,
         email: user.email,
-        role: user.role,
-        universityId: user.universityId
+        role: user.role
     };
 
     const cookieStore = await cookies();

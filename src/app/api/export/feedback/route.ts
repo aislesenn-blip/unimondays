@@ -39,15 +39,13 @@ export async function POST(request: NextRequest) {
     const job = await enqueueJob(
       'EXPORT_ZIP',
       { workSessionId },
-      5,
-      user.universityId || undefined
+      5
     );
 
     // Audit Log
     await prisma.auditLog.create({
       data: {
         userId: user.id,
-        universityId: user.universityId,
         action: 'EXPORT',
         details: `Export initiated for Session ${workSessionId}, Job ${job.id}`,
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',

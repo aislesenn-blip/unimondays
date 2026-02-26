@@ -8,15 +8,14 @@ export interface JobPayload {
   [key: string]: any;
 }
 
-export async function enqueueJob(type: string, payload: JobPayload, priority: number = 0, universityId?: string): Promise<Job> {
+export async function enqueueJob(type: string, payload: JobPayload, priority: number = 0): Promise<Job> {
   // priority is ignored
   const payloadStr = JSON.stringify(payload);
   return await prisma.job.create({
     data: {
       type,
       payload: payloadStr,
-      status: 'PENDING',
-      universityId
+      status: 'PENDING'
     },
   });
 }
@@ -41,7 +40,9 @@ export async function claimJob(types: string[] = []): Promise<Job | null> {
   if (!candidate) return null;
 
   // 2. Try to claim it
-  const { count } = await prisma.job.updateMany({
+  // Use explicit transaction or optimistic locking if high concurrency,
+  // but for now simple update is fine as 'claimJob' is usually single-threaded per worker or uses DB lock
+  const updated = await prisma.job.updateMany({
     where: {
       id: candidate.id,
       status: 'PENDING',
@@ -53,7 +54,7 @@ export async function claimJob(types: string[] = []): Promise<Job | null> {
     },
   });
 
-  if (count === 0) {
+  if (updated.count === 0) {
     return null;
   }
 
