@@ -250,7 +250,7 @@ Student Identifier: ${studentId}.
           status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
       }
 
-      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status}`);
+      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
         strengths: result.strengths || [],
