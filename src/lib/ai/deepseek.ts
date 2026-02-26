@@ -48,24 +48,31 @@ export async function gradeSubmission(
     throw new Error("DEEPSEEK_API_KEY is not set. Grading service unavailable.");
   }
 
-  // Optimize prompt: Remove excessive whitespace, focus on JSON strictness
-  const systemPrompt = `You are an expert academic grader. Grade the student's submission strictly based on the provided rubric and marking scheme.
-Follow the "Gold Standard": objective, consistent, justifiable.
+  // System Prompt Optimization: Concise, Chain-of-Thought reduced for V3 speed.
+  const systemPrompt = `
+You are an expert academic grader. Your task is to grade a student's submission based STRICTLY on the provided rubric and marking scheme.
+Follow the "Gold Standard" of academic grading: objective, consistent, and justifiable.
 
-Config:
-- Strictness: ${config.strictness} (1.0=Neutral).
+Calibration:
+- Strictness: ${config.strictness} (1.0=Neutral, <1.0=Lenient, >1.0=Strict)
 - Methodology: ${config.calibration?.methodology || "Standard"}
 - Grammar: ${config.calibration?.grammar || "Ignore unless critical"}
-- Verbosity: ${config.calibration?.verbosity || "Concise"}
-- Incomplete: ${config.calibration?.incomplete || "Grade present work"}
+- Verbosity: ${config.calibration?.verbosity || "Focus on facts"}
+- Incomplete: ${config.calibration?.incomplete || "Grade present"}
 - Custom: ${config.calibration?.custom || "None"}
 - Notes: ${config.lecturerNotes || "None"}
 
-Output STRICT JSON:
+Output ONLY a valid JSON object:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string" }
+    {
+      "question": "Q1",
+      "score": number,
+      "max": number,
+      "feedback": "string",
+      "rubricReference": "string"
+    }
   ],
   "aiReasoning": "string",
   "confidence": number,
@@ -73,25 +80,35 @@ Output STRICT JSON:
   "weaknesses": ["string"],
   "improvement": "string"
 }
-Total score max: ${totalMarks}.`;
+
+Total Score Max: ${totalMarks}.
+`;
 
   try {
+    // Truncate OCR text if massively huge (safety)
+    const MAX_OCR_LENGTH = 30000; // ~7-10k tokens, well within 64k limit but keeps it snappy
+    const safeOcrText = ocrText.length > MAX_OCR_LENGTH
+        ? ocrText.substring(0, MAX_OCR_LENGTH) + "\n...[Text Truncated for Speed]..."
+        : ocrText;
+
     const completion = await deepseek.chat.completions.create({
-      model: "deepseek-chat",
+      model: "deepseek-chat", // V3 is preferred for speed/cost balance
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Marking Scheme:
-${config.markingScheme || "None"}
+        { role: "user", content: `
+MARKING SCHEME:
+${config.markingScheme ? config.markingScheme.substring(0, 5000) : "None"}
 
-Rubric:
-${rubric}
+RUBRIC:
+${rubric.substring(0, 5000)}
 
-Student Submission:
-${ocrText}` }
+STUDENT SUBMISSION:
+${safeOcrText}
+        ` }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.1,
-      max_tokens: 4000, // Prevent infinite loops
+      temperature: 0.1, // Low temp for deterministic grading
+      max_tokens: 2000, // Limit output size to prevent loops
     });
 
     const content = completion.choices[0].message.content;
@@ -101,9 +118,8 @@ ${ocrText}` }
     return result as GradingResult;
   } catch (error: any) {
     console.error("DeepSeek Grading Error:", error);
-    // Add more context to error
-    if (error.status === 429) {
-        throw new Error("DeepSeek Rate Limit Exceeded. Please try again later.");
+    if (error.code === 'context_length_exceeded') {
+        throw new Error("Submission too long for AI processing.");
     }
     throw new Error(`Failed to grade submission: ${error.message}`);
   }
