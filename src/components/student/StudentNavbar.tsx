@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
+import { NotificationsPopover } from "@/components/dashboard/NotificationsPopover";
 
 export function StudentNavbar() {
   const router = useRouter();
@@ -26,8 +27,9 @@ export function StudentNavbar() {
           <span className="text-[10px] font-normal text-muted-foreground tracking-widest uppercase">By Uni Monday</span>
         </Link>
         <div className="flex items-center gap-4">
+            <NotificationsPopover />
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground hover:text-foreground">
-                <LogOut className="mr-2 h-4 w-4" /> Log Out
+                <LogOut className="mr-2 h-4 w-4" /> <span className="hidden sm:inline">Log Out</span>
             </Button>
         </div>
       </div>

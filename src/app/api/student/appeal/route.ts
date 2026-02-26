@@ -17,7 +17,13 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
+    let session;
+    try {
+        session = JSON.parse(sessionCookie.value);
+    } catch (e) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid session' }, { status: 401 });
+    }
+
     const userId = session.userId;
 
     // Verify ownership
@@ -35,8 +41,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Appeals are disabled for this session.' }, { status: 403 });
     }
 
-    if (submission.status !== 'GRADED') {
-         return NextResponse.json({ error: 'Cannot appeal submission. It must be graded first.' }, { status: 400 });
+    // Check if status allows appeal (GRADED or FLAGGED)
+    // The previous code only checked for 'GRADED'. Students might want to appeal FLAGGED items too if released?
+    // Assuming only released grades can be appealed.
+    if (!submission.workSession.areGradesReleased) {
+         return NextResponse.json({ error: 'Grades are not yet released.' }, { status: 400 });
+    }
+
+    if (submission.status === 'APPEALED') {
+         return NextResponse.json({ error: 'Appeal already pending.' }, { status: 400 });
     }
 
     // Create Appeal

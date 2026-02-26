@@ -12,11 +12,12 @@ import {
   SheetFooter
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, FileText, Download, Loader2 } from "lucide-react";
+import { Eye, FileText, Download, Loader2, AlertTriangle, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface SubmissionDrawerProps {
   submission: any; // Ideally typed, but 'any' for speed/parsing
@@ -32,6 +33,7 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
   // Parsing JSON fields if they are strings
   let feedback: any = {};
   let breakdown: any[] = [];
+  let appealReason: string | null = null;
 
   try {
       feedback = typeof submission.feedback === 'string' ? JSON.parse(submission.feedback) : (submission.feedback || {});
@@ -46,6 +48,13 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
       if (!Array.isArray(breakdown)) breakdown = []; // Ensure array
   } catch (e) {
       console.warn("Failed to parse breakdown JSON", e);
+  }
+
+  if (submission.status === 'APPEALED' || (submission.appeals && submission.appeals.length > 0)) {
+      // Find pending appeal
+      const pending = submission.appeals?.find((a: any) => a.status === 'PENDING');
+      if (pending) appealReason = pending.reason;
+      else if (submission.appeals && submission.appeals.length > 0) appealReason = submission.appeals[0].reason; // Fallback
   }
 
   const handleSave = async () => {
@@ -89,6 +98,21 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
         </SheetHeader>
 
         <div className="space-y-6 py-6">
+            {/* ALERT: APPEAL PENDING */}
+            {submission.status === 'APPEALED' && appealReason && (
+                <Alert variant="destructive" className="bg-orange-50 border-orange-200 text-orange-900">
+                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                    <AlertTitle className="text-orange-800 font-bold">Grade Appeal Pending</AlertTitle>
+                    <AlertDescription className="mt-2 text-sm leading-relaxed">
+                        <span className="font-semibold block mb-1">Student's Reason:</span>
+                        "{appealReason}"
+                        <div className="mt-3 text-xs text-orange-700/80">
+                            Override the grade below to resolve this appeal automatically.
+                        </div>
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {/* Score Card & Override Engine */}
             <div className="flex flex-col gap-4 p-4 bg-muted rounded-lg">
                 <div className="flex items-center justify-between">
@@ -114,11 +138,11 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                     <div className="flex items-center gap-2">
                          {!isEditing && (
                              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                                 Override
+                                 Override / Resolve
                              </Button>
                          )}
-                         <Badge variant={submission.status === 'GRADED' ? 'default' : 'secondary'}>
-                            {submission.status}
+                         <Badge variant={submission.status === 'GRADED' ? 'default' : submission.status === 'APPEALED' ? 'destructive' : 'secondary'}>
+                            {submission.status === 'APPEALED' ? 'Appeal Pending' : submission.status}
                         </Badge>
                     </div>
                 </div>
