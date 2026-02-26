@@ -65,4 +65,32 @@ export class SupabaseStorageService implements StorageService {
     const bucket = 'exam_pdfs'; // Default
     await supabase.storage.from(bucket).remove([cleanPath]);
   }
+
+  // V4.5 Cloud-Pull Architecture
+  async fetchAndSaveFromUrl(url: string, folder: string = 'submissions'): Promise<string> {
+      try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Failed to fetch file from URL: ${response.statusText}`);
+
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+
+          // Attempt to derive filename from URL or headers
+          let filename = 'cloud_import.pdf';
+          const disposition = response.headers.get('content-disposition');
+          if (disposition && disposition.includes('filename=')) {
+              filename = disposition.split('filename=')[1].replace(/"/g, '');
+          } else {
+              const urlPath = new URL(url).pathname;
+              filename = path.basename(urlPath) || 'cloud_import.pdf';
+          }
+
+          const mimeType = response.headers.get('content-type') || 'application/pdf';
+
+          return this.saveBuffer(buffer, filename, folder, mimeType);
+      } catch (e: any) {
+          console.error("[Storage] Cloud Pull Error:", e);
+          throw new Error(`Cloud Pull Failed: ${e.message}`);
+      }
+  }
 }

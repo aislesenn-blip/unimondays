@@ -225,9 +225,17 @@ Student Identifier: ${studentId}.
       });
 
       // 5. Update Submission Status (Dynamic Confidence Threshold)
-      // Check result.confidence against workSession.confidenceThreshold
+      // UNIDENTIFIED FALLBACK: If AI returns null identity AND we have no user context (bulk upload), FLAG it.
+      let status: string;
       const threshold = submission.workSession.confidenceThreshold ?? 85;
-      const status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+
+      if (!result.detectedIdentity && !submission.userId && !submission.studentRegNo) {
+          status = 'FLAGGED';
+          result.confidence = 0; // Force low confidence
+          console.warn(`[AI_IDENTITY] Unidentified submission. Flagging for manual review.`);
+      } else {
+          status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+      }
 
       console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status}`);
 
@@ -250,9 +258,9 @@ Student Identifier: ${studentId}.
       await prisma.auditLog.create({
         data: {
           userId: submission.userId,
-          action: 'GRADED',
-          details: `Submission for ${submission.workSession.title} graded. Score: ${result.totalScore}`,
-          severity: 'INFO'
+          action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
+          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.totalScore}`,
+          severity: status === 'GRADED' ? 'INFO' : 'WARNING'
         }
       });
 

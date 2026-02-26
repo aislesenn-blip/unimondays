@@ -8,6 +8,7 @@ export interface StorageService {
   saveBuffer(buffer: Buffer, originalName: string, folder: string, mimeType?: string): Promise<string>;
   readFile(filePath: string, bucket?: string): Promise<Buffer>;
   deleteFile(filePath: string): Promise<void>;
+  fetchAndSaveFromUrl(url: string, folder: string): Promise<string>; // V4.5 Capability
 }
 
 // Instantiate Supabase Storage Service directly.
@@ -19,3 +20,4 @@ export const uploadFile = (file: File, folder: string = 'submissions') => storag
 export const saveBuffer = (buffer: Buffer, name: string, folder: string = 'submissions', mimeType?: string) => storage.saveBuffer(buffer, name, folder, mimeType);
 export const readFile = (path: string, bucket?: string) => storage.readFile(path, bucket);
 export const deleteFile = (path: string) => storage.deleteFile(path);
+export const fetchAndSaveFromUrl = (url: string, folder: string = 'submissions') => storage.fetchAndSaveFromUrl(url, folder);
