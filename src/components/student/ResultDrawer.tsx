@@ -79,7 +79,7 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                     </h3>
                     <div className="flex gap-2">
                         <a
-                            href={submission.filePath}
+                            href={`/api/download?url=${encodeURIComponent(submission.filePath)}&inline=true`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex-1 flex items-center justify-center p-3 border rounded-lg hover:bg-accent transition-colors group"

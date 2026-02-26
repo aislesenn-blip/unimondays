@@ -202,7 +202,7 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                     <h3 className="text-sm font-medium mb-2">Original Script</h3>
                     <div className="flex gap-2">
                         <a
-                            href={submission.filePath}
+                            href={`/api/download?url=${encodeURIComponent(submission.filePath)}&inline=true`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex-1 flex items-center justify-center p-3 border rounded-md hover:bg-accent transition-colors"
