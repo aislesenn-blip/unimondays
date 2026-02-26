@@ -77,7 +77,13 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                     <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4" /> Original Submission
                     </h3>
-                    <a href={submission.filePath} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 border rounded-lg hover:bg-accent transition-colors group">
+                    <a
+                        href={submission.filePath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="flex items-center p-3 border rounded-lg hover:bg-accent transition-colors group"
+                    >
                         <span className="text-sm truncate flex-1 text-blue-600 group-hover:underline">Download Script</span>
                         <Download className="h-4 w-4 text-muted-foreground" />
                     </a>

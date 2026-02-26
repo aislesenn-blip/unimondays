@@ -12,12 +12,13 @@ import {
   SheetFooter
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, FileText, Download, Loader2, AlertTriangle, AlertCircle } from "lucide-react";
+import { Eye, FileText, Download, Loader2, AlertTriangle, AlertCircle, ShieldCheck, ShieldAlert, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 
 interface SubmissionDrawerProps {
   submission: any; // Ideally typed, but 'any' for speed/parsing
@@ -80,6 +81,13 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
           setIsSaving(false);
       }
   };
+
+  // Confidence Logic
+  const confidence = submission.confidenceScore || 0;
+  const isHighTrust = confidence >= 80;
+  const isMediumTrust = confidence >= 50 && confidence < 80;
+  const confidenceColor = isHighTrust ? "bg-green-500" : isMediumTrust ? "bg-yellow-500" : "bg-red-500";
+  const confidenceLabel = isHighTrust ? "High Trust" : isMediumTrust ? "Medium Trust" : "Low Trust";
 
   return (
     <Sheet>
@@ -147,6 +155,22 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                     </div>
                 </div>
 
+                {/* AI Confidence Card */}
+                {submission.status !== 'PENDING' && (
+                    <div className="bg-background rounded border p-3">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                                {isHighTrust ? <ShieldCheck className="h-3 w-3 text-green-500" /> : <ShieldAlert className="h-3 w-3 text-yellow-500" />}
+                                AI Confidence: <span className="text-foreground">{Math.round(confidence)}%</span>
+                            </span>
+                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${isHighTrust ? "bg-green-100 text-green-700" : isMediumTrust ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>
+                                {confidenceLabel}
+                            </span>
+                        </div>
+                        <Progress value={confidence} className="h-1.5" indicatorColor={confidenceColor} />
+                    </div>
+                )}
+
                 {isEditing && (
                     <div className="space-y-2 border-t pt-4 animate-in fade-in zoom-in-95 duration-200">
                         <label className="text-sm font-medium">Lecturer Remarks</label>
@@ -171,7 +195,13 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
             {submission.filePath && (
                 <div>
                     <h3 className="text-sm font-medium mb-2">Original Script</h3>
-                    <a href={submission.filePath} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 border rounded-md hover:bg-accent transition-colors">
+                    <a
+                        href={submission.filePath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="flex items-center p-3 border rounded-md hover:bg-accent transition-colors"
+                    >
                         <FileText className="h-5 w-5 mr-3 text-blue-500" />
                         <span className="text-sm truncate flex-1">{submission.filePath.split('/').pop()}</span>
                         <Download className="h-4 w-4 text-muted-foreground" />

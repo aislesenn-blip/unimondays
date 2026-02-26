@@ -30,7 +30,8 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
       submissions: {
         include: {
           user: true,
-          score: true
+          score: true,
+          appeals: true // Include appeals for the client component
         },
         orderBy: { submittedAt: 'desc' }
       }
@@ -41,6 +42,12 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
   if (session.lecturerId !== user.id && user.role !== 'ADMIN') {
       redirect("/dashboard");
   }
+
+  // Determine if marking scheme is a downloadable file
+  const markingSchemeUrl = session.markingScheme &&
+    (session.markingScheme.startsWith('http') || session.markingScheme.endsWith('.pdf') || session.markingScheme.includes('/'))
+    ? session.markingScheme
+    : null;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -62,8 +69,16 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
             </div>
         </div>
         <div className="flex gap-2">
+             {markingSchemeUrl && (
+                 <a href={markingSchemeUrl} target="_blank" rel="noopener noreferrer" download>
+                     <Button variant="outline">
+                         <Download className="mr-2 h-4 w-4" />
+                         Marking Scheme
+                     </Button>
+                 </a>
+             )}
              {session.rubricUrl && (
-                <a href={session.rubricUrl} target="_blank" rel="noopener noreferrer">
+                <a href={session.rubricUrl} target="_blank" rel="noopener noreferrer" download>
                     <Button variant="outline">
                         <FileText className="mr-2 h-4 w-4" />
                         View Rubric
