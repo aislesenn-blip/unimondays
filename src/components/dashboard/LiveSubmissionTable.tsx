@@ -4,7 +4,10 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SubmissionDrawer } from "@/components/dashboard/SubmissionDrawer";
-import { Loader2, CheckCircle2, AlertTriangle, FileText } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, FileText, RotateCw, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 interface Submission {
   id: string;
@@ -12,6 +15,7 @@ interface Submission {
   studentRegNo?: string;
   status: string;
   submittedAt: string;
+  feedback?: string; // JSON string containing error details
   score?: {
     totalMarks: number;
   };
@@ -19,38 +23,57 @@ interface Submission {
     fullName?: string;
     email?: string;
   };
-  workSessionId?: string; // We might need this if we don't pass full context
+  workSessionId?: string;
 }
 
 export function LiveSubmissionTable({ initialSubmissions, workSession }: { initialSubmissions: any[], workSession: any }) {
   const [submissions, setSubmissions] = useState<any[]>(initialSubmissions);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   useEffect(() => {
-    // Only poll if there are pending submissions
-    // Check if ANY submission is PENDING or PROCESSING
-    const hasPending = submissions.some(s => s.status === 'PENDING' || s.status === 'PROCESSING');
-
-    // If no pending, no need to poll (unless we want to catch NEW submissions? Yes, "Zero Friction")
-    // The requirement is "When the Lecturer opens their dashboard... see which papers are Grading..."
-    // But also new submissions appearing magically is good.
-    // Let's poll always for now, or back off if idle.
-    // 3 seconds is aggressive but "Magic".
-
+    // Poll every 4 seconds to update status (Pending -> Graded/Failed)
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/work-sessions/${workSession.id}/submissions`);
         if (res.ok) {
           const data = await res.json();
-          // Check if data changed to avoid re-renders? React handles this mostly.
           setSubmissions(data);
         }
       } catch (e) {
         console.error("Polling failed", e);
       }
-    }, 4000); // 4 seconds poll
+    }, 4000);
 
     return () => clearInterval(interval);
-  }, [workSession.id]); // Removed 'submissions' dependency to avoid reset loop, let interval run
+  }, [workSession.id]);
+
+  const handleRetry = async (subId: string) => {
+      setRetrying(subId);
+      try {
+          const res = await fetch(`/api/work-sessions/${workSession.id}/submissions/${subId}/retry`, {
+              method: 'POST'
+          });
+          if (!res.ok) throw new Error("Retry failed");
+
+          toast.success("Grading Retried. System is reprocessing.");
+
+          // Optimistic update
+          setSubmissions(prev => prev.map(s => s.id === subId ? { ...s, status: 'PENDING' } : s));
+      } catch (e) {
+          toast.error("Failed to retry grading. Please try again.");
+      } finally {
+          setRetrying(null);
+      }
+  };
+
+  const getErrorTooltip = (jsonFeedback: string) => {
+      try {
+          const data = JSON.parse(jsonFeedback);
+          return data.error || "Unknown Error";
+      } catch {
+          return "System Error";
+      }
+  };
 
   return (
       <Table>
@@ -80,7 +103,7 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                   </div>
                 </TableCell>
                 <TableCell>
-                  {/* MAGIC UI: Status Badges */}
+                  {/* Status Logic with Resilience UI */}
                   {(sub.status === 'PENDING' || sub.status === 'PROCESSING') ? (
                     <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200 flex items-center gap-1.5 w-fit animate-pulse transition-all">
                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -89,13 +112,35 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                   ) : (sub.status === 'GRADED' || sub.status === 'RELEASED') ? (
                     <Badge variant="default" className="bg-green-50 text-green-700 hover:bg-green-50 border-green-200 flex items-center gap-1.5 w-fit shadow-sm">
                         <CheckCircle2 className="h-3 w-3" />
-                        Graded / Completed
+                        Graded
                     </Badge>
-                  ) : sub.status === 'FLAGGED' ? (
-                     <Badge variant="destructive" className="flex items-center gap-1.5 w-fit">
-                        <AlertTriangle className="h-3 w-3" />
-                        Flagged
-                     </Badge>
+                  ) : (sub.status === 'FAILED' || sub.status === 'FLAGGED') ? (
+                     <div className="flex items-center gap-2">
+                         <TooltipProvider>
+                           <Tooltip>
+                             <TooltipTrigger>
+                               <Badge variant="destructive" className="flex items-center gap-1.5 w-fit cursor-help">
+                                  <XCircle className="h-3 w-3" />
+                                  {sub.status === 'FAILED' ? 'Failed' : 'Flagged'}
+                               </Badge>
+                             </TooltipTrigger>
+                             <TooltipContent className="max-w-xs bg-destructive text-destructive-foreground border-destructive">
+                               <p className="font-semibold">System Error:</p>
+                               <p className="text-xs">{getErrorTooltip(sub.feedback || "{}")}</p>
+                             </TooltipContent>
+                           </Tooltip>
+                         </TooltipProvider>
+
+                         <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-full hover:bg-muted"
+                            onClick={() => handleRetry(sub.id)}
+                            disabled={retrying === sub.id}
+                         >
+                            <RotateCw className={`h-3 w-3 ${retrying === sub.id ? 'animate-spin' : ''}`} />
+                         </Button>
+                     </div>
                   ) : (
                     <Badge variant="outline">{sub.status}</Badge>
                   )}
