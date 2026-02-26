@@ -23,6 +23,7 @@ model User {
   tier         String?   @default("Lite")
   quota        Int?      @default(100)
   used         Int?      @default(0)
+  calibrationSettings String? @map("calibration_settings") // JSON string for default user calibration
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
@@ -66,7 +67,9 @@ model WorkSession {
   rubric       String?
   rubricUrl    String?   @map("rubric_url")
   markingScheme String?  @map("marking_scheme")
+  goldStandardUrl String? @map("gold_standard_url")
   instructions String?
+  calibration  String?   // JSON string for 5-point calibration
   strictness   String?   // 'LENIENT', 'MODERATE', 'STRICT'
   totalMarks   Int?      @map("total_marks")
   releaseMode  String?   @default("MANUAL") @map("release_mode")

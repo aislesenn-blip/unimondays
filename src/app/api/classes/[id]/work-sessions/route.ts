@@ -20,7 +20,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const body = await req.json();
-    const { title, deadline, rubric, rubricUrl, markingScheme, strictness, releaseMode, totalMarks } = body;
+    const {
+        title,
+        deadline,
+        rubric,
+        rubricUrl,
+        markingScheme,
+        goldStandardUrl,
+        instructions,
+        calibration,
+        strictness,
+        releaseMode,
+        totalMarks,
+        saveAsDefault
+    } = body;
 
     if (!title) {
         return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -63,12 +76,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         rubric: rubric || '',
         rubricUrl: rubricUrl || null,
         markingScheme: markingScheme || '',
+        goldStandardUrl: goldStandardUrl || null,
+        instructions: instructions || '',
+        calibration: calibration || null, // Stored as JSON string
         strictness: strictness || 'MODERATE',
         totalMarks: totalMarks ? parseInt(totalMarks) : 100,
         releaseMode: releaseMode || 'MANUAL',
         status: 'PUBLISHED'
       }
     });
+
+    // Save as default settings if requested
+    if (saveAsDefault && calibration) {
+        try {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { calibrationSettings: calibration }
+            });
+        } catch (e) {
+            console.warn("Failed to save user calibration settings", e);
+        }
+    }
 
     return NextResponse.json(session, { status: 201 });
   } catch (error) {

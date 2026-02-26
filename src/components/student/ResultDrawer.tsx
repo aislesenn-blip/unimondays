@@ -9,8 +9,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Eye, FileText, Download } from "lucide-react";
+import { Eye, FileText, Download, CheckCircle, AlertTriangle, ArrowUpCircle } from "lucide-react";
 import { AppealModal } from "./AppealModal";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function StudentResultDrawer({ submission }: { submission: any }) {
   // Parse logic
@@ -24,8 +25,8 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
       if (!Array.isArray(breakdown)) breakdown = [];
   } catch (e) { console.warn(e); }
 
-  const isReleased = submission.isReleased;
-  const canAppeal = submission.status === 'GRADED';
+  const isReleased = submission.isReleased; // Assuming API returns this flag or based on status
+  const canAppeal = submission.status === 'GRADED' || submission.status === 'RELEASED'; // Allow appeal if graded/released
 
   return (
     <Sheet>
@@ -35,23 +36,23 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
             View Result
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{submission.workSessionTitle}</SheetTitle>
-          <SheetDescription>
-            Submitted on {new Date(submission.submittedAt).toLocaleString()}
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent className="w-[400px] sm:w-[600px] overflow-y-auto p-0">
+        <div className="p-6 pb-20 space-y-8">
+            <SheetHeader>
+            <SheetTitle>{submission.workSessionTitle || "Assessment Result"}</SheetTitle>
+            <SheetDescription>
+                Submitted on {new Date(submission.submittedAt).toLocaleString()}
+            </SheetDescription>
+            </SheetHeader>
 
-        <div className="space-y-6 py-6">
-            {/* Score Card - Only if Released */}
+            {/* Final Score Section */}
             {isReleased && submission.score !== null ? (
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                <div className="flex items-center justify-between p-6 bg-muted/30 rounded-xl border shadow-sm">
                     <div>
-                        <div className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Final Grade</div>
-                        <div className="text-3xl font-bold mt-1 text-primary">
+                        <div className="text-xs uppercase tracking-wider font-bold text-muted-foreground mb-1">Final Grade</div>
+                        <div className="text-4xl font-extrabold text-primary">
                             {submission.score}
-                            <span className="text-sm text-muted-foreground font-normal ml-1">/ {submission.totalMarks}</span>
+                            <span className="text-lg text-muted-foreground font-medium ml-1">/ {submission.totalMarks}</span>
                         </div>
                     </div>
                     {/* Appeal Button */}
@@ -60,78 +61,128 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                     )}
                 </div>
             ) : (
-                <div className="bg-yellow-50 text-yellow-800 p-4 rounded-lg text-sm border border-yellow-100">
-                    <div className="font-semibold mb-1">Processing / Waiting for Release</div>
-                    Your submission has been received. Grades will be available once released by the lecturer.
+                <div className="bg-amber-50 text-amber-900 p-4 rounded-lg text-sm border border-amber-100 flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0" />
+                    <div>
+                        <div className="font-semibold mb-1">Processing / Waiting for Release</div>
+                        <p>Your submission has been received. Grades will be available once released by the lecturer.</p>
+                    </div>
                 </div>
             )}
 
             {/* Script Link */}
             {submission.filePath && (
                 <div>
-                    <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                         <FileText className="h-4 w-4" /> Original Submission
                     </h3>
-                    <a href={submission.filePath} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 border rounded-md hover:bg-accent transition-colors group">
+                    <a href={submission.filePath} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 border rounded-lg hover:bg-accent transition-colors group">
                         <span className="text-sm truncate flex-1 text-blue-600 group-hover:underline">Download Script</span>
                         <Download className="h-4 w-4 text-muted-foreground" />
                     </a>
                 </div>
             )}
 
-            {/* AI Feedback - Only if Released */}
-            {isReleased && feedback && (
-                <div className="space-y-3 pt-2">
-                    <h3 className="text-sm font-medium">AI Feedback</h3>
-                    {feedback.strengths?.length > 0 && (
-                        <div className="text-sm bg-green-50/50 p-3 rounded border border-green-100 text-foreground">
-                            <span className="font-semibold text-green-700 block mb-1">Strengths</span>
-                            {feedback.strengths.join(". ")}
+            {isReleased && (
+                <>
+                     {/* 1. Student Answer (OCR) */}
+                    {submission.ocrText && (
+                        <div>
+                             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                                1. Your Answer (OCR)
+                             </h3>
+                             <div className="rounded-lg border bg-muted/10 p-4">
+                                <ScrollArea className="h-[150px] w-full rounded-md border p-2 bg-background font-mono text-xs text-muted-foreground">
+                                    {submission.ocrText}
+                                </ScrollArea>
+                                <p className="text-[10px] text-muted-foreground mt-2">* This is the text extracted by AI for grading.</p>
+                             </div>
                         </div>
                     )}
-                    {feedback.weaknesses?.length > 0 && (
-                        <div className="text-sm bg-amber-50/50 p-3 rounded border border-amber-100 text-foreground">
-                            <span className="font-semibold text-amber-700 block mb-1">Areas for Improvement</span>
-                            {feedback.weaknesses.join(". ")}
-                        </div>
-                    )}
-                    {feedback.improvement && (
-                        <div className="text-sm bg-blue-50/50 p-3 rounded border border-blue-100 text-blue-800">
-                            <span className="font-semibold block mb-1">Actionable Advice</span>
-                            {feedback.improvement}
-                        </div>
-                    )}
-                </div>
-            )}
 
-            {/* Breakdown Table - Only if Released */}
-            {isReleased && breakdown.length > 0 && (
-                <div className="pt-2">
-                    <h3 className="text-sm font-medium mb-3">Detailed Breakdown</h3>
-                    <div className="border rounded-md overflow-hidden">
-                        {breakdown.map((item: any, i: number) => (
-                            <div key={i} className="flex justify-between p-3 text-sm border-b last:border-0 hover:bg-muted/30">
-                                <div className="flex-1 pr-4">
-                                    <span className="font-medium text-foreground">{item.question || `Question ${i+1}`}</span>
-                                    <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
-                                </div>
-                                <div className="font-mono font-medium text-right min-w-[3rem] text-foreground">
-                                    {item.score}/{item.max}
-                                </div>
+                    {/* 2. Detailed Assessment (Expected vs Actual) */}
+                    {breakdown.length > 0 && (
+                        <div>
+                             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                                2. Detailed Assessment
+                             </h3>
+                             <div className="space-y-4">
+                                {breakdown.map((item: any, i: number) => (
+                                    <div key={i} className="border rounded-lg p-4 bg-card shadow-sm transition-all hover:shadow-md">
+                                        <div className="flex justify-between items-start mb-3 border-b pb-2">
+                                            <span className="font-semibold text-sm">{item.question || `Question ${i+1}`}</span>
+                                            <span className={`font-bold text-sm px-2 py-0.5 rounded ${item.score === item.max ? 'bg-green-100 text-green-700' : 'bg-muted text-foreground'}`}>
+                                                {item.score} / {item.max}
+                                            </span>
+                                        </div>
+
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            {/* Expected / Rubric Reference */}
+                                            {item.rubricReference && (
+                                                <div className="text-xs p-2 bg-muted/20 rounded">
+                                                    <span className="font-bold text-muted-foreground uppercase tracking-wider text-[10px] block mb-1">Expected / Criteria</span>
+                                                    <p className="text-muted-foreground leading-relaxed">{item.rubricReference}</p>
+                                                </div>
+                                            )}
+
+                                            {/* Feedback */}
+                                            <div className="text-xs p-2 bg-blue-50/50 rounded border-blue-100 border">
+                                                <span className="font-bold text-blue-700 uppercase tracking-wider text-[10px] block mb-1">AI Feedback</span>
+                                                <p className="text-foreground leading-relaxed">{item.feedback}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
+                        </div>
+                    )}
+
+                    {/* 3. Overall Feedback (Remarks) */}
+                    {feedback && (
+                        <div>
+                             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                                3. Overall Feedback & Remarks
+                             </h3>
+                            <div className="space-y-3">
+                                {feedback.strengths?.length > 0 && (
+                                    <div className="text-sm bg-green-50 p-4 rounded-lg border border-green-100 text-green-900">
+                                        <div className="flex items-center gap-2 font-semibold mb-2">
+                                            <CheckCircle className="h-4 w-4" /> Strengths
+                                        </div>
+                                        <ul className="list-disc list-inside space-y-1 text-xs">
+                                            {feedback.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                                {feedback.weaknesses?.length > 0 && (
+                                    <div className="text-sm bg-amber-50 p-4 rounded-lg border border-amber-100 text-amber-900">
+                                        <div className="flex items-center gap-2 font-semibold mb-2">
+                                            <AlertTriangle className="h-4 w-4" /> Areas for Improvement
+                                        </div>
+                                        <ul className="list-disc list-inside space-y-1 text-xs">
+                                            {feedback.weaknesses.map((w: string, i: number) => <li key={i}>{w}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                                {feedback.improvement && (
+                                    <div className="text-sm bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-900">
+                                        <div className="flex items-center gap-2 font-semibold mb-2">
+                                            <ArrowUpCircle className="h-4 w-4" /> Actionable Advice
+                                        </div>
+                                        <p className="text-xs leading-relaxed">{feedback.improvement}</p>
+                                    </div>
+                                )}
                             </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                        </div>
+                    )}
 
-            {/* Remarks - Only if Released */}
-            {isReleased && submission.remarks && (
-                <div className="pt-2">
-                    <h3 className="text-sm font-medium mb-2">Lecturer/AI Remarks</h3>
-                    <p className="text-sm text-muted-foreground italic border-l-2 pl-3 py-1">
-                        "{submission.remarks}"
-                    </p>
-                </div>
+                    {/* Remarks */}
+                    {submission.remarks && (
+                        <div className="p-4 bg-muted/10 rounded-lg italic text-sm text-muted-foreground border-l-4 border-primary/20">
+                            " {submission.remarks} "
+                        </div>
+                    )}
+                </>
             )}
         </div>
       </SheetContent>
