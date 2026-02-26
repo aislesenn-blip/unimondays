@@ -22,7 +22,12 @@ export async function GET(req: NextRequest) {
     // 2. Fetch Submissions
     const submissions = await prisma.submission.findMany({
         where: { userId },
-        include: {
+        select: {
+            id: true,
+            submittedAt: true,
+            status: true,
+            feedback: true,
+            filePath: true,
             workSession: {
                 select: {
                     title: true,
@@ -35,7 +40,13 @@ export async function GET(req: NextRequest) {
                     }
                 }
             },
-            score: true
+            score: {
+                select: {
+                    totalMarks: true,
+                    remarks: true,
+                    breakdown: true
+                }
+            }
         },
         orderBy: { submittedAt: 'desc' }
     });

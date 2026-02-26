@@ -55,7 +55,7 @@ export default function SignupPage() {
       }
 
       // Success
-      router.push("/onboarding"); // Or /dashboard directly if onboarding is just a welcome
+      router.push("/dashboard"); // Or /dashboard directly if onboarding is just a welcome
     } catch (err) {
       setError("An unexpected error occurred");
     } finally {
