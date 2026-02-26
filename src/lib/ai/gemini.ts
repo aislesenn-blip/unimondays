@@ -24,9 +24,12 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
 
     const response = await result.response;
     return response.text();
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini OCR Error:", error);
-    throw new Error("Failed to perform OCR on document.");
+    if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
+      throw new Error("RATE_LIMIT_HIT: Gemini Service overloaded.");
+    }
+    throw new Error(`Failed to perform OCR on document: ${error.message}`);
   }
 }
 
@@ -69,8 +72,11 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
     const response = await result.response;
     const text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(text) as PdfSplit[];
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Structure Analysis Error:", error);
-    throw new Error("Failed to analyze PDF structure.");
+    if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
+      throw new Error("RATE_LIMIT_HIT: Gemini Service overloaded.");
+    }
+    throw new Error(`Failed to analyze PDF structure: ${error.message}`);
   }
 }

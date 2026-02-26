@@ -256,6 +256,12 @@ export async function handleAiGrade(job: Job) {
   } catch (fatalError: any) {
       console.error(`[AI_FATAL_ERROR] Pipeline Crashed:`, fatalError);
 
+      // RATE LIMIT ARMOR: Do not fail the submission if it's just a rate limit.
+      // The queue processor will catch this and retry.
+      if (fatalError.message?.includes("RATE_LIMIT_HIT")) {
+          throw fatalError;
+      }
+
       // CRITICAL: Update Status to FAILED so UI knows
       await prisma.submission.update({
           where: { id: submissionId },

@@ -104,8 +104,8 @@ ${ocrText}` }
   } catch (error: any) {
     console.error("DeepSeek Grading Error:", error);
     // Add more context to error
-    if (error.status === 429) {
-        throw new Error("DeepSeek Rate Limit Exceeded. Please try again later.");
+    if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
+        throw new Error("RATE_LIMIT_HIT: DeepSeek Service overloaded.");
     }
     throw new Error(`Failed to grade submission: ${error.message}`);
   }
