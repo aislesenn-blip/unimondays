@@ -37,6 +37,7 @@ export interface GradeConfig {
   markingScheme?: string;
   lecturerNotes?: string;
   calibration?: CalibrationSettings;
+  context?: string; // New Context Injection Field
 }
 
 export async function gradeSubmission(
@@ -52,6 +53,9 @@ export async function gradeSubmission(
   // Optimize prompt: Remove excessive whitespace, focus on JSON strictness
   const systemPrompt = `You are an expert academic grader. Grade the student's submission strictly based on the provided rubric and marking scheme.
 Follow the "Gold Standard": objective, consistent, justifiable.
+
+Context:
+${config.context || "No specific context provided."}
 
 Config:
 - Strictness: ${config.strictness} (1.0=Neutral).
