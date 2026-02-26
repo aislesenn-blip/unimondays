@@ -2,7 +2,7 @@ import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readFile } from '@/lib/storage';
 import { ocrDocument } from '@/lib/ai/gemini';
-import { gradeSubmission, GradeConfig } from '@/lib/ai/deepseek';
+import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 
 export async function handleAiGrade(job: Job) {
@@ -37,28 +37,36 @@ export async function handleAiGrade(job: Job) {
     throw new Error(`WorkSession not found for submission ${submissionId}.`);
   }
 
-  // 1. Ensure OCR
+  // 1. Ensure OCR (Student Script)
   let ocrText = submission.ocrText;
   if (!ocrText && submission.filePath) {
-    const buffer = await readFile(submission.filePath);
-    const mimeType = submission.filePath.endsWith('.png') ? 'image/png' :
-                     submission.filePath.endsWith('.jpg') ? 'image/jpeg' :
-                     'application/pdf';
+    try {
+        console.log(`[AI_GRADE] Fetching submission file: ${submission.filePath}`);
+        // Ensure bucket logic aligns with storage-supabase.ts
+        // If filePath is 'submissions/xyz', it's relative to 'exam_pdfs' bucket
+        const buffer = await readFile(submission.filePath, 'exam_pdfs');
+        const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
+                         submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+                         'application/pdf';
 
-    ocrText = await ocrDocument(buffer, mimeType);
+        ocrText = await ocrDocument(buffer, mimeType);
 
-    // Save OCR text
-    await prisma.submission.update({
-      where: { id: submissionId },
-      data: { ocrText, status: 'PROCESSING' }
-    });
+        // Save OCR text immediately
+        await prisma.submission.update({
+        where: { id: submissionId },
+        data: { ocrText, status: 'PROCESSING' }
+        });
+    } catch (ocrError: any) {
+        console.error("[AI_GRADE] OCR Failed for Submission:", ocrError);
+        throw new Error(`OCR Processing Failed: ${ocrError.message}`);
+    }
   }
 
   if (!ocrText) {
-    throw new Error("Failed to extract text from submission.");
+    throw new Error("Failed to extract text from submission. File might be empty or unreadable.");
   }
 
-  // 2. Prepare Grading Config
+  // 2. Prepare Grading Config & Rubric
   const strictnessMap: Record<string, number> = {
     'LENIENT': 0.8,
     'MODERATE': 1.0,
@@ -66,50 +74,114 @@ export async function handleAiGrade(job: Job) {
   };
   const strictnessVal = strictnessMap[submission.workSession.strictness || 'MODERATE'] || 1.0;
 
-  const config: GradeConfig = {
-    strictness: strictnessVal,
-    markingScheme: submission.workSession.markingScheme || undefined,
-    lecturerNotes: undefined
-  };
+  // Retrieve Rubric Content (Text or File)
+  let rubricContent = submission.workSession.rubric;
 
-  // 3. Grade
-  const totalMarks = submission.workSession.totalMarks || 100;
-  const rubric = submission.workSession.rubric || "Grade based on general academic standards.";
+  // If rubric text is empty but a file URL exists, try to OCR it
+  if (!rubricContent && submission.workSession.rubricUrl) {
+      try {
+          console.log(`[AI_GRADE] Fetching Rubric URL: ${submission.workSession.rubricUrl}`);
+          const rBuffer = await readFile(submission.workSession.rubricUrl, 'exam_pdfs');
+          // Simple mime detection
+          const rMime = submission.workSession.rubricUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+          rubricContent = await ocrDocument(rBuffer, rMime);
 
-  // Zero-Trust Tracing: Log Configuration
-  console.log(`[AI_GRADE] Job ${job.id} Configuration Trace:`);
-  console.log(`- WorkSession ID: ${submission.workSession.id}`);
-  console.log(`- Strictness (DB): ${submission.workSession.strictness} -> Multiplier: ${strictnessVal}`);
-  console.log(`- Rubric Present: ${!!submission.workSession.rubric} (Length: ${submission.workSession.rubric?.length || 0})`);
-  console.log(`- Marking Scheme Present: ${!!submission.workSession.markingScheme} (Length: ${submission.workSession.markingScheme?.length || 0})`);
-  console.log(`- Total Marks: ${totalMarks}`);
-
-  let result: any;
-
-  // Use Simulator if Keys Missing (for Board Audit)
-  if (!process.env.DEEPSEEK_API_KEY) {
-    console.log(`[Simulator] Using DeepSeek Simulator for Job ${job.id}`);
-    const sim = await simulateDeepSeekCall(ocrText);
-
-    if (sim.breakdown === "INVALID_JSON_RESPONSE") {
-       throw new Error("AI returned malformed JSON (Simulator)");
-    }
-
-    result = {
-      totalScore: sim.score,
-      breakdown: sim.breakdown,
-      aiReasoning: sim.reasoning,
-      confidence: sim.confidence,
-      strengths: ["Consistency", "Clarity"],
-      weaknesses: ["Calculation Error"],
-      improvement: "Check arithmetic."
-    };
-  } else {
-    console.log(`[AI_GRADE] Invoking DeepSeek with constrained context...`);
-    result = await gradeSubmission(ocrText, rubric, totalMarks, config);
+          // Optionally cache this back to the WorkSession to save API calls?
+          // For now, let's just use it.
+          // Updating the WorkSession might be risky if multiple jobs run concurrently.
+          // Let's log it.
+          console.log(`[AI_GRADE] Extracted Rubric Text (Length: ${rubricContent.length})`);
+      } catch (e) {
+          console.warn("[AI_GRADE] Failed to OCR Rubric File. Falling back to default.", e);
+      }
   }
 
-  // 4. Save Score
+  if (!rubricContent) {
+      rubricContent = "Grade based on general academic standards and common sense.";
+  }
+
+  // Parse Calibration Settings
+  let calibrationSettings;
+  if (submission.workSession.calibration) {
+      try {
+          calibrationSettings = JSON.parse(submission.workSession.calibration);
+      } catch (e) {
+          console.warn("[AI_GRADE] Failed to parse calibration JSON", e);
+      }
+  }
+
+  const config: GradeConfig = {
+    strictness: strictnessVal,
+    markingScheme: submission.workSession.markingScheme || undefined, // URL
+    // If markingScheme is a URL, we might need to OCR it too?
+    // The prompt in deepseek.ts treats markingScheme as text.
+    // If it's a URL, the AI will just see a URL string which isn't helpful.
+    // TODO: OCR Marking Scheme if URL. For now, let's assume text or ignore.
+    // Actually, createWorkSession uses a file upload for markingScheme too.
+    // So 'markingScheme' field in DB might contain a URL (from API logic).
+    // Let's attempt to fetch it if it looks like a path.
+    lecturerNotes: submission.workSession.instructions || undefined,
+    calibration: calibrationSettings
+  };
+
+  // OCR Marking Scheme if it's a file path
+  if (config.markingScheme && (config.markingScheme.startsWith('rubrics/') || config.markingScheme.includes('/'))) {
+       try {
+          const msBuffer = await readFile(config.markingScheme, 'exam_pdfs'); // rubrics are in exam_pdfs bucket too?
+          const msMime = config.markingScheme.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+          const msText = await ocrDocument(msBuffer, msMime);
+          config.markingScheme = msText;
+       } catch (e) {
+           console.warn("[AI_GRADE] Failed to OCR Marking Scheme file. Ignoring.", e);
+           config.markingScheme = undefined;
+       }
+  }
+
+
+  // 3. Grade (Zero-Trust Tracing)
+  const totalMarks = submission.workSession.totalMarks || 100;
+
+  console.log(`[AI_GRADE] Job ${job.id} Execution Trace:`);
+  console.log(`- Submission ID: ${submission.id}`);
+  console.log(`- Config: Strictness=${config.strictness}, Calibrated=${!!config.calibration}`);
+  console.log(`- Rubric Length: ${rubricContent.length}`);
+  console.log(`- OCR Text Length: ${ocrText.length}`);
+
+  let result: GradingResult;
+
+  try {
+    // Simulator Check
+    if (!process.env.DEEPSEEK_API_KEY) {
+        console.log(`[Simulator] Using DeepSeek Simulator for Job ${job.id}`);
+        const sim = await simulateDeepSeekCall(ocrText);
+        if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
+
+        result = {
+            totalScore: sim.score,
+            breakdown: sim.breakdown as any,
+            aiReasoning: sim.reasoning,
+            confidence: sim.confidence,
+            strengths: ["Consistency", "Clarity"],
+            weaknesses: ["Calculation Error"],
+            improvement: "Check arithmetic."
+        };
+    } else {
+        console.log(`[AI_GRADE] Invoking DeepSeek API...`);
+        result = await gradeSubmission(ocrText, rubricContent, totalMarks, config);
+        console.log(`[AI_GRADE] Success. Score: ${result.totalScore}/${totalMarks}`);
+    }
+  } catch (aiError: any) {
+      console.error(`[AI_GRADE] FATAL AI ERROR for Job ${job.id}:`, aiError);
+      // Ensure we expose this error in the job result/logs so we can debug on Vercel
+      throw new Error(`AI Grading Failed: ${aiError.message}`);
+  }
+
+  // 4. Save Score & Feedback
+  // Validate result structure
+  if (typeof result.totalScore !== 'number') {
+      throw new Error("Invalid AI Result: Missing totalScore");
+  }
+
   const breakdownStr = JSON.stringify(result.breakdown);
 
   await prisma.score.upsert({
@@ -132,9 +204,9 @@ export async function handleAiGrade(job: Job) {
   const status = result.confidence < 70 ? 'FLAGGED' : 'GRADED';
 
   const feedbackStr = JSON.stringify({
-    strengths: result.strengths,
-    weaknesses: result.weaknesses,
-    improvement: result.improvement
+    strengths: result.strengths || [],
+    weaknesses: result.weaknesses || [],
+    improvement: result.improvement || "No specific advice."
   });
 
   await prisma.submission.update({
@@ -151,7 +223,7 @@ export async function handleAiGrade(job: Job) {
     data: {
       userId: submission.userId,
       action: 'GRADED',
-      details: `Submission for ${submission.workSession.title} has been graded.`,
+      details: `Submission for ${submission.workSession.title} graded. Score: ${result.totalScore}`,
       severity: 'INFO'
     }
   });

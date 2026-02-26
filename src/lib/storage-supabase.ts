@@ -47,16 +47,22 @@ export class SupabaseStorageService implements StorageService {
   }
 
   async readFile(filePath: string, bucket: string = 'exam_pdfs'): Promise<Buffer> {
-     // Download from Supabase
-     // filePath is expected to be the path inside the bucket (e.g. 'submissions/xyz.pdf')
-     const { data, error } = await supabase.storage.from(bucket).download(filePath);
+     // Clean path: remove leading slashes if present
+     const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
 
-     if (error) throw new Error(`Supabase Download Error for ${filePath} in ${bucket}: ${error.message}`);
+     // Download from Supabase
+     const { data, error } = await supabase.storage.from(bucket).download(cleanPath);
+
+     if (error) {
+         console.error(`[Storage] Supabase Download Error: ${error.message} (Bucket: ${bucket}, Path: ${cleanPath})`);
+         throw new Error(`Supabase Download Error for ${cleanPath} in ${bucket}: ${error.message}`);
+     }
      return Buffer.from(await data.arrayBuffer());
   }
 
   async deleteFile(filePath: string): Promise<void> {
+    const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
     const bucket = 'exam_pdfs'; // Default
-    await supabase.storage.from(bucket).remove([filePath]);
+    await supabase.storage.from(bucket).remove([cleanPath]);
   }
 }
