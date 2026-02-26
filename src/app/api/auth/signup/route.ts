@@ -32,24 +32,25 @@ export async function POST(req: NextRequest) {
 
     userId = authData.user.id;
 
-    // 2. Create Public User Record
-    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
-
-    let publicUser;
-    if (!existingUser) {
-        publicUser = await prisma.user.create({
-            data: {
-                id: userId,
-                email,
-                fullName,
-                role: 'LECTURER',
-                tier: 'Lite',
-                quota: 100,
-            },
-        });
-    } else {
-        publicUser = existingUser;
-    }
+    // 2. Create Public User Record (Handle Race Condition with Trigger)
+    // Use upsert to handle cases where the Postgres trigger might have already inserted the user.
+    const publicUser = await prisma.user.upsert({
+        where: { id: userId },
+        update: {
+            fullName,
+            role: 'LECTURER', // Ensure role is set correctly
+            tier: 'Lite',
+            quota: 100,
+        },
+        create: {
+            id: userId!,
+            email,
+            fullName,
+            role: 'LECTURER',
+            tier: 'Lite',
+            quota: 100,
+        },
+    });
 
     // 3. Set Session Cookie
     const sessionData = {
