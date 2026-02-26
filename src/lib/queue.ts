@@ -1,25 +1,27 @@
 import { prisma } from './prisma';
-import { Job, JobType, JobStatus } from '@prisma/client';
+import { Job } from '@prisma/client';
 
-export type { JobType, JobStatus };
+export type JobType = 'OCR_SPLIT' | 'AI_GRADE' | 'EXPORT_ZIP';
+export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 export interface JobPayload {
   [key: string]: any;
 }
 
-export async function enqueueJob(type: JobType, payload: JobPayload, priority: number = 0, quizId?: string, universityId?: string): Promise<Job> {
-  // priority and quizId are deprecated/removed from schema but kept in signature for compatibility if needed (ignored)
+export async function enqueueJob(type: string, payload: JobPayload, priority: number = 0, universityId?: string): Promise<Job> {
+  // priority is ignored
+  const payloadStr = JSON.stringify(payload);
   return await prisma.job.create({
     data: {
       type,
-      payload: payload,
+      payload: payloadStr,
       status: 'PENDING',
       universityId
     },
   });
 }
 
-export async function claimJob(types: JobType[] = []): Promise<Job | null> {
+export async function claimJob(types: string[] = []): Promise<Job | null> {
   const whereClause: any = {
     status: 'PENDING',
   };
@@ -59,12 +61,13 @@ export async function claimJob(types: JobType[] = []): Promise<Job | null> {
 }
 
 export async function completeJob(id: string, result: any): Promise<Job> {
+  const resultStr = JSON.stringify(result);
   return await prisma.job.update({
     where: { id },
     data: {
       status: 'COMPLETED',
-      result: result, // Prisma handles Json type
-      processedAt: new Date() // Update processedAt on completion too? Or rely on claim time? Schema has processedAt.
+      result: resultStr,
+      processedAt: new Date()
     },
   });
 }

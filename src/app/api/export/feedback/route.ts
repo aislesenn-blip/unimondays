@@ -16,42 +16,41 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { quizId } = body;
+    const { workSessionId } = body;
 
-    if (!quizId) {
-      return NextResponse.json({ error: 'Missing quizId' }, { status: 400 });
+    if (!workSessionId) {
+      return NextResponse.json({ error: 'Missing workSessionId' }, { status: 400 });
     }
 
-    const quiz = await prisma.quiz.findUnique({
-      where: { id: quizId },
+    const session = await prisma.workSession.findUnique({
+      where: { id: workSessionId },
       include: { lecturer: true }
     });
 
-    if (!quiz) {
-      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+    if (!session) {
+      return NextResponse.json({ error: 'WorkSession not found' }, { status: 404 });
     }
 
     // Ownership Check
-    if (quiz.lecturerId !== user.id) {
+    if (session.lecturerId !== user.id && user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const job = await enqueueJob(
       'EXPORT_ZIP',
-      { quizId },
+      { workSessionId },
       5,
-      undefined,
       user.universityId || undefined
     );
 
     // Audit Log
     await prisma.auditLog.create({
       data: {
+        userId: user.id,
         universityId: user.universityId,
         action: 'EXPORT',
-        details: `Export initiated for Quiz ${quizId}, Job ${job.id}`,
+        details: `Export initiated for Session ${workSessionId}, Job ${job.id}`,
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        // userAgent: request.headers.get('user-agent'),
         severity: 'INFO'
       }
     });

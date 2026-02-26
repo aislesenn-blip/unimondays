@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
 import { cookies } from 'next/headers';
-import { UserRole } from '@prisma/client';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,10 +16,7 @@ export async function POST(req: NextRequest) {
     const normalizedName = institutionName.trim();
     let university = await prisma.university.findFirst({
       where: {
-        name: {
-          equals: normalizedName,
-          mode: 'insensitive',
-        },
+        name: normalizedName,
       },
     });
 
@@ -50,46 +46,9 @@ export async function POST(req: NextRequest) {
     let userId: string | undefined;
 
     if (authError) {
-      // Check if user already exists
-      if (authError.message.includes('already registered') || authError.status === 422) {
-          console.warn(`User ${email} already exists in Auth. Checking public record...`);
-          // Try to get the user ID. We can't get it from createUser if it fails.
-          // We must fetch it.
-          // Since we are admin, we can list users or get by email?
-          // supabase.auth.admin.listUsers() is heavy.
-          // Maybe just assume they can login?
-          // But the requirement is to REPAIR the profile if it's missing.
-          // We can't get the ID easily without signing in or listing users.
-          // Let's try listing users by email?
-          // Note: listUsers doesn't filter by email directly in all versions, but let's check.
-          // Actually, if they exist in Auth, maybe we can't get the ID without their password (login).
-          // BUT, if we are in the signup flow, and they already exist, we should tell them to LOGIN.
-          // However, the prompt says "If a user attempts to log in...".
-          // Wait, the prompt says: "If a user attempts to log in, and they exist in Supabase auth.users but are MISSING from the public.users table... Update the login route".
-          // For SIGNUP, if they exist in Auth, we usually say "User already exists".
-          // But if they are *orphaned*, maybe we should allow them to "sign up" again to repair?
-          // If we can't get the ID, we can't repair.
-          // So for Signup, if Auth exists, we return 400 "User already exists. Please login."
-          // And relying on Login to repair?
-          // No, Login can't repair because it doesn't have the payload (Institution, Name).
-          // So Signup MUST repair if possible.
-          // Can we get the user by email?
-          // `supabase.auth.admin.listUsers()` logic?
-          // Or `supabase.rpc`?
-          // Let's try `supabase.auth.admin.listUsers()`. (Might be slow/limited).
-          // Alternatively, we can just return 400 and tell them to contact support if they can't login.
-          // But the user said "Dynamically repair their profile...".
-          // Let's assume we can't get ID easily here.
-          // Actually, if we use `createUser` and it exists, it might return the user object in some versions? No.
-          // Let's stick to: Return 400 "User already exists". The *Login* route will handle the orphaned check (by returning 400 cleanly).
-          // The prompt says "If a user attempts to log in... handle orphaned users gracefully".
-          // It also says "Fix the Prisma Invocation (/api/auth/signup & /api/auth/login)".
-          // So for Signup, I should just make sure it doesn't crash 500.
-          console.error("Supabase Auth Error:", authError);
-          return NextResponse.json({ error: authError.message }, { status: 400 });
-      }
-      console.error("Supabase Auth Error:", authError);
-      return NextResponse.json({ error: authError.message }, { status: 400 });
+      console.warn("Supabase Auth Create Failed (User likely exists):", authError.message);
+      // For now, return error asking to login
+      return NextResponse.json({ error: "User already exists or Auth failed. Please try logging in." }, { status: 400 });
     }
 
     if (!authData.user) {
@@ -111,7 +70,7 @@ export async function POST(req: NextRequest) {
                 email,
                 fullName,
                 universityId: university.id,
-                role: UserRole.LECTURER, // Maps to 'LECTURER' in DB
+                role: 'LECTURER', // Maps to 'LECTURER' in DB
                 tier: 'Lite',
                 quota: 100,
             },

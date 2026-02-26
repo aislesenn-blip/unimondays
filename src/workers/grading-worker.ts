@@ -6,7 +6,12 @@ import { gradeSubmission, GradeConfig } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 
 export async function handleAiGrade(job: Job) {
-  const data = job.payload as any;
+  let data: any;
+  try {
+     data = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
+  } catch (e) {
+     throw new Error("Invalid job payload JSON");
+  }
   const { submissionId } = data;
 
   if (!submissionId) {
@@ -16,7 +21,7 @@ export async function handleAiGrade(job: Job) {
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
     include: {
-      quiz: {
+      workSession: {
         include: {
           lecturer: true
         }
@@ -28,8 +33,8 @@ export async function handleAiGrade(job: Job) {
     throw new Error(`Submission ${submissionId} not found.`);
   }
 
-  if (!submission.quiz) {
-    throw new Error(`Quiz not found for submission ${submissionId}.`);
+  if (!submission.workSession) {
+    throw new Error(`WorkSession not found for submission ${submissionId}.`);
   }
 
   // 1. Ensure OCR
@@ -54,30 +59,29 @@ export async function handleAiGrade(job: Job) {
   }
 
   // 2. Prepare Grading Config
-  // Map strictness ENUM to number multiplier
   const strictnessMap: Record<string, number> = {
     'LENIENT': 0.8,
     'MODERATE': 1.0,
     'STRICT': 1.2
   };
-  const strictnessVal = strictnessMap[submission.quiz.strictness || 'MODERATE'] || 1.0;
+  const strictnessVal = strictnessMap[submission.workSession.strictness || 'MODERATE'] || 1.0;
 
   const config: GradeConfig = {
     strictness: strictnessVal,
-    markingScheme: submission.quiz.markingScheme || undefined,
-    lecturerNotes: undefined // Removed from schema
+    markingScheme: submission.workSession.markingScheme || undefined,
+    lecturerNotes: undefined
   };
 
   // 3. Grade
-  const totalMarks = submission.quiz.totalMarks || 100;
-  const rubric = submission.quiz.rubric || "Grade based on general academic standards.";
+  const totalMarks = submission.workSession.totalMarks || 100;
+  const rubric = submission.workSession.rubric || "Grade based on general academic standards.";
 
   // Zero-Trust Tracing: Log Configuration
   console.log(`[AI_GRADE] Job ${job.id} Configuration Trace:`);
-  console.log(`- Quiz ID: ${submission.quiz.id}`);
-  console.log(`- Strictness (DB): ${submission.quiz.strictness} -> Multiplier: ${strictnessVal}`);
-  console.log(`- Rubric Present: ${!!submission.quiz.rubric} (Length: ${submission.quiz.rubric?.length || 0})`);
-  console.log(`- Marking Scheme Present: ${!!submission.quiz.markingScheme} (Length: ${submission.quiz.markingScheme?.length || 0})`);
+  console.log(`- WorkSession ID: ${submission.workSession.id}`);
+  console.log(`- Strictness (DB): ${submission.workSession.strictness} -> Multiplier: ${strictnessVal}`);
+  console.log(`- Rubric Present: ${!!submission.workSession.rubric} (Length: ${submission.workSession.rubric?.length || 0})`);
+  console.log(`- Marking Scheme Present: ${!!submission.workSession.markingScheme} (Length: ${submission.workSession.markingScheme?.length || 0})`);
   console.log(`- Total Marks: ${totalMarks}`);
 
   let result: any;
@@ -87,7 +91,6 @@ export async function handleAiGrade(job: Job) {
     console.log(`[Simulator] Using DeepSeek Simulator for Job ${job.id}`);
     const sim = await simulateDeepSeekCall(ocrText);
 
-    // Check for malformed JSON simulation
     if (sim.breakdown === "INVALID_JSON_RESPONSE") {
        throw new Error("AI returned malformed JSON (Simulator)");
     }
@@ -107,58 +110,59 @@ export async function handleAiGrade(job: Job) {
   }
 
   // 4. Save Score
-  // Check if score exists (upsert)
+  const breakdownStr = JSON.stringify(result.breakdown);
+
   await prisma.score.upsert({
     where: { submissionId: submission.id },
     update: {
       totalMarks: result.totalScore,
-      breakdown: result.breakdown,
+      breakdown: breakdownStr,
       remarks: result.aiReasoning,
       gradedAt: new Date()
     },
     create: {
       submissionId: submission.id,
       totalMarks: result.totalScore,
-      breakdown: result.breakdown,
+      breakdown: breakdownStr,
       remarks: result.aiReasoning
     }
   });
 
   // 5. Update Submission Status
-  // If confidence is low, flag it.
   const status = result.confidence < 70 ? 'FLAGGED' : 'GRADED';
+
+  const feedbackStr = JSON.stringify({
+    strengths: result.strengths,
+    weaknesses: result.weaknesses,
+    improvement: result.improvement
+  });
 
   await prisma.submission.update({
     where: { id: submission.id },
     data: {
       status,
       confidenceScore: result.confidence,
-      // calibrationId removed from schema
-      feedback: { // Prisma handles Json
-        strengths: result.strengths,
-        weaknesses: result.weaknesses,
-        improvement: result.improvement
-      }
+      feedback: feedbackStr
     }
   });
 
-  // Create Audit Log for Notification
+  // Create Audit Log
   await prisma.auditLog.create({
     data: {
-      userId: submission.userId, // Notify the student
+      userId: submission.userId,
       universityId: submission.universityId,
       action: 'GRADED',
-      details: `Submission for ${submission.quiz.title} has been graded.`,
+      details: `Submission for ${submission.workSession.title} has been graded.`,
       severity: 'INFO'
     }
   });
 
-  // Increment Lecturer Quota (Dead Logic Fix)
-  if (submission.quiz.lecturerId) {
+  // Increment Lecturer Quota
+  if (submission.workSession.lecturerId) {
     await prisma.user.update({
-        where: { id: submission.quiz.lecturerId },
+        where: { id: submission.workSession.lecturerId },
         data: { used: { increment: 1 } }
-    }).catch(e => console.warn(`[AI_GRADE] Failed to increment quota for user ${submission.quiz.lecturerId}`, e));
+    }).catch(e => console.warn(`[AI_GRADE] Failed to increment quota for user ${submission.workSession.lecturerId}`, e));
   }
 
   return {

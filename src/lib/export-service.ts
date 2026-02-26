@@ -1,9 +1,9 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import * as XLSX from 'xlsx';
-import { Submission, Score, Quiz, User } from '@prisma/client';
+import { Submission, Score, WorkSession, User } from '@prisma/client';
 import { readFile } from '@/lib/storage';
 
-type FullSubmission = Submission & {
+export type FullSubmission = Submission & {
   score: Score | null;
   user: User | null;
 };
@@ -12,7 +12,7 @@ export async function createFeedbackPage(submission: FullSubmission): Promise<Bu
   const pdfDoc = await PDFDocument.create();
   const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
 
-  const page = pdfDoc.addPage();
+  let page = pdfDoc.addPage();
   const { width, height } = page.getSize();
   let y = height - 50;
 
@@ -27,20 +27,25 @@ export async function createFeedbackPage(submission: FullSubmission): Promise<Bu
   // Breakdown
   if (submission.score?.breakdown) {
     try {
-      const breakdown = submission.score.breakdown as any[];
-      page.drawText('Breakdown:', { x: 50, y, size: 14, font: timesRomanFont });
-      y -= 20;
+      const breakdown = typeof submission.score.breakdown === 'string'
+          ? JSON.parse(submission.score.breakdown)
+          : submission.score.breakdown;
 
-      for (const item of breakdown) {
-        if (y < 50) {
-          const newPage = pdfDoc.addPage();
-          y = height - 50;
-        }
+      if (Array.isArray(breakdown)) {
+          page.drawText('Breakdown:', { x: 50, y, size: 14, font: timesRomanFont });
+          y -= 20;
 
-        const text = `${item.question}: ${item.score}/${item.max} - ${item.feedback}`;
-        const safeText = text.length > 90 ? text.substring(0, 87) + '...' : text;
-        page.drawText(safeText, { x: 50, y, size: 10, font: timesRomanFont });
-        y -= 15;
+          for (const item of breakdown) {
+            if (y < 50) {
+              page = pdfDoc.addPage();
+              y = height - 50;
+            }
+
+            const text = `${item.question}: ${item.score}/${item.max} - ${item.feedback}`;
+            const safeText = text.length > 90 ? text.substring(0, 87) + '...' : text;
+            page.drawText(safeText, { x: 50, y, size: 10, font: timesRomanFont });
+            y -= 15;
+          }
       }
     } catch (e) {
       page.drawText('Error parsing breakdown.', { x: 50, y, size: 10, font: timesRomanFont, color: rgb(1, 0, 0) });
