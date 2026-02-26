@@ -86,13 +86,16 @@ export function MasterCASpreadsheet({ workSessions: initialSessions, students, c
   const exportToExcel = () => {
     if (!processedStudents || processedStudents.length === 0) return;
     const data = processedStudents.map(s => {
+      // Enterprise Data Separation
       const row: any = {
         'Student Name': s.name,
-        'Reg No': s.regNo,
+        'Reg No': s.secondaryInfo || s.regNo, // Explicit separate column
       };
+      // Add each session
       sessions.forEach(sess => {
         row[sess.title] = s.scores[sess.id] !== undefined ? s.scores[sess.id] : '-';
       });
+      // Final Calcs
       row['Total Score'] = s.totalScore;
       row['Percentage'] = `${s.percentage.toFixed(1)}%`;
       return row;
@@ -129,7 +132,8 @@ export function MasterCASpreadsheet({ workSessions: initialSessions, students, c
                 <Table>
                     <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead className="min-w-[200px] sticky left-0 bg-background z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Student</TableHead>
+                        <TableHead className="min-w-[180px] sticky left-0 bg-background z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Student Name</TableHead>
+                        <TableHead className="min-w-[120px] sticky left-[180px] bg-background z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Reg No</TableHead>
                         {sessions.map(session => (
                         <TableHead key={session.id} className="text-center min-w-[120px]">
                             <div className="flex flex-col items-center gap-2 py-2">
@@ -155,11 +159,11 @@ export function MasterCASpreadsheet({ workSessions: initialSessions, students, c
                     <TableBody>
                     {processedStudents.map((student) => (
                         <TableRow key={student.id} className="hover:bg-muted/50">
-                        <TableCell className="sticky left-0 bg-background z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-medium">
-                            <div className="flex flex-col">
-                                <span className="font-bold text-foreground">{student.name}</span>
-                                <span className="text-xs text-muted-foreground">{student.secondaryInfo || student.regNo}</span>
-                            </div>
+                        <TableCell className="sticky left-0 bg-background z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-bold text-foreground">
+                            {student.name}
+                        </TableCell>
+                        <TableCell className="sticky left-[180px] bg-background z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-mono text-sm text-muted-foreground">
+                            {student.secondaryInfo || student.regNo}
                         </TableCell>
                         {sessions.map(session => (
                             <TableCell key={session.id} className={`text-center ${!session.includeInCalculation ? 'opacity-40 bg-muted/20' : ''}`}>
