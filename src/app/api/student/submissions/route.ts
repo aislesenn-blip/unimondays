@@ -60,21 +60,34 @@ export async function GET(req: NextRequest) {
 
         let isReleased = false;
 
-        // Release Logic (V2.0)
-        if (workSession.releaseMode === 'AUTO') {
+        // Release Logic (V2.0) - ENFORCED
+        // Ensure "On Deadline" logic is strictly adhered to.
+        // If mode is DEADLINE, we ONLY release if now >= deadline.
+        // If deadline is missing, we default to MANUAL safety (not released).
+
+        const mode = workSession.releaseMode || 'MANUAL'; // Default to manual for safety
+
+        if (mode === 'AUTO') {
             isReleased = true;
-        } else if (workSession.releaseMode === 'DEADLINE') {
-            if (workSession.deadline && now > workSession.deadline) {
-                isReleased = true;
+        } else if (mode === 'DEADLINE') {
+            if (workSession.deadline) {
+                 if (now >= workSession.deadline) {
+                    isReleased = true;
+                 } else {
+                    isReleased = false; // Explicitly withheld
+                 }
+            } else {
+                isReleased = false; // Configuration Error: No deadline set, withhold results.
             }
-        } else if (workSession.releaseMode === 'MANUAL') {
-            // Check the explicit 'Publish' toggle
+        } else if (mode === 'MANUAL') {
+            // Strictly respect the lecturer's toggle
             isReleased = !!workSession.areGradesReleased;
         } else {
-             isReleased = true;
+             isReleased = false; // Unknown mode, fail safe.
         }
 
-        // Override: If not graded, can't be released
+        // Override: If not successfully graded/flagged, can't be released yet.
+        // We allow FLAGGED to be released if the mode allows it (so students see "Needs Review")
         if (status !== 'GRADED' && status !== 'APPEALED' && status !== 'FLAGGED') {
             isReleased = false;
         }
@@ -83,17 +96,22 @@ export async function GET(req: NextRequest) {
         return {
             id: sub.id,
             workSessionTitle: workSession.title,
-            lecturerName: workSession.lecturer.fullName,
+            lecturerName: workSession.lecturer?.fullName || 'Unknown Lecturer',
             submittedAt: sub.submittedAt,
+            // If withheld, show a friendly status instead of leaking the real one
             status: isReleased ? status : (status === 'PENDING' || status === 'PROCESSING' ? status : 'WAITING_RELEASE'),
-            score: isReleased ? score?.totalMarks : null,
-            totalMarks: workSession.totalMarks,
-            remarks: isReleased ? score?.remarks : null,
+            score: isReleased ? (sub.score ? sub.score.totalMarks : 0) : null,
+            totalMarks: workSession.totalMarks || 100,
+            remarks: isReleased ? (sub.score ? sub.score.remarks : null) : null,
             feedback: isReleased ? sub.feedback : null,
-            breakdown: isReleased ? score?.breakdown : null,
+            breakdown: isReleased ? (sub.score ? sub.score.breakdown : null) : null,
             filePath: sub.filePath,
-            allowAppeals: workSession.allowAppeals,
-            isReleased
+            allowAppeals: workSession.allowAppeals || false,
+            isReleased,
+            // Helper for UI to show why
+            releaseInfo: !isReleased && mode === 'DEADLINE' ?
+                `Results will be released after ${new Date(workSession.deadline!).toLocaleString()}` :
+                (!isReleased && mode === 'MANUAL' ? "Results are withheld by instructor" : null)
         };
     });
 
