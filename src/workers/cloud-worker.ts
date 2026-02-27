@@ -3,16 +3,46 @@ import { prisma } from '@/lib/prisma';
 import { saveBuffer, deleteFile } from '@/lib/storage';
 import { PDFDocument } from 'pdf-lib';
 
-async function fetchFileFromLink(url: string): Promise<Buffer> {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch cloud file: ${res.statusText}`);
+async function resolveGDriveLink(url: string): Promise<Buffer> {
+    const fileIdMatch = url.match(/[-\w]{25,}/);
+    if (!fileIdMatch) {
+        throw new Error("Could not extract Google Drive File ID. Please use a direct link.");
+    }
+    const fileId = fileIdMatch[0];
+    const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
-    // Google Drive Trap Detection
+    let res = await fetch(directUrl);
+
+    // Check for "Virus Scan" warning (Google returns 200 OK with HTML)
     const contentType = res.headers.get('content-type') || '';
-    if (url.includes('drive.google.com') && contentType.includes('text/html')) {
-        throw new Error("Google Drive links block direct server downloads. Please use a direct Dropbox link (ending in ?dl=1) or upload the PDF directly to a public host.");
+    if (contentType.includes('text/html')) {
+        const html = await res.text();
+
+        // Extract confirm token: href="/uc?export=download&id=...&confirm=XXXX"
+        // Regex looks for &confirm=([a-zA-Z0-9_-]+)
+        const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
+
+        if (confirmMatch) {
+            const confirmToken = confirmMatch[1];
+            const bypassUrl = `${directUrl}&confirm=${confirmToken}`;
+            res = await fetch(bypassUrl);
+        } else {
+             // If we can't find a token but it's Drive HTML, fail gracefully
+             throw new Error("Google Drive blocked the download (Virus Scan). Please use a direct Dropbox link or upload manually.");
+        }
     }
 
+    if (!res.ok) throw new Error(`Failed to fetch from Google Drive: ${res.statusText}`);
+    return Buffer.from(await res.arrayBuffer());
+}
+
+async function fetchFileFromLink(url: string): Promise<Buffer> {
+    if (url.includes('drive.google.com')) {
+        return resolveGDriveLink(url);
+    }
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch cloud file: ${res.statusText}`);
     return Buffer.from(await res.arrayBuffer());
 }
 
