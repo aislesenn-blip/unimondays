@@ -135,8 +135,25 @@ export async function POST(req: NextRequest) {
     }
 
     // V2.0 Strict Deadline Logic
-    if (workSession.deadline && new Date() > workSession.deadline && workSession.strictDeadline) {
-        return NextResponse.json({ error: 'Deadline has passed (Strict Mode Enabled).' }, { status: 403 });
+    // MANDATE 1: Strict Deadline Enforcement
+    // If a deadline is set, it acts as a hard cutoff unless explicitly configured otherwise.
+    // The previous check relied on `workSession.strictDeadline`, which might default to false.
+    // We enforce it generally if the deadline exists and has passed.
+    if (workSession.deadline) {
+        const now = new Date();
+        // Allow a 60-second grace period for network latency
+        const gracePeriod = new Date(workSession.deadline.getTime() + 60 * 1000);
+
+        if (now > gracePeriod) {
+             // If strictDeadline is EXPLICITLY false, we might allow late submissions (flagged).
+             // But the mandate implies clarity and enforcement.
+             // If strictDeadline is true OR undefined (default behavior for safety), we block.
+             if (workSession.strictDeadline !== false) {
+                 return NextResponse.json({
+                     error: 'Submission Rejected: The deadline for this assignment has passed.'
+                 }, { status: 403 });
+             }
+        }
     }
 
     // 6. Upload File (Securely)

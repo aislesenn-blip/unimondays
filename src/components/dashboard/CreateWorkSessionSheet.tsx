@@ -121,7 +121,12 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="deadline">Deadline (Optional)</Label>
+            <Label htmlFor="deadline" className="flex items-center gap-1">
+              Deadline (Optional)
+              <span className="text-xs text-muted-foreground ml-1 font-normal">
+                (Sets the cutoff time for student submissions. It is also used to trigger automated result releases if 'Release on Deadline' mode is selected.)
+              </span>
+            </Label>
             <Input id="deadline" type="datetime-local" {...register("deadline")} />
           </div>
 
