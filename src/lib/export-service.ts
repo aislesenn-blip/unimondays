@@ -10,7 +10,8 @@ export type FullSubmission = Submission & {
 
 // Helper for Identity Priority (V2.3)
 function getIdentity(sub: FullSubmission) {
-    const detected = sub.score?.detectedIdentity;
+    let detected = sub.score?.detectedIdentity;
+    if (detected === 'UNIDENTIFIED_IDENTITY') detected = null;
     const name = detected || sub.user?.fullName || sub.studentName || 'Unknown Student';
     const id = sub.studentRegNo || sub.user?.email || 'N/A';
     return { name, id };

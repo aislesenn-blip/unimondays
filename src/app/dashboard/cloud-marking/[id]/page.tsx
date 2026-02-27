@@ -44,12 +44,13 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
 
   // Poll for status updates
   useEffect(() => {
+    let isMounted = true;
     let interval: NodeJS.Timeout;
     const fetchStatus = async () => {
       try {
         const resolvedParams = await params;
         const res = await fetch(`/api/cloud-marking/${resolvedParams.id}`);
-        if (res.ok) {
+        if (res.ok && isMounted) {
           const data = await res.json();
           setSession(data);
 
@@ -67,7 +68,10 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
     fetchStatus();
     interval = setInterval(fetchStatus, 3000); // Poll every 3s
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [params]);
 
   // Derived Grading Progress

@@ -106,6 +106,11 @@ MANDATE 5: LECTURER CUSTOM RULES
 - **Custom Rules**: [${customRules}]
 - Failure to follow these specific instructions will result in an incorrect grade. If the custom rule says "Ignore spelling", do not penalize spelling even if the rubric says otherwise.
 
+MANDATE 6: AUTOPILOT PROTOCOL
+- If the user specifies 'Autopilot' or 'Grade on autopilot' in Custom Rules, you must proceed even if the Marking Scheme is missing.
+- Infer a standard academic marking scheme based on the content.
+- Do NOT reject the task for a missing formal marking scheme.
+
 Context:
 ${config.context || "No specific context provided."}
 
