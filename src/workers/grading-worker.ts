@@ -191,41 +191,43 @@ Student Identifier: ${studentId}.
           if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
 
           result = {
-              totalScore: sim.score,
-              breakdown: sim.breakdown as any,
-              aiReasoning: sim.reasoning,
-              confidence: sim.confidence,
-              strengths: ["Consistency", "Clarity"],
-              weaknesses: ["Calculation Error"],
-              improvement: "Check arithmetic."
+              exam_id: "simulated",
+              rubric_version: "1.0",
+              model_version: "simulator",
+              results: sim.breakdown as any,
+              total_marks_awarded: sim.score,
+              total_max_marks: totalMarks,
+              detectedIdentity: "SIMULATED_IDENTITY"
           };
       } else {
           // Pass image buffer for multimodal grading
           result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
-          console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
+          console.log(`[AI_SUCCESS] Graded. Score: ${result.total_marks_awarded}/${totalMarks}`);
       }
 
       // 4. Save Score & Feedback
-      if (typeof result.totalScore !== 'number') {
-          throw new Error("Invalid AI Result: Missing totalScore");
+      if (typeof result.total_marks_awarded !== 'number') {
+          throw new Error("Invalid AI Result: Missing total_marks_awarded");
       }
 
-      const breakdownStr = JSON.stringify(result.breakdown);
+      const breakdownStr = JSON.stringify(result.results);
+      const lowestConfidence = result.results.length > 0 ? Math.min(...result.results.map(r => r.confidence)) : 1.0;
+      const confidenceScore = lowestConfidence * 100; // Assuming API returns 0.0 to 1.0
 
       await prisma.score.upsert({
         where: { submissionId: submission.id },
         update: {
-          totalMarks: result.totalScore,
+          totalMarks: result.total_marks_awarded,
           breakdown: breakdownStr,
-          remarks: result.aiReasoning,
+          remarks: "Graded by deterministic engine", // aiReasoning is removed, adjust as needed
           detectedIdentity: result.detectedIdentity,
           gradedAt: new Date()
         },
         create: {
           submissionId: submission.id,
-          totalMarks: result.totalScore,
+          totalMarks: result.total_marks_awarded,
           breakdown: breakdownStr,
-          remarks: result.aiReasoning,
+          remarks: "Graded by deterministic engine",
           detectedIdentity: result.detectedIdentity
         }
       });
@@ -243,32 +245,31 @@ Student Identifier: ${studentId}.
           if (isContextMissing) {
               // GHOST SUBMISSION: No AI ID, No DB ID.
               status = 'FLAGGED';
-              result.confidence = 0;
-              result.aiReasoning = `IDENTITY CRISIS: ${result.aiReasoning || "System could not identify student."} Please manually assign ownership.`;
+              confidenceScore = 0;
               console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
           } else {
               // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
               // We proceed but maybe lower confidence? For now, we trust the auth context but log it.
               console.log(`[AI_IDENTITY] AI missed identity, but using Auth Context: ${submission.user?.fullName}`);
-              status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+              status = confidenceScore >= threshold ? 'GRADED' : 'FLAGGED';
           }
       } else {
-          status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+          status = confidenceScore >= threshold ? 'GRADED' : 'FLAGGED';
       }
 
-      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
+      console.log(`[AI_CONFIDENCE] Score: ${confidenceScore}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
-        strengths: result.strengths || [],
-        weaknesses: result.weaknesses || [],
-        improvement: result.improvement || "No specific advice."
+        strengths: [],
+        weaknesses: [],
+        improvement: "No specific advice."
       });
 
       await prisma.submission.update({
         where: { id: submission.id },
         data: {
           status,
-          confidenceScore: result.confidence,
+          confidenceScore,
           feedback: feedbackStr
         }
       });
@@ -278,7 +279,7 @@ Student Identifier: ${studentId}.
         data: {
           userId: submission.userId,
           action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
-          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.totalScore}`,
+          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.total_marks_awarded}`,
           severity: status === 'GRADED' ? 'INFO' : 'WARNING'
         }
       });
@@ -293,7 +294,7 @@ Student Identifier: ${studentId}.
 
       return {
         success: true,
-        score: result.totalScore,
+        score: result.total_marks_awarded,
         status
       };
 
