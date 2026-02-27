@@ -49,6 +49,12 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
     ? session.markingScheme
     : null;
 
+  // FIX: Serialize Date objects to strings for Client Components
+  const serializedSession = {
+    ...session,
+    appealDeadline: session.appealDeadline ? session.appealDeadline.toISOString() : null,
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between border-b pb-6">
@@ -89,7 +95,7 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
       </div>
 
       {/* V2.0 Controls */}
-      <WorkSessionControls session={session} />
+      <WorkSessionControls session={serializedSession} />
 
       <div className="rounded-md border bg-card">
          {/* Live Client Component for "Magic" Updates */}
