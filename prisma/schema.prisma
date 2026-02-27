@@ -81,6 +81,7 @@ model WorkSession {
   areGradesReleased Boolean? @default(false) @map("are_grades_released")
   includeInCalculation Boolean? @default(true) @map("include_in_calculation")
   allowAppeals Boolean? @default(false) @map("allow_appeals")
+  appealDeadline DateTime? @map("appeal_deadline")
   confidenceThreshold Int? @default(85) @map("confidence_threshold") // 0-100
 
   type         String?   @default("WORK_SESSION")
@@ -205,6 +206,7 @@ model BulkSession {
   // Results
   successCount    Int?      @default(0) @map("success_count")
   unidentifiedCount Int?    @default(0) @map("unidentified_count")
+  errorMessage    String?   @map("error_message")
 
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")

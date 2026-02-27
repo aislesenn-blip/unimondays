@@ -41,6 +41,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Appeals are disabled for this session.' }, { status: 403 });
     }
 
+    // Check Appeal Deadline
+    if (submission.workSession.appealDeadline && new Date() > new Date(submission.workSession.appealDeadline)) {
+        return NextResponse.json({ error: 'Appeal window has closed.' }, { status: 403 });
+    }
+
     // Check if status allows appeal (GRADED or FLAGGED)
     // The previous code only checked for 'GRADED'. Students might want to appeal FLAGGED items too if released?
     // Assuming only released grades can be appealed.

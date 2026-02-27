@@ -15,6 +15,7 @@ interface WorkSessionControlsProps {
     id: string;
     strictDeadline: boolean | null;
     allowAppeals: boolean | null;
+    appealDeadline: string | null;
     areGradesReleased: boolean | null;
     releaseMode: string | null;
     confidenceThreshold: number | null;
@@ -24,22 +25,30 @@ interface WorkSessionControlsProps {
 export function WorkSessionControls({ session }: WorkSessionControlsProps) {
   const [strictDeadline, setStrictDeadline] = useState(session.strictDeadline || false);
   const [allowAppeals, setAllowAppeals] = useState(session.allowAppeals || false);
+  const [appealDeadline, setAppealDeadline] = useState(session.appealDeadline ? new Date(session.appealDeadline).toISOString().slice(0, 16) : "");
   const [areGradesReleased, setAreGradesReleased] = useState(session.areGradesReleased || false);
   const [confidenceThreshold, setConfidenceThreshold] = useState(session.confidenceThreshold || 85);
   const [loading, setLoading] = useState<string | null>(null);
 
-  const updateSetting = async (key: string, value: boolean | number) => {
+  const updateSetting = async (key: string, value: boolean | number | string | null) => {
     setLoading(key);
     try {
+      let payloadValue = value;
+      // Convert date to ISO string (UTC) to handle timezones correctly
+      if (key === 'appealDeadline' && typeof value === 'string' && value) {
+          payloadValue = new Date(value).toISOString();
+      }
+
       const res = await fetch(`/api/work-sessions/${session.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [key]: value }),
+        body: JSON.stringify({ [key]: payloadValue }),
       });
       if (!res.ok) throw new Error("Update failed");
 
       if (key === 'strictDeadline') setStrictDeadline(value as boolean);
       if (key === 'allowAppeals') setAllowAppeals(value as boolean);
+      if (key === 'appealDeadline') setAppealDeadline(value as string);
       if (key === 'areGradesReleased') setAreGradesReleased(value as boolean);
       if (key === 'confidenceThreshold') setConfidenceThreshold(value as number);
 
@@ -80,17 +89,31 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
         </div>
 
         {/* Allow Appeals */}
-        <div className="flex items-center space-x-2">
-            <Switch
-                id="allow-appeals"
-                checked={allowAppeals}
-                onCheckedChange={(v) => updateSetting('allowAppeals', v)}
-                disabled={!!loading}
-            />
-            <Label htmlFor="allow-appeals" className="flex items-center gap-1 cursor-pointer">
-                Allow Appeals
-                {loading === 'allowAppeals' && <Loader2 className="h-3 w-3 animate-spin" />}
-            </Label>
+        <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+                <Switch
+                    id="allow-appeals"
+                    checked={allowAppeals}
+                    onCheckedChange={(v) => updateSetting('allowAppeals', v)}
+                    disabled={!!loading}
+                />
+                <Label htmlFor="allow-appeals" className="flex items-center gap-1 cursor-pointer">
+                    Allow Appeals
+                    {loading === 'allowAppeals' && <Loader2 className="h-3 w-3 animate-spin" />}
+                </Label>
+            </div>
+            {allowAppeals && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                     <Label htmlFor="appeal-deadline" className="text-xs text-muted-foreground">Until:</Label>
+                     <input
+                        type="datetime-local"
+                        id="appeal-deadline"
+                        value={appealDeadline}
+                        onChange={(e) => updateSetting('appealDeadline', e.target.value)}
+                        className="h-8 text-sm border rounded px-2 bg-background"
+                     />
+                </div>
+            )}
         </div>
 
         {/* AI Confidence Threshold */}
