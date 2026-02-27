@@ -208,10 +208,7 @@ Student Identifier: ${studentId}.
                   confidence: 1.0
               })),
               aiReasoning: sim.reasoning,
-              confidence: sim.confidence,
-              strengths: ["Consistency", "Clarity"],
-              weaknesses: ["Calculation Error"],
-              improvement: "Check arithmetic."
+              confidence: sim.confidence
           };
       } else {
           // Pass image buffer for multimodal grading
@@ -276,18 +273,18 @@ Student Identifier: ${studentId}.
               // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
               // We proceed but maybe lower confidence? For now, we trust the auth context but log it.
               console.log(`[AI_IDENTITY] AI missed identity, but using Auth Context: ${submission.user?.fullName}`);
-              status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+              status = (result.confidence ?? 0) >= threshold ? 'GRADED' : 'FLAGGED';
           }
       } else {
-          status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+          status = (result.confidence ?? 0) >= threshold ? 'GRADED' : 'FLAGGED';
       }
 
       console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
-        strengths: result.strengths || [],
-        weaknesses: result.weaknesses || [],
-        improvement: result.improvement || "No specific advice."
+        strengths: [],
+        weaknesses: [],
+        improvement: "Detailed feedback via AI is now embedded in question breakdowns."
       });
 
       await prisma.submission.update({

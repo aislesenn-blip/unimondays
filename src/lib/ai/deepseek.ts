@@ -274,4 +274,6 @@ ${ocrText}` }
       await new Promise(res => setTimeout(res, 1000 * Math.pow(2, attempt)));
     }
   }
+
+  throw new Error("AI Grading Service completely failed: Maximum network retries (3) exceeded.");
 }
