@@ -250,6 +250,16 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
             )}
 
             {/* Breakdown Table */}
+            {breakdown.some((i: any) => i.review_flag || i.alternative_valid_concept) && (
+                <Alert className="bg-yellow-50 border-yellow-200 text-yellow-900">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <AlertTitle className="text-yellow-800 font-bold">AI Flagged for Review</AlertTitle>
+                    <AlertDescription className="mt-2 text-sm leading-relaxed">
+                        The AI detected alternative valid concepts or low confidence on specific questions. Please review the highlighted questions below.
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {breakdown.length > 0 && (
                 <div>
                     <h3 className="text-sm font-medium mb-3">Grading Breakdown</h3>
@@ -258,7 +268,20 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                             <div key={i} className="flex justify-between p-3 text-sm border-b last:border-0">
                                 <div className="flex-1 pr-4">
                                     <span className="font-medium text-foreground">{item.question}</span>
+                                    {item.alternative_valid_concept && (
+                                        <Badge variant="outline" className="ml-2 bg-yellow-50 text-yellow-700 border-yellow-200">
+                                            Alternative Valid Concept
+                                        </Badge>
+                                    )}
+                                    {item.review_flag && (
+                                        <Badge variant="destructive" className="ml-2 text-[10px] uppercase">
+                                            Review Required
+                                        </Badge>
+                                    )}
                                     <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
+                                    {item.status === 'Not Attempted' && (
+                                        <p className="text-red-500 text-xs mt-1 font-semibold">Not Attempted</p>
+                                    )}
                                 </div>
                                 <div className="font-mono font-medium">
                                     {item.score}/{item.max}
