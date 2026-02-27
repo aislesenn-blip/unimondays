@@ -10,9 +10,26 @@ const PNG_MAGIC = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
 async function validateFileSignature(buffer: Buffer): Promise<boolean> {
   try {
-    const bytes = new Uint8Array(buffer.slice(0, 8)); // Read first 8 bytes
-    const check = (magic: number[]) => magic.every((byte, i) => bytes[i] === byte);
-    return check(PDF_MAGIC) || check(JPEG_MAGIC) || check(PNG_MAGIC);
+    // MANDATE 3: RELAXED MAGIC BYTE CHECK
+    // Scanners often add garbage headers or Byte Order Marks (BOM).
+    // We search the first 128 bytes for the signature instead of enforcing index 0.
+    const header = buffer.slice(0, 128);
+
+    const containsSequence = (magic: number[]) => {
+        for (let i = 0; i <= header.length - magic.length; i++) {
+            let match = true;
+            for (let j = 0; j < magic.length; j++) {
+                if (header[i + j] !== magic[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) return true;
+        }
+        return false;
+    };
+
+    return containsSequence(PDF_MAGIC) || containsSequence(JPEG_MAGIC) || containsSequence(PNG_MAGIC);
   } catch (e) {
     return false;
   }
