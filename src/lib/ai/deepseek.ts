@@ -259,7 +259,7 @@ ${ocrText}` }
 
     } catch (error: any) {
       attempt++;
-      console.error(`AI Grading Error (Attempt ${attempt}/${MAX_RETRIES}):`, error);
+      console.error(`[GRADING FATAL ERROR] AI Grading Error (Attempt ${attempt}/${MAX_RETRIES}):`, error);
 
       const isRateLimit = error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503');
 
