@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(newClass, { status: 201 });
   } catch (error: any) {
     if (error.code === 'P2002') {
-      return NextResponse.json({ error: 'Class code already exists' }, { status: 409 });
+      return NextResponse.json({ error: 'A class with this name or code already exists.' }, { status: 409 });
     }
     console.error("Error creating class:", error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

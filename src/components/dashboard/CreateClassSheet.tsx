@@ -32,6 +32,11 @@ export function CreateClassSheet() {
         body: JSON.stringify(data)
       });
 
+      if (res.status === 409) {
+        toast.warning("Warning: This Class Code or Name already exists. Please use a unique code.");
+        return;
+      }
+
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to create class');
