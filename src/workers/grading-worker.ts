@@ -191,8 +191,22 @@ Student Identifier: ${studentId}.
           if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
 
           result = {
-              totalScore: sim.score,
-              breakdown: sim.breakdown as any,
+              total_marks_awarded: sim.score,
+              total_max_marks: totalMarks,
+              exam_id: "sim",
+              rubric_version: "sim",
+              model_version: "sim",
+              results: (sim.breakdown as any).map((b: any) => ({
+                  question_id: b.question,
+                  marks_awarded: b.score,
+                  max_marks: b.max,
+                  justification: b.feedback,
+                  status: "Attempted",
+                  tier_used: "Tier 1",
+                  alternative_valid_concept: false,
+                  review_flag: false,
+                  confidence: 1.0
+              })),
               aiReasoning: sim.reasoning,
               confidence: sim.confidence,
               strengths: ["Consistency", "Clarity"],
@@ -202,20 +216,32 @@ Student Identifier: ${studentId}.
       } else {
           // Pass image buffer for multimodal grading
           result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
-          console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
+          console.log(`[AI_SUCCESS] Graded. Score: ${result.total_marks_awarded}/${totalMarks}`);
       }
 
       // 4. Save Score & Feedback
-      if (typeof result.totalScore !== 'number') {
-          throw new Error("Invalid AI Result: Missing totalScore");
+      if (typeof result.total_marks_awarded !== 'number') {
+          throw new Error("Invalid AI Result: Missing total_marks_awarded");
       }
 
-      const breakdownStr = JSON.stringify(result.breakdown);
+      // Transform the new V2 results format into the expected breakdown format
+      const formattedBreakdown = result.results?.map((item) => ({
+        question: item.question_id,
+        score: item.marks_awarded,
+        max: item.max_marks,
+        feedback: item.justification,
+        rubricReference: item.tier_used,
+        status: item.status,
+        alternative_valid_concept: item.alternative_valid_concept,
+        review_flag: item.review_flag,
+        confidence: item.confidence
+      })) || [];
+      const breakdownStr = JSON.stringify(formattedBreakdown);
 
       await prisma.score.upsert({
         where: { submissionId: submission.id },
         update: {
-          totalMarks: result.totalScore,
+          totalMarks: result.total_marks_awarded,
           breakdown: breakdownStr,
           remarks: result.aiReasoning,
           detectedIdentity: result.detectedIdentity,
@@ -223,7 +249,7 @@ Student Identifier: ${studentId}.
         },
         create: {
           submissionId: submission.id,
-          totalMarks: result.totalScore,
+          totalMarks: result.total_marks_awarded,
           breakdown: breakdownStr,
           remarks: result.aiReasoning,
           detectedIdentity: result.detectedIdentity
@@ -278,7 +304,7 @@ Student Identifier: ${studentId}.
         data: {
           userId: submission.userId,
           action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
-          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.totalScore}`,
+          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.total_marks_awarded}`,
           severity: status === 'GRADED' ? 'INFO' : 'WARNING'
         }
       });
@@ -293,7 +319,7 @@ Student Identifier: ${studentId}.
 
       return {
         success: true,
-        score: result.totalScore,
+        score: result.total_marks_awarded,
         status
       };
 

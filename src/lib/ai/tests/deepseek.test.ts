@@ -44,11 +44,11 @@ describe('AI System Prompt Generation', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
 
-    expect(prompt).toContain('MANDATE 1: THE MARKING SCHEME CALIBRATION');
-    expect(prompt).toContain('MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)');
-    expect(prompt).toContain('MANDATE 3: EMPATHY & OCR FORGIVENESS');
-    expect(prompt).toContain('MANDATE 4: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS');
-    expect(prompt).toContain('MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT');
+    expect(prompt).toContain('🔐 IMMUTABLE RULES');
+    expect(prompt).toContain('🎯 CORE RULE: MARK ALLOCATION ENFORCEMENT');
+    expect(prompt).toContain('🧠 EVALUATION PROTOCOL (STRICT 3-TIER MODEL)');
+    expect(prompt).toContain('TIER 1 (DIRECT OR SEMANTIC MATCH)');
+    expect(prompt).toContain('TIER 2 (EQUIVALENT CONCEPT VALIDATION)');
   });
 
   it('should preserve critical system protocols', () => {
@@ -60,21 +60,21 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('detectedIdentity');
 
     // Chaos Handling (Old Mandate 2)
-    expect(prompt).toContain('SYSTEM PROTOCOL 2: CHAOS HANDLING (NON-LINEAR GRADING)');
+    expect(prompt).toContain('TIER 3 (OUT-OF-SCOPE OR GENERIC KNOWLEDGE)');
 
     // Autopilot (Old Mandate 6)
-    expect(prompt).toContain('SYSTEM PROTOCOL 3: AUTOPILOT PROTOCOL');
+    expect(prompt).toContain('❗ MISSING QUESTIONS HANDLING');
 
     // Visual Analysis (Old Mandate 7)
-    expect(prompt).toContain('SYSTEM PROTOCOL 4: ADVANCED VISUAL & DIAGRAM ANALYSIS');
+    expect(prompt).toContain('📊 CONFIDENCE SCORING & RUBRIC GAP DETECTION');
   });
 
   it('should include the strict JSON output schema', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
 
-    expect(prompt).toContain('Output STRICT JSON:');
-    expect(prompt).toContain('"totalScore": number');
+    expect(prompt).toContain('📦 OUTPUT FORMAT (MANDATORY STRICT JSON ONLY)');
+    expect(prompt).toContain('"total_marks_awarded": number');
     expect(prompt).toContain('"detectedIdentity": "string');
   });
 });
