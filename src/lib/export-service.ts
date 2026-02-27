@@ -8,6 +8,14 @@ export type FullSubmission = Submission & {
   user: User | null;
 };
 
+// Helper for Identity Priority (V2.3)
+function getIdentity(sub: FullSubmission) {
+    const detected = sub.score?.detectedIdentity;
+    const name = detected || sub.user?.fullName || sub.studentName || 'Unknown Student';
+    const id = sub.studentRegNo || sub.user?.email || 'N/A';
+    return { name, id };
+}
+
 export async function createFeedbackPage(submission: FullSubmission): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
   const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
@@ -16,11 +24,15 @@ export async function createFeedbackPage(submission: FullSubmission): Promise<Bu
   const { width, height } = page.getSize();
   let y = height - 50;
 
+  const identity = getIdentity(submission);
+
   // Header
   page.drawText(`Feedback Report`, { x: 50, y, size: 20, font: timesRomanFont });
   y -= 30;
-  page.drawText(`Student: ${submission.studentRegNo || 'Unknown'}`, { x: 50, y, size: 14, font: timesRomanFont });
+  page.drawText(`Student Name: ${identity.name}`, { x: 50, y, size: 14, font: timesRomanFont });
   y -= 20;
+  page.drawText(`ID / Reg No: ${identity.id}`, { x: 50, y, size: 12, font: timesRomanFont });
+  y -= 30;
   page.drawText(`Score: ${submission.score?.totalMarks || 0}`, { x: 50, y, size: 14, font: timesRomanFont });
   y -= 40;
 
@@ -42,9 +54,17 @@ export async function createFeedbackPage(submission: FullSubmission): Promise<Bu
             }
 
             const text = `${item.question}: ${item.score}/${item.max} - ${item.feedback}`;
-            const safeText = text.length > 90 ? text.substring(0, 87) + '...' : text;
-            page.drawText(safeText, { x: 50, y, size: 10, font: timesRomanFont });
-            y -= 15;
+            // Basic text wrapping
+            if (text.length > 90) {
+                const chunk1 = text.substring(0, 90);
+                const chunk2 = text.substring(90, 180) + (text.length > 180 ? '...' : '');
+                page.drawText(chunk1, { x: 50, y, size: 10, font: timesRomanFont });
+                y -= 12;
+                page.drawText(chunk2, { x: 50, y, size: 10, font: timesRomanFont });
+            } else {
+                page.drawText(text, { x: 50, y, size: 10, font: timesRomanFont });
+            }
+            y -= 18;
           }
       }
     } catch (e) {
@@ -69,6 +89,10 @@ export async function createFeedbackPage(submission: FullSubmission): Promise<Bu
             currentLine = word + " ";
         } else {
             currentLine += word + " ";
+        }
+        if (y < 50) {
+            page = pdfDoc.addPage();
+            y = height - 50;
         }
     }
     page.drawText(currentLine, { x: 50, y, size: 10, font: timesRomanFont });
@@ -106,15 +130,28 @@ export async function createAnnotatedPdf(submission: FullSubmission, feedbackBuf
 }
 
 export async function generateMasterExcel(submissions: FullSubmission[]): Promise<Buffer> {
-  const data = submissions.map(sub => ({
-    RegNo: sub.studentRegNo,
-    Name: sub.studentName || sub.user?.fullName || '',
-    Score: sub.score?.totalMarks || 0,
-    Status: sub.status,
-    Remarks: sub.score?.remarks || ''
-  }));
+  const data = submissions.map(sub => {
+    const identity = getIdentity(sub);
+    return {
+        'Student Name': identity.name,
+        'Reg No / ID': identity.id,
+        'Score': sub.score?.totalMarks || 0,
+        'Status': sub.status,
+        'Remarks': sub.score?.remarks || ''
+    };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(data);
+  // Auto-width for columns
+  const wscols = [
+      { wch: 30 }, // Name
+      { wch: 20 }, // ID
+      { wch: 10 }, // Score
+      { wch: 15 }, // Status
+      { wch: 50 }  // Remarks
+  ];
+  worksheet['!cols'] = wscols;
+
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Grades");
 

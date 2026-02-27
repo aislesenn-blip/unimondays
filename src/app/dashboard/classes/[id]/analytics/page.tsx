@@ -16,11 +16,11 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   if (!classData) notFound();
   if (classData.lecturerId !== user.id && user.role !== 'ADMIN') redirect("/dashboard");
 
-  // Fetch Graded Submissions
+  // Fetch Graded Submissions (Expanded Scope)
   const submissions = await prisma.submission.findMany({
       where: {
           workSession: { classId: id },
-          status: 'GRADED'
+          status: { in: ['GRADED', 'FLAGGED', 'RELEASED', 'APPEALED'] }
       },
       include: {
           score: true,
@@ -58,7 +58,7 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
       if (percentage >= 50) passCount++;
 
       // Timeline
-      // Use detectedIdentity if available
+      // Priority: Detected > User > StudentName
       const studentName = sub.score.detectedIdentity || sub.user?.fullName || sub.studentName || "Unknown";
       const key = sub.userId || studentName; // Fallback to name if no UserID
 
