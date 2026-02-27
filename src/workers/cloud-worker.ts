@@ -32,6 +32,28 @@ export async function handleCloudMarking(job: Job) {
         // 1. Fetch the Cloud File
         const fileBuffer = await fetchFileFromLink(bulkSession.cloudLink);
 
+        // MANDATE 3: Smart File Inspection (Anti-Garbage)
+        // Check Magic Bytes for PDF (%PDF-)
+        const isPdf = fileBuffer.length > 4 &&
+                      fileBuffer[0] === 0x25 &&
+                      fileBuffer[1] === 0x50 &&
+                      fileBuffer[2] === 0x44 &&
+                      fileBuffer[3] === 0x46;
+
+        if (!isPdf) {
+            const errorMessage = "Unsupported file type detected. I saw images/photos or invalid data. Please provide a valid PDF exam link.";
+            console.error(`[CLOUD_WORKER] Invalid file type detected for BulkSession ${bulkSession.id}`);
+
+            await prisma.bulkSession.update({
+                where: { id: bulkSession.id },
+                data: {
+                    status: 'FAILED',
+                    errorMessage: errorMessage
+                }
+            });
+            throw new Error(errorMessage);
+        }
+
         // 2. Load PDF
         const srcDoc = await PDFDocument.load(fileBuffer);
         const pageCount = srcDoc.getPageCount();
@@ -140,10 +162,18 @@ export async function handleCloudMarking(job: Job) {
 
     } catch (e: any) {
         console.error("[CLOUD_WORKER] Critical Failure", e);
-        await prisma.bulkSession.update({
+        // Only update to FAILED if not already marked (avoid overwriting specific error messages)
+        const currentStatus = await prisma.bulkSession.findUnique({
             where: { id: bulkSession.id },
-            data: { status: 'FAILED' }
+            select: { status: true }
         });
+
+        if (currentStatus?.status !== 'FAILED') {
+             await prisma.bulkSession.update({
+                where: { id: bulkSession.id },
+                data: { status: 'FAILED', errorMessage: e.message || "Unknown error during processing" }
+            });
+        }
         throw e;
     }
 }

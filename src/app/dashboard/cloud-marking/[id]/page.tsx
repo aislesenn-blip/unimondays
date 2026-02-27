@@ -31,6 +31,7 @@ interface BulkSessionData {
   processedFiles: number;
   totalFiles: number;
   unidentifiedCount: number;
+  errorMessage?: string;
   submissions: any[]; // In a real app, this might be paginated
 }
 
@@ -107,7 +108,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{session.title}</h1>
           <div className="flex items-center gap-3 mt-2">
-             <Badge variant={session.status === 'READY' ? 'default' : 'secondary'}>
+             <Badge variant={session.status === 'READY' ? 'default' : session.status === 'FAILED' ? 'destructive' : 'secondary'}>
                 {session.status === 'PROCESSING' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                 {session.status}
              </Badge>
@@ -131,8 +132,24 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
+      {/* FAILED STATE */}
+      {session.status === 'FAILED' && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-6 flex flex-col items-center justify-center text-center space-y-3">
+              <div className="h-12 w-12 rounded-full bg-destructive/20 flex items-center justify-center text-destructive">
+                  <AlertTriangle className="h-6 w-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-destructive">Processing Failed</h3>
+              <p className="text-sm text-destructive/80 max-w-lg">
+                  {session.errorMessage || "An unexpected error occurred during cloud processing. Please check the file link and try again."}
+              </p>
+              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => router.push('/dashboard/cloud-marking')}>
+                  Return to Dashboard
+              </Button>
+          </div>
+      )}
+
       {/* MANDATE 4: RECONCILIATION UI */}
-      {session.status === 'PROCESSING' || session.status === 'PENDING' ? (
+      {(session.status === 'PROCESSING' || session.status === 'PENDING') ? (
           <Card className="border-dashed border-2">
               <CardContent className="flex flex-col items-center justify-center py-20 text-center space-y-4">
                   <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center animate-pulse">
@@ -143,9 +160,19 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
                       The system is autonomously fetching, slicing, and grading the submissions.
                       Results will appear here shortly.
                   </p>
+                  {/* Progress Bar Simulation */}
+                   <div className="w-full max-w-xs h-2 bg-muted rounded-full overflow-hidden">
+                       <div
+                           className="h-full bg-primary transition-all duration-500 ease-out"
+                           style={{ width: `${session.totalFiles > 0 ? (session.processedFiles / session.totalFiles) * 100 : 5}%` }}
+                       />
+                   </div>
+                   <p className="text-xs text-muted-foreground">
+                       {Math.round(session.totalFiles > 0 ? (session.processedFiles / session.totalFiles) * 100 : 0)}% Complete
+                   </p>
               </CardContent>
           </Card>
-      ) : (
+      ) : session.status === 'FAILED' ? null : (
           <div className="grid gap-6 md:grid-cols-2">
               {/* MATCHES */}
               <Card className="border-green-100 bg-green-50/20">

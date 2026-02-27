@@ -27,7 +27,8 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
 
   const isReleased = submission.isReleased; // Assuming API returns this flag or based on status
   // Allow appeal if grades are released, appeals are allowed, and not already appealed/pending
-  const canAppeal = isReleased && submission.allowAppeals && submission.status !== 'APPEALED';
+  const appealDeadlinePassed = submission.appealDeadline ? new Date() > new Date(submission.appealDeadline) : false;
+  const canAppeal = isReleased && submission.allowAppeals && submission.status !== 'APPEALED' && !appealDeadlinePassed;
 
   return (
     <Sheet>
@@ -57,9 +58,21 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                         </div>
                     </div>
                     {/* Appeal Button */}
-                    {canAppeal && (
-                        <AppealModal submissionId={submission.id} onSuccess={() => window.location.reload()} />
-                    )}
+                    <div className="flex flex-col items-end gap-1">
+                        {canAppeal && (
+                            <AppealModal submissionId={submission.id} onSuccess={() => window.location.reload()} />
+                        )}
+                        {submission.allowAppeals && appealDeadlinePassed && (
+                            <div className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-1 rounded">
+                                Appeal window closed
+                            </div>
+                        )}
+                         {submission.allowAppeals && !appealDeadlinePassed && submission.appealDeadline && (
+                            <div className="text-[10px] text-muted-foreground">
+                                Appeals close: {new Date(submission.appealDeadline).toLocaleString()}
+                            </div>
+                        )}
+                    </div>
                 </div>
             ) : (
                 <div className="bg-amber-50 text-amber-900 p-4 rounded-lg text-sm border border-amber-100 flex items-start gap-3">

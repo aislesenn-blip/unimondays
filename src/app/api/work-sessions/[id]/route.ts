@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const body = await req.json();
 
       // Filter allowed fields for security
-      const allowed = ['strictDeadline', 'areGradesReleased', 'includeInCalculation', 'allowAppeals', 'releaseMode', 'confidenceThreshold'];
+      const allowed = ['strictDeadline', 'areGradesReleased', 'includeInCalculation', 'allowAppeals', 'appealDeadline', 'releaseMode', 'confidenceThreshold'];
       const data: any = {};
       for (const key of allowed) {
           if (key in body) data[key] = body[key];
