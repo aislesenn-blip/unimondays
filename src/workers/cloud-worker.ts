@@ -6,6 +6,13 @@ import { PDFDocument } from 'pdf-lib';
 async function fetchFileFromLink(url: string): Promise<Buffer> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch cloud file: ${res.statusText}`);
+
+    // Google Drive Trap Detection
+    const contentType = res.headers.get('content-type') || '';
+    if (url.includes('drive.google.com') && contentType.includes('text/html')) {
+        throw new Error("Google Drive links block direct server downloads. Please use a direct Dropbox link (ending in ?dl=1) or upload the PDF directly to a public host.");
+    }
+
     return Buffer.from(await res.arrayBuffer());
 }
 

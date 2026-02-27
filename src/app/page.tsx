@@ -67,6 +67,79 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Deep Explanation Section: Cloud Marking */}
+        <section className="py-24 bg-background">
+            <div className="max-w-7xl mx-auto px-6 md:px-12">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                    <div className="space-y-8">
+                        <h2 className="text-3xl font-bold tracking-tight">Cloud Marking: The Ultimate Bulk Grading Engine</h2>
+                        <p className="text-lg text-muted-foreground leading-relaxed">
+                            Stop grading papers one by one. With Cloud Marking, you upload a single PDF containing hundreds of exam scripts. Our AI engine automatically slices, indexes, and grades every student in minutes.
+                        </p>
+                        <div className="space-y-6">
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                    <Upload className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg">1. Upload Bulk PDF</h3>
+                                    <p className="text-muted-foreground text-sm">Drag and drop your scanned exam packet. We support huge files up to 500 pages.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                    <Zap className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg">2. Auto-Slice & Grade</h3>
+                                    <p className="text-muted-foreground text-sm">We detect student IDs, split the PDF into individual submissions, and apply your rubric.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                    <BarChart2 className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg">3. Instant Analytics</h3>
+                                    <p className="text-muted-foreground text-sm">Get a master gradebook and per-question breakdown instantly. Export to Excel with one click.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="relative h-[500px] rounded-2xl overflow-hidden shadow-2xl border bg-muted/50 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-violet-500/10"></div>
+                        <img
+                            src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1600&auto=format&fit=crop"
+                            alt="Cloud Marking Dashboard"
+                            className="absolute inset-0 w-full h-full object-cover opacity-80"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="bg-background/90 backdrop-blur border rounded-xl p-6 shadow-xl max-w-sm">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                                        <CheckCircle2 className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold">Processing Complete</div>
+                                        <div className="text-xs text-muted-foreground">142 Scripts Graded • 4m 12s</div>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 w-full animate-pulse"></div>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span>upload_final_exam.pdf</span>
+                                        <span>100%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         {/* Feature Section */}
         <section id="how-it-works" className="py-24 bg-secondary/30">
           <div className="max-w-7xl mx-auto px-6 md:px-12">
@@ -231,6 +304,18 @@ export default function LandingPage() {
                  <div className="bg-background p-6 rounded-xl border shadow-sm">
                     <h3 className="font-bold text-lg mb-2">Can I customize the grading strictness?</h3>
                     <p className="text-muted-foreground">Absolutely. You can configure the AI to be Lenient, Moderate, or Strict depending on the nature of the assessment.</p>
+                 </div>
+                 <div className="bg-background p-6 rounded-xl border shadow-sm">
+                    <h3 className="font-bold text-lg mb-2">What is Cloud Marking?</h3>
+                    <p className="text-muted-foreground">Cloud Marking is our bulk processing engine. You upload a single PDF containing all student scripts (e.g., 500 pages), and our system automatically splits them, identifies the student, and grades each one individually.</p>
+                 </div>
+                 <div className="bg-background p-6 rounded-xl border shadow-sm">
+                    <h3 className="font-bold text-lg mb-2">How many exam papers can I grade at once?</h3>
+                    <p className="text-muted-foreground">There is no hard limit. We regularly process bulk PDFs with hundreds of pages. The system queues them and processes them in parallel for maximum speed.</p>
+                 </div>
+                 <div className="bg-background p-6 rounded-xl border shadow-sm">
+                    <h3 className="font-bold text-lg mb-2">What file formats are supported?</h3>
+                    <p className="text-muted-foreground">We strictly support <strong>PDF</strong> for Cloud Marking to ensure maximum security and formatting preservation. For individual submissions, we also accept images (PNG, JPG).</p>
                  </div>
               </div>
            </div>

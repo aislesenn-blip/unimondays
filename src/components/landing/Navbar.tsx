@@ -14,10 +14,10 @@ export function Navbar({ className }: { className?: string }) {
         </Link>
 
         <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
+          <Link href="/#how-it-works" className="text-primary font-semibold hover:text-primary/80 transition-colors">Cloud Marking</Link>
           <Link href="/#outcomes" className="hover:text-foreground transition-colors">Outcomes</Link>
           <Link href="/#partnerships" className="hover:text-foreground transition-colors">Partnerships</Link>
           <Link href="/#faqs" className="hover:text-foreground transition-colors">FAQs</Link>
-          <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
         </div>
       </div>
 
