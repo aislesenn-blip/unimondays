@@ -184,7 +184,7 @@ export async function handleCloudMarking(job: Job) {
                         const sliceBuffer = Buffer.from(pdfBytes);
 
                         // Identity (sanitize)
-                        const safeRegNo = split.regNo?.replace(/[^a-zA-Z0-9]/g, '') || 'UNIDENTIFIED';
+                        const safeRegNo = split.regNo?.replace(/[^a-zA-Z0-9\-\/]/g, '') || 'UNIDENTIFIED';
                         const uniqueSuffix = uuidv4().substring(0, 8); // Prevent collisions
                         const fileName = `bulk_${bulkSession.id}_${safeRegNo}_${uniqueSuffix}.pdf`;
 
