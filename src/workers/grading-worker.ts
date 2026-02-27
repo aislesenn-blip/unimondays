@@ -42,22 +42,23 @@ export async function handleAiGrade(job: Job) {
   console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}`);
 
   try {
-      // PARALLEL TASK 1: Submission OCR
-      const submissionOcrTask = async (): Promise<string> => {
-          if (submission.ocrText) {
-              console.log(`[OCR_SKIP] Submission already OCR'd. Length: ${submission.ocrText.length}`);
-              return submission.ocrText;
-          }
+      // PARALLEL TASK 1: Submission OCR (Return buffer for visual analysis)
+      const submissionOcrTask = async (): Promise<{ text: string, buffer: Buffer, mimeType: string }> => {
           if (!submission.filePath) throw new Error("No file path and no OCR text for submission.");
 
+          console.log(`[SUPABASE_FETCH] Submission File: ${submission.filePath}`);
+          const buffer = await readFile(submission.filePath, 'exam_pdfs');
+
+          const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
+                           submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+                           'application/pdf';
+
+          if (submission.ocrText) {
+              console.log(`[OCR_SKIP] Submission already OCR'd. Length: ${submission.ocrText.length}`);
+              return { text: submission.ocrText, buffer, mimeType };
+          }
+
           try {
-              console.log(`[SUPABASE_FETCH] Submission File: ${submission.filePath}`);
-              const buffer = await readFile(submission.filePath, 'exam_pdfs');
-
-              const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
-                               submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
-                               'application/pdf';
-
               console.log(`[OCR_START] Sending ${buffer.length} bytes to Gemini (${mimeType})...`);
               const text = await ocrDocument(buffer, mimeType);
               console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
@@ -67,7 +68,7 @@ export async function handleAiGrade(job: Job) {
                   where: { id: submissionId },
                   data: { ocrText: text, status: 'PROCESSING' }
               });
-              return text;
+              return { text, buffer, mimeType };
           } catch (ocrError: any) {
               console.error("[OCR_FATAL_ERROR]", ocrError);
               throw new Error(`OCR Processing Failed: ${ocrError.message}`);
@@ -124,12 +125,12 @@ export async function handleAiGrade(job: Job) {
       };
 
       // EXECUTE PARALLEL TASKS
-      let ocrText: string;
+      let submissionData: { text: string, buffer: Buffer, mimeType: string };
       let rubricContent: string;
       let markingSchemeText: string | undefined;
 
       try {
-          [ocrText, rubricContent, markingSchemeText] = await Promise.all([
+          [submissionData, rubricContent, markingSchemeText] = await Promise.all([
               submissionOcrTask(),
               rubricOcrTask(),
               markingSchemeOcrTask()
@@ -137,6 +138,8 @@ export async function handleAiGrade(job: Job) {
       } catch (e: any) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
+
+      const { text: ocrText, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
 
       // Prepare Config
       const strictnessMap: Record<string, number> = {
@@ -173,10 +176,11 @@ Student Identifier: ${studentId}.
       // 3. Grade (Zero-Trust Tracing)
       const totalMarks = submission.workSession.totalMarks || 100;
 
-      console.log(`[AI_GRADE] Invoking DeepSeek for Job ${job.id}`);
+      console.log(`[AI_GRADE] Invoking AI for Job ${job.id}`);
       console.log(`- Config: Strictness=${config.strictness}`);
       console.log(`- Context: ${contextString.trim()}`);
       console.log(`- Payload: Submission=${ocrText.length} chars, Rubric=${rubricContent.length} chars`);
+      if (submissionBuffer) console.log(`- Visual: Buffer loaded (${submissionBuffer.length} bytes, ${submissionMime})`);
 
       let result: GradingResult;
 
@@ -196,7 +200,8 @@ Student Identifier: ${studentId}.
               improvement: "Check arithmetic."
           };
       } else {
-          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config);
+          // Pass image buffer for multimodal grading
+          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
           console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
       }
 

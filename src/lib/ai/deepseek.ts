@@ -7,6 +7,18 @@ export const deepseek = process.env.DEEPSEEK_API_KEY
     })
   : null;
 
+// Initialize OpenRouter Client for Multimodal Vision (Gemini 2.5 Flash)
+const openRouter = process.env.OPENROUTER_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.OPENROUTER_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      defaultHeaders: {
+        "HTTP-Referer": "https://playbook.edu",
+        "X-Title": "Playbook EdTech",
+      },
+    })
+  : null;
+
 export interface GradingResult {
   totalScore: number;
   breakdown: Array<{
@@ -72,7 +84,9 @@ export async function gradeSubmission(
   ocrText: string,
   rubric: string,
   totalMarks: number,
-  config: GradeConfig = { strictness: 1.0 }
+  config: GradeConfig = { strictness: 1.0 },
+  imageBuffer?: Buffer, // NEW: Multimodal Payload
+  mimeType?: string     // NEW: Multimodal Payload
 ): Promise<GradingResult> {
   if (!deepseek) {
     throw new Error("DEEPSEEK_API_KEY is not set. Grading service unavailable.");
@@ -111,6 +125,10 @@ MANDATE 6: AUTOPILOT PROTOCOL
 - Infer a standard academic marking scheme based on the content.
 - Do NOT reject the task for a missing formal marking scheme.
 
+MANDATE 7: VISUAL & DIAGRAM ANALYSIS PROTOCOL
+- **You are a Multimodal Visual Examiner.** Do NOT just read the text on the page. If the student provides a drawing, sketch, graph, or diagram, you MUST deeply analyze the visual geometry, shapes, and structural accuracy of the drawing itself.
+- If the question asks the student to draw or label a shape (e.g., a heart, an ear, a physics circuit), evaluate if the shape is visually correct, where the components are placed, and if the indicator lines point to the correct visual parts. Grade the drawing visually, not just the words.
+
 Context:
 ${config.context || "No specific context provided."}
 
@@ -138,11 +156,45 @@ Output STRICT JSON:
 Total score max: ${totalMarks}.`;
 
   try {
-    const completion = await deepseek.chat.completions.create({
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Marking Scheme:
+    let completion: OpenAI.Chat.Completions.ChatCompletion;
+
+    // BRANCH: MULTIMODAL (Visual Analysis)
+    if (imageBuffer && openRouter && mimeType) {
+        console.log(`[AI_ROUTER] Routing request to Gemini 2.5 Flash (Multimodal) via OpenRouter.`);
+        const base64Data = imageBuffer.toString("base64");
+        const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+        completion = await openRouter.chat.completions.create({
+            model: "google/gemini-2.5-flash",
+            messages: [
+                { role: "system", content: systemPrompt },
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: `Marking Scheme:\n${config.markingScheme || "None"}\n\nRubric:\n${rubric}\n\nStudent Text (OCR):\n${ocrText}` },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: dataUrl,
+                                detail: "high"
+                            }
+                        }
+                    ]
+                }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+            max_tokens: 4000,
+        });
+
+    } else {
+        // BRANCH: TEXT-ONLY (DeepSeek V3)
+        console.log(`[AI_ROUTER] Routing request to DeepSeek V3 (Text-Only).`);
+        completion = await deepseek.chat.completions.create({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Marking Scheme:
 ${config.markingScheme || "None"}
 
 Rubric:
@@ -150,22 +202,27 @@ ${rubric}
 
 Student Submission:
 ${ocrText}` }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-      max_tokens: 4000, // Prevent infinite loops
-    });
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+            max_tokens: 4000, // Prevent infinite loops
+        });
+    }
 
     const content = completion.choices[0].message.content;
-    if (!content) throw new Error("No content returned from DeepSeek");
+    if (!content) throw new Error("No content returned from AI Service");
 
-    const result = JSON.parse(content);
+    // Sanitize JSON (Markdown Stripping)
+    const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    const result = JSON.parse(cleanContent);
     return result as GradingResult;
+
   } catch (error: any) {
-    console.error("DeepSeek Grading Error:", error);
+    console.error("AI Grading Error:", error);
     // Add more context to error
     if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
-        throw new Error("RATE_LIMIT_HIT: DeepSeek Service overloaded.");
+        throw new Error("RATE_LIMIT_HIT: AI Service overloaded.");
     }
     throw new Error(`Failed to grade submission: ${error.message}`);
   }
