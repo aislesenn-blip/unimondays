@@ -25,6 +25,7 @@ interface GradeViewClientProps {
   submission: {
     id: string;
     studentName: string;
+    detectedIdentity?: string | null;
     regNo: string;
     score: number;
     maxScore: number;
@@ -51,7 +52,7 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
           </Link>
           <div>
             <h1 className="text-lg font-bold flex items-center gap-2">
-              {submission.studentName}
+              {submission.detectedIdentity || submission.studentName}
               <span className="text-sm font-normal text-muted-foreground">({submission.regNo})</span>
             </h1>
             <p className="text-xs text-muted-foreground">Submission ID: {submission.id}</p>

@@ -38,7 +38,7 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   let totalCount = 0;
 
   // 2. Bottlenecks
-  const questionStats: Record<string, { failures: number; count: number }> = {};
+  const questionStats: Record<string, { failures: number; count: number; totalScore: number; maxScore: number }> = {};
 
   // 3. Student Timeline
   const studentMap: Record<string, { name: string; data: any[] }> = {};
@@ -79,9 +79,11 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
                   // Key by Session Title + Question to avoid collisions
                   const qName = `${sub.workSession.title}: ${q.question || "Q"}`;
 
-                  if (!questionStats[qName]) questionStats[qName] = { failures: 0, count: 0 };
+                  if (!questionStats[qName]) questionStats[qName] = { failures: 0, count: 0, totalScore: 0, maxScore: q.max || 10 };
 
                   questionStats[qName].count++;
+                  questionStats[qName].totalScore += q.score || 0;
+
                   // Assume failure if score < 50% of max
                   if (q.score < (q.max * 0.5)) {
                       questionStats[qName].failures++;
@@ -96,12 +98,15 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   if (totalCount === 0) lowest = 0;
 
   const bottlenecks = Object.entries(questionStats)
-      .map(([q, stats]) => ({
-          question: q,
-          failureRate: Math.round((stats.failures / stats.count) * 100),
-          avgScore: 0, // Not calculating for now
-          maxScore: 0
-      }))
+      .map(([q, stats]) => {
+          const avg = stats.count > 0 ? (stats.totalScore / stats.count) : 0;
+          return {
+            question: q,
+            failureRate: Math.round((stats.failures / stats.count) * 100),
+            avgScore: parseFloat(avg.toFixed(1)),
+            maxScore: stats.maxScore
+          };
+      })
       .sort((a, b) => b.failureRate - a.failureRate)
       .slice(0, 5); // Top 5
 

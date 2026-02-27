@@ -18,12 +18,24 @@ import { AlertCircle } from "lucide-react";
 interface AppealModalProps {
   submissionId: string;
   onSuccess: () => void;
+  deadline?: string; // New prop for strict enforcement
 }
 
-export function AppealModal({ submissionId, onSuccess }: AppealModalProps) {
+export function AppealModal({ submissionId, onSuccess, deadline }: AppealModalProps) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // UTC Time check
+  const isExpired = deadline ? new Date() > new Date(deadline) : false;
+
+  if (isExpired) {
+      return (
+          <Button variant="outline" size="sm" disabled className="opacity-50 cursor-not-allowed">
+              Appeal Closed
+          </Button>
+      );
+  }
 
   const handleSubmit = async () => {
     if (!reason.trim()) return;

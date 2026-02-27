@@ -57,6 +57,24 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: 'Appeal already pending.' }, { status: 400 });
     }
 
+    // Rate Limit: Check last appeal time for this submission or user
+    // We want to prevent spamming appeals.
+    const lastAppeal = await prisma.appeal.findFirst({
+        where: {
+            submission: {
+                userId: userId
+            }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    if (lastAppeal) {
+        const timeSince = Date.now() - new Date(lastAppeal.createdAt).getTime();
+        if (timeSince < 60000) { // 60s debounce
+             return NextResponse.json({ error: 'Please wait before appealing again.' }, { status: 429 });
+        }
+    }
+
     // Create Appeal
     const appeal = await prisma.appeal.create({
         data: {

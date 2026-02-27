@@ -149,6 +149,11 @@ export default function LandingPage() {
                               icon: Download,
                               title: "Administrative Export",
                               desc: "One-click generation of master gradebooks and annotated script archives for departmental filing."
+                            },
+                            {
+                              icon: Upload,
+                              title: "Cloud Marking (Bulk PDF)",
+                              desc: "Upload a single PDF containing hundreds of exam scripts. We automatically slice, index, and grade them all."
                             }
                           ].map((feature, idx) => (
                             <div key={idx} className="flex gap-4 items-start p-4 hover:bg-secondary/50 rounded-xl transition-colors">

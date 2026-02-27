@@ -83,7 +83,11 @@ export function SubmissionList() {
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   {sub.isReleased && sub.allowAppeals && sub.status !== 'APPEALED' && (
-                     <AppealModal submissionId={sub.id} onSuccess={() => window.location.reload()} />
+                     <AppealModal
+                        submissionId={sub.id}
+                        onSuccess={() => window.location.reload()}
+                        deadline={sub.appealDeadline} // Pass deadline prop
+                     />
                   )}
                   <StudentResultDrawer submission={sub} />
                 </div>
