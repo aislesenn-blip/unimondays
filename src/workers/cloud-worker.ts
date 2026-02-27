@@ -1,6 +1,6 @@
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { saveBuffer } from '@/lib/storage';
+import { saveBuffer, deleteFile } from '@/lib/storage';
 import { PDFDocument } from 'pdf-lib';
 
 async function fetchFileFromLink(url: string): Promise<Buffer> {
@@ -28,6 +28,9 @@ export async function handleCloudMarking(job: Job) {
     console.log(`[CLOUD_WORKER] Starting Bulk Session: ${bulkSession.title}`);
     await prisma.bulkSession.update({ where: { id: bulkSession.id }, data: { status: 'PROCESSING' } });
 
+    // Track created files for cleanup on failure
+    const createdSlicePaths: string[] = [];
+
     try {
         // 1. Fetch the Cloud File
         const fileBuffer = await fetchFileFromLink(bulkSession.cloudLink);
@@ -41,8 +44,20 @@ export async function handleCloudMarking(job: Job) {
                       fileBuffer[3] === 0x46;
 
         if (!isPdf) {
-            const errorMessage = "Unsupported file type detected. I saw images/photos or invalid data. Please provide a valid PDF exam link.";
-            console.error(`[CLOUD_WORKER] Invalid file type detected for BulkSession ${bulkSession.id}`);
+            // Dynamic MIME Detection
+            let detectedType = "application/octet-stream";
+            if (fileBuffer.length > 3 && fileBuffer[0] === 0xFF && fileBuffer[1] === 0xD8 && fileBuffer[2] === 0xFF) {
+                detectedType = "image/jpeg";
+            } else if (fileBuffer.length > 8 && fileBuffer[0] === 0x89 && fileBuffer[1] === 0x50 && fileBuffer[2] === 0x4E && fileBuffer[3] === 0x47) {
+                detectedType = "image/png";
+            } else if (fileBuffer.toString('utf8', 0, 5).toLowerCase().includes('html') || fileBuffer.toString('utf8', 0, 15).toLowerCase().includes('<!doctype html>')) {
+                detectedType = "text/html";
+            } else if (fileBuffer.toString('utf8', 0, 4).toLowerCase() === 'zip' || (fileBuffer[0] === 0x50 && fileBuffer[1] === 0x4B)) {
+                detectedType = "application/zip";
+            }
+
+            const errorMessage = `Invalid file type. Expected application/pdf, but received ${detectedType}.`;
+            console.error(`[CLOUD_WORKER] ${errorMessage} for BulkSession ${bulkSession.id}`);
 
             await prisma.bulkSession.update({
                 where: { id: bulkSession.id },
@@ -108,6 +123,7 @@ export async function handleCloudMarking(job: Job) {
 
                         // Upload to Supabase
                         const slicePath = await saveBuffer(sliceBuffer, `bulk_${bulkSession.id}_p${j + 1}.pdf`, 'exam_pdfs');
+                        createdSlicePaths.push(slicePath);
 
                         // Create Submission
                         const submission = await prisma.submission.create({
@@ -162,6 +178,15 @@ export async function handleCloudMarking(job: Job) {
 
     } catch (e: any) {
         console.error("[CLOUD_WORKER] Critical Failure", e);
+
+        // Cleanup: Delete orphaned slices
+        if (createdSlicePaths.length > 0) {
+            console.log(`[CLOUD_WORKER] Cleaning up ${createdSlicePaths.length} orphaned slices...`);
+            Promise.all(createdSlicePaths.map(path => deleteFile(path))).catch(err =>
+                console.error("[CLOUD_WORKER] Cleanup failed", err)
+            );
+        }
+
         // Only update to FAILED if not already marked (avoid overwriting specific error messages)
         const currentStatus = await prisma.bulkSession.findUnique({
             where: { id: bulkSession.id },

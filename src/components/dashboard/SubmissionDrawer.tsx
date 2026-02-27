@@ -105,9 +105,14 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
       <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Submission Details</SheetTitle>
-          <SheetDescription>
-            {submission.studentName || submission.studentRegNo || 'Unknown Student'}
+          <SheetDescription className="font-medium text-foreground">
+            {submission.score?.detectedIdentity || submission.studentName || submission.studentRegNo || 'Unknown Student'}
           </SheetDescription>
+          {(submission.studentRegNo || submission.user?.email) && (
+             <p className="text-xs text-muted-foreground">
+                {submission.studentRegNo || submission.user?.email}
+             </p>
+          )}
         </SheetHeader>
 
         <div className="space-y-6 py-6">

@@ -89,7 +89,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
         </div>
 
         {/* Allow Appeals */}
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:space-x-4">
             <div className="flex items-center space-x-2">
                 <Switch
                     id="allow-appeals"
@@ -103,14 +103,14 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 </Label>
             </div>
             {allowAppeals && (
-                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
-                     <Label htmlFor="appeal-deadline" className="text-xs text-muted-foreground">Until:</Label>
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 w-full sm:w-auto">
+                     <Label htmlFor="appeal-deadline" className="text-xs text-muted-foreground whitespace-nowrap">Until:</Label>
                      <input
                         type="datetime-local"
                         id="appeal-deadline"
                         value={appealDeadline}
                         onChange={(e) => updateSetting('appealDeadline', e.target.value)}
-                        className="h-8 text-sm border rounded px-2 bg-background"
+                        className="h-8 text-sm border rounded px-2 bg-background w-full sm:w-auto"
                      />
                 </div>
             )}
