@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleAiGrade } from '@/workers/grading-worker';
+import { handleCloudMarking } from '@/workers/cloud-worker';
 
 export const maxDuration = 300; // 5 Minutes (Vercel Pro/Enterprise)
 export const dynamic = 'force-dynamic'; // Disable caching
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     const jobs = await prisma.job.findMany({
         where: {
             status: 'PENDING',
-            type: 'AI_GRADE_SUBMISSION',
+            type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
             retryCount: { lt: 3 } // Max 3 retries
         },
         orderBy: { createdAt: 'asc' }, // FIFO
@@ -48,8 +49,14 @@ export async function POST(req: NextRequest) {
         });
 
         try {
-            // EXECUTE WORKER
-            await handleAiGrade(job);
+            // EXECUTE WORKER BASED ON TYPE
+            if (job.type === 'CLOUD_MARKING') {
+                await handleCloudMarking(job);
+            } else if (job.type === 'AI_GRADE_SUBMISSION') {
+                await handleAiGrade(job);
+            } else {
+                throw new Error(`Unknown Job Type: ${job.type}`);
+            }
 
             // Mark COMPLETED
             await prisma.job.update({
