@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         where: {
             status: 'PENDING',
             type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
-            retryCount: { lt: 3 } // Max 3 retries
+            retryCount: { lt: 4 } // Max 3 retries
         },
         orderBy: { createdAt: 'asc' }, // FIFO
         take: 5
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
             await prisma.job.update({
                 where: { id: job.id },
                 data: {
-                    status: 'FAILED',
+                    status: job.retryCount < 3 ? 'PENDING' : 'FAILED',
                     error: error.message,
                     retryCount: { increment: 1 }
                 }

@@ -227,8 +227,8 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                 </div>
             )}
 
-            {/* AI Feedback */}
-            {feedback && (
+            {/* AI Feedback (V2 doesn't return these, but keeping logic for backward compatibility or if populated) */}
+            {feedback && (feedback.strengths?.length > 0 || feedback.weaknesses?.length > 0 || feedback.improvement) && (
                 <div className="space-y-3">
                     <h3 className="text-sm font-medium">AI Feedback</h3>
                     {feedback.strengths?.length > 0 && (
@@ -249,22 +249,59 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                 </div>
             )}
 
-            {/* Breakdown Table */}
+            {/* Breakdown Table (V2 Logic) */}
             {breakdown.length > 0 && (
                 <div>
                     <h3 className="text-sm font-medium mb-3">Grading Breakdown</h3>
                     <div className="border rounded-md">
-                        {breakdown.map((item: any, i: number) => (
-                            <div key={i} className="flex justify-between p-3 text-sm border-b last:border-0">
-                                <div className="flex-1 pr-4">
-                                    <span className="font-medium text-foreground">{item.question}</span>
-                                    <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
+                        {breakdown.map((item: any, i: number) => {
+                             // Handle V2 vs V1 properties
+                             const question = item.question_id || item.question;
+                             const score = item.marks_awarded !== undefined ? item.marks_awarded : item.score;
+                             const max = item.max_marks !== undefined ? item.max_marks : item.max;
+                             const justification = item.justification || item.feedback;
+
+                             // V2 specific
+                             const tier = item.tier_used;
+                             const isAlternative = item.alternative_valid_concept;
+                             const needsReview = item.review_flag;
+
+                             return (
+                                <div key={i} className="flex flex-col p-3 text-sm border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1 pr-4">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="font-bold text-foreground">{question}</span>
+                                                {tier && <Badge variant="outline" className="text-[10px] h-5 px-1.5">{tier}</Badge>}
+                                                {item.status === 'Not Attempted' && <Badge variant="secondary" className="text-[10px] h-5 px-1.5">Not Attempted</Badge>}
+                                            </div>
+                                            <p className="text-muted-foreground text-xs leading-relaxed">{justification}</p>
+                                        </div>
+                                        <div className="font-mono font-medium text-right shrink-0">
+                                            {score}/{max}
+                                        </div>
+                                    </div>
+
+                                    {/* Warnings / Flags */}
+                                    {(needsReview || isAlternative) && (
+                                        <div className="mt-2 flex gap-2">
+                                            {needsReview && (
+                                                <div className="text-xs bg-red-50 text-red-700 px-2 py-1 rounded flex items-center gap-1.5">
+                                                    <AlertTriangle className="h-3 w-3" />
+                                                    AI Review Flag: Confirm mark allocation.
+                                                </div>
+                                            )}
+                                            {isAlternative && (
+                                                <div className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded flex items-center gap-1.5">
+                                                    <AlertCircle className="h-3 w-3" />
+                                                    Alternative Concept Validated
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="font-mono font-medium">
-                                    {item.score}/{item.max}
-                                </div>
-                            </div>
-                        ))}
+                             );
+                        })}
                     </div>
                 </div>
             )}

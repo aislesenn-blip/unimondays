@@ -187,88 +187,89 @@ Student Identifier: ${studentId}.
       // Simulator Check
       if (!process.env.DEEPSEEK_API_KEY) {
           console.log(`[Simulator] Using DeepSeek Simulator`);
-          const sim = await simulateDeepSeekCall(ocrText);
-          if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
-
-          result = {
-              totalScore: sim.score,
-              breakdown: sim.breakdown as any,
-              aiReasoning: sim.reasoning,
-              confidence: sim.confidence,
-              strengths: ["Consistency", "Clarity"],
-              weaknesses: ["Calculation Error"],
-              improvement: "Check arithmetic."
-          };
+          // Note: Simulator needs update for V2 structure but for now we throw since we want real logic
+          throw new Error("Simulator not supported for V2 Strict Grading yet.");
       } else {
           // Pass image buffer for multimodal grading
           result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
-          console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
+          console.log(`[AI_SUCCESS] Graded. Score: ${result.total_marks_awarded}/${totalMarks}`);
       }
 
       // 4. Save Score & Feedback
-      if (typeof result.totalScore !== 'number') {
-          throw new Error("Invalid AI Result: Missing totalScore");
+      // Map V2 result to DB Schema
+      const totalScore = result.total_marks_awarded;
+      if (typeof totalScore !== 'number') {
+          throw new Error("Invalid AI Result: Missing total_marks_awarded");
       }
 
-      const breakdownStr = JSON.stringify(result.breakdown);
+      // We store the 'results' array as the breakdown JSON
+      const breakdownStr = JSON.stringify(result.results);
+
+      // detectedIdentity is no longer guaranteed in V2 strict mode unless we parse it from text or context
+      // The prompt V2 doesn't explicitly output detectedIdentity field in top-level JSON anymore,
+      // but we can look for it if we modify the prompt or just rely on what we have.
+      // Instructions say: "If a section is not attempted... output...".
+      // It doesn't mention detectedIdentity in the output JSON schema in the final prompt block.
+      // So we assume it's null for now or extracted earlier.
+
+      const detectedIdentity = result.detectedIdentity || null;
+      const remarks = result.aiReasoning || "Graded via Deterministic V2 Engine";
 
       await prisma.score.upsert({
         where: { submissionId: submission.id },
         update: {
-          totalMarks: result.totalScore,
+          totalMarks: totalScore,
           breakdown: breakdownStr,
-          remarks: result.aiReasoning,
-          detectedIdentity: result.detectedIdentity,
+          remarks: remarks,
+          detectedIdentity: detectedIdentity,
           gradedAt: new Date()
         },
         create: {
           submissionId: submission.id,
-          totalMarks: result.totalScore,
+          totalMarks: totalScore,
           breakdown: breakdownStr,
-          remarks: result.aiReasoning,
-          detectedIdentity: result.detectedIdentity
+          remarks: remarks,
+          detectedIdentity: detectedIdentity
         }
       });
 
       // 5. Update Submission Status (Dynamic Confidence Threshold)
-      // UNIDENTIFIED FALLBACK: If AI returns null identity OR 'UNIDENTIFIED_IDENTITY' literal, handle flagging.
-      // If we also lack local user context (bulk upload), this is CRITICAL FLAGGING.
+      // Calculate average confidence from questions
+      let avgConfidence = 0;
+      if (result.results && result.results.length > 0) {
+          const sum = result.results.reduce((acc, r) => acc + (r.confidence || 0), 0);
+          avgConfidence = sum / result.results.length;
+      }
+      // Scale to 0-100 for DB
+      const confidenceScore = Math.round(avgConfidence * 100);
+
       let status: string;
       const threshold = submission.workSession.confidenceThreshold ?? 85;
 
-      const isIdentityMissing = !result.detectedIdentity || result.detectedIdentity === 'UNIDENTIFIED_IDENTITY';
-      const isContextMissing = !submission.userId && !submission.studentRegNo;
+      // Check for review flags
+      const hasReviewFlag = result.results.some(r => r.review_flag);
 
-      if (isIdentityMissing) {
-          if (isContextMissing) {
-              // GHOST SUBMISSION: No AI ID, No DB ID.
-              status = 'FLAGGED';
-              result.confidence = 0;
-              result.aiReasoning = `IDENTITY CRISIS: ${result.aiReasoning || "System could not identify student."} Please manually assign ownership.`;
-              console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
-          } else {
-              // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
-              // We proceed but maybe lower confidence? For now, we trust the auth context but log it.
-              console.log(`[AI_IDENTITY] AI missed identity, but using Auth Context: ${submission.user?.fullName}`);
-              status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
-          }
+      if (hasReviewFlag || confidenceScore < threshold) {
+           status = 'FLAGGED';
       } else {
-          status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+           status = 'GRADED';
       }
 
-      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
+      console.log(`[AI_CONFIDENCE] Score: ${confidenceScore}, Threshold: ${threshold}, Flags: ${hasReviewFlag} -> Status: ${status}`);
 
+      // V2 Prompt doesn't output strengths/weaknesses/improvement.
+      // We send empty arrays to satisfy the schema/UI expectations.
       const feedbackStr = JSON.stringify({
-        strengths: result.strengths || [],
-        weaknesses: result.weaknesses || [],
-        improvement: result.improvement || "No specific advice."
+        strengths: [],
+        weaknesses: [],
+        improvement: "Detailed question-by-question breakdown available."
       });
 
       await prisma.submission.update({
         where: { id: submission.id },
         data: {
           status,
-          confidenceScore: result.confidence,
+          confidenceScore: confidenceScore,
           feedback: feedbackStr
         }
       });
@@ -278,7 +279,7 @@ Student Identifier: ${studentId}.
         data: {
           userId: submission.userId,
           action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
-          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.totalScore}`,
+          details: `Submission for ${submission.workSession.title} ${status}. Score: ${totalScore}`,
           severity: status === 'GRADED' ? 'INFO' : 'WARNING'
         }
       });
@@ -293,7 +294,7 @@ Student Identifier: ${studentId}.
 
       return {
         success: true,
-        score: result.totalScore,
+        score: totalScore,
         status
       };
 
