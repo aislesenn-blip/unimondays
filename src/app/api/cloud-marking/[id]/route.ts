@@ -11,17 +11,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
 
+    // Use workSessions relation to get submissions
     const bulkSession = await prisma.bulkSession.findUnique({
       where: { id },
       include: {
-        submissions: {
-          select: {
-             id: true,
-             studentRegNo: true,
-             status: true,
-             score: { select: { totalMarks: true, detectedIdentity: true } },
-             userId: true,
-             confidenceScore: true
+        workSessions: {
+          include: {
+            submissions: {
+              select: {
+                 id: true,
+                 studentRegNo: true,
+                 status: true,
+                 score: { select: { totalMarks: true, detectedIdentity: true } },
+                 userId: true,
+                 confidenceScore: true
+              }
+            }
           }
         }
       }
@@ -35,7 +40,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    return NextResponse.json(bulkSession);
+    // Flatten submissions from all related work sessions
+    const submissions = bulkSession.workSessions.flatMap(ws => ws.submissions);
+
+    // Return the bulk session data with flattened submissions to match UI expectations
+    const responseData = {
+        ...bulkSession,
+        submissions,
+        workSessions: undefined // Optionally remove the nested structure if not needed by UI
+    };
+
+    return NextResponse.json(responseData);
 
   } catch (error: any) {
     console.error("Cloud Marking Fetch Error:", error);
