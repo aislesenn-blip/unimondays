@@ -21,6 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
               select: {
                  id: true,
                  studentRegNo: true,
+                 studentName: true,
                  status: true,
                  score: { select: { totalMarks: true, detectedIdentity: true } },
                  userId: true,

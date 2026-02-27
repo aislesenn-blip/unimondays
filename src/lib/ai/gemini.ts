@@ -83,11 +83,22 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
 
     const prompt = `
       Analyze this document containing multiple student scripts.
-      Identify the start and end page numbers for each student's script.
-      Look for Registration Numbers (RegNo) or Names at the top of the first page of a script.
-      Scripts are continuous.
+      Your task is to identify the start and end page numbers for each student's script and extract their identity.
 
-      Return a STRICT JSON array of objects with keys: "regNo", "startPage" (1-based integer), "endPage" (1-based integer).
+      Instructions:
+      1. Look for Registration Numbers (e.g., RegNo, Matric No) or Names at the top of the first page of a script.
+      2. Scripts are continuous (e.g., if Student A is on pages 1-3, Student B starts on page 4).
+      3. If a page has no clear identity but follows a script, assume it belongs to the previous student.
+      4. If a script has no visible RegNo, use "UNIDENTIFIED" as the regNo.
+      5. Extract the Student Name if visible.
+
+      Output Format:
+      Return a STRICT JSON array of objects with keys:
+      - "regNo" (string)
+      - "name" (string, optional)
+      - "startPage" (1-based integer)
+      - "endPage" (1-based integer)
+
       Do not include any markdown formatting. Just the JSON.
     `;
 
@@ -113,7 +124,17 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
     const text = response.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim();
     if (!text) throw new Error("No content returned");
 
-    return JSON.parse(text) as PdfSplit[];
+    // Handle potential wrapper object like { "splits": [...] } or direct array
+    let json = JSON.parse(text);
+    if (Array.isArray(json)) return json as PdfSplit[];
+    if (json.splits && Array.isArray(json.splits)) return json.splits as PdfSplit[];
+
+    // Fallback if structure is unknown but likely array-like
+    if (Object.keys(json).length === 1 && Array.isArray(Object.values(json)[0])) {
+        return Object.values(json)[0] as PdfSplit[];
+    }
+
+    throw new Error("Invalid JSON structure returned from AI");
 
   } catch (error: any) {
     console.error("OpenRouter Structure Analysis Error:", error);
