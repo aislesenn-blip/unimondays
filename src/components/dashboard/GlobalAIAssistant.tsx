@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Sparkles, Send, X, Bot, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { usePathname } from "next/navigation";
 
 export function GlobalAIAssistant() {
   const [open, setOpen] = useState(false);
@@ -15,6 +16,7 @@ export function GlobalAIAssistant() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const pathname = usePathname(); // MANDATE 1: Capture current route
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -28,7 +30,10 @@ export function GlobalAIAssistant() {
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: [...messages, userMsg] })
+            body: JSON.stringify({
+                messages: [...messages, userMsg],
+                currentPath: pathname // MANDATE 1: Pass path to API
+            })
         });
 
         if (res.ok) {
