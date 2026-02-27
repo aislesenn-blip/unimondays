@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Save,
-  Sparkles,
   Download,
   FileText
 } from "lucide-react";
@@ -18,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { PlaybookAI } from "@/components/icons/PlaybookAI";
 
 interface GradeViewClientProps {
   sessionId: string;
@@ -126,7 +126,7 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
             <Card className="bg-primary/5 border-primary/10 shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2 text-primary">
-                  <Sparkles className="h-4 w-4" />
+                  <PlaybookAI className="h-4 w-4" />
                   AI Analysis
                 </CardTitle>
               </CardHeader>

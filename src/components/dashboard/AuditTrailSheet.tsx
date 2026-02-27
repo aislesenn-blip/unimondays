@@ -3,7 +3,8 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, AlertCircle, Sparkles, FileText, ChevronRight } from "lucide-react";
+import { CheckCircle2, AlertCircle, FileText, ChevronRight } from "lucide-react";
+import { PlaybookAI } from "@/components/icons/PlaybookAI";
 
 export function AuditTrailSheet({
   open,
@@ -33,7 +34,7 @@ export function AuditTrailSheet({
           {/* AI Confidence Card */}
           <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 flex items-center justify-between shadow-sm">
              <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-emerald-600" />
+                <PlaybookAI className="h-5 w-5 text-emerald-600" />
                 <div>
                   <h4 className="font-semibold text-emerald-900 text-sm">High Confidence Grade</h4>
                   <p className="text-xs text-emerald-700">AI is 98% confident in this assessment based on the rubric.</p>
@@ -70,7 +71,7 @@ export function AuditTrailSheet({
                     </div>
                     <div className="pt-2 border-t border-dashed mt-2">
                        <p className="text-xs font-medium text-primary flex items-center gap-1">
-                          <Sparkles className="h-3 w-3" /> AI Justification:
+                          <PlaybookAI className="h-3 w-3" /> AI Justification:
                        </p>
                        <p className="text-xs text-muted-foreground mt-1">
                           Student demonstrated complete mastery of the core concepts defined in the marking scheme. No points deducted.

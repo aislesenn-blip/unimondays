@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Send, X, Bot, Loader2 } from "lucide-react";
+import { Send, X, Bot, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { PlaybookAI } from "@/components/icons/PlaybookAI";
 
 export function GlobalAIAssistant() {
   const pathname = usePathname();
@@ -63,7 +64,7 @@ export function GlobalAIAssistant() {
           className="h-14 w-14 rounded-full shadow-2xl bg-primary text-primary-foreground hover:scale-105 transition-transform duration-200 border-2 border-white/20 animate-in fade-in zoom-in duration-300"
           onClick={() => setOpen(true)}
         >
-          <Sparkles className="h-6 w-6" />
+          <PlaybookAI className="h-6 w-6" />
         </Button>
       </div>
 
@@ -72,7 +73,7 @@ export function GlobalAIAssistant() {
             <SheetHeader className="p-4 border-b bg-muted/20 flex-shrink-0">
               <div className="flex items-center gap-3">
                  <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shrink-0">
-                    <Bot className="h-6 w-6" />
+                    <PlaybookAI className="h-6 w-6" />
                  </div>
                  <div className="text-left">
                    <SheetTitle className="text-lg">Playbook Assistant</SheetTitle>
