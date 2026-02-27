@@ -222,7 +222,7 @@ export async function gradeSubmission(
               response_format: { type: "json_object" },
               temperature: 0.0,
               top_p: 0.1,
-              max_tokens: 4000,
+              max_tokens: 8192,
           });
 
       } else {
@@ -244,7 +244,7 @@ ${ocrText}` }
               response_format: { type: "json_object" },
               temperature: 0.0,
               top_p: 0.1,
-              max_tokens: 4000, // Prevent infinite loops
+              max_tokens: 8192, // Prevent infinite loops
           });
       }
 
