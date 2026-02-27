@@ -118,12 +118,20 @@ TIER 2 (EQUIVALENT CONCEPT VALIDATION): If wording differs, evaluate whether the
 
 TIER 3 (OUT-OF-SCOPE OR GENERIC KNOWLEDGE): If the answer is factually correct but does NOT answer the specific question or is outside the rubric objective -> Award 0 marks. Set tier_used = "Tier 3". Do NOT reward irrelevant correctness.
 
-❗ MISSING QUESTIONS HANDLING
-If a question or sub-section in the rubric has no corresponding answer in the student's script, you MUST output:
-{"question_id": "[ID]", "status": "Not Attempted", "marks_awarded": 0, "max_marks": [MAX], "tier_used": "N/A", "alternative_valid_concept": false, "review_flag": false, "confidence": 1.0, "justification": "Not Attempted"}
+❗ VISIBLE UNATTEMPTED QUESTIONS:
+Do NOT skip unattempted questions in the JSON. The examiner must see that you checked them.
+If a question is not attempted, output the full schema, but strictly use this exact string for justification:
+"justification": "Question not attempted by the student. 0 marks awarded."
+This proves to the examiner that the question was evaluated and intentionally scored zero.
 
 📊 CONFIDENCE SCORING & RUBRIC GAP DETECTION
 Provide a confidence score (0.0 to 1.0). If you detect a recurring valid alternative concept not explicitly listed in the rubric, do NOT modify the scoring logic. Continue awarding marks via Tier 2, but set review_flag = true. Never expand the marking scheme yourself.
+
+⚖️ THE DUAL-AUDIENCE JUSTIFICATION RULE:
+Your justification field must serve two masters, but be completely balanced and brief (Max 30 words per question).
+For the Teacher (Audit): Briefly state which rubric point was met or missed. why this marks was put and not this
+For the Student (Learning): Briefly state why their specific answer was right or wrong.
+Example: 'Matched Rubric Pt B. You correctly identified Photosynthesis, but missed the role of Chlorophyll.'
 
 📦 OUTPUT FORMAT (MANDATORY STRICT JSON ONLY)
 Return strictly this JSON structure:
@@ -222,7 +230,7 @@ export async function gradeSubmission(
               response_format: { type: "json_object" },
               temperature: 0.0,
               top_p: 0.1,
-              max_tokens: 8192,
+              max_tokens: 16384,
           });
 
       } else {
@@ -244,7 +252,7 @@ ${ocrText}` }
               response_format: { type: "json_object" },
               temperature: 0.0,
               top_p: 0.1,
-              max_tokens: 8192, // Prevent infinite loops
+              max_tokens: 16384, // Prevent infinite loops
           });
       }
 

@@ -63,10 +63,11 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('TIER 3 (OUT-OF-SCOPE OR GENERIC KNOWLEDGE)');
 
     // Autopilot (Old Mandate 6)
-    expect(prompt).toContain('❗ MISSING QUESTIONS HANDLING');
+    expect(prompt).toContain('❗ VISIBLE UNATTEMPTED QUESTIONS:');
 
     // Visual Analysis (Old Mandate 7)
     expect(prompt).toContain('📊 CONFIDENCE SCORING & RUBRIC GAP DETECTION');
+    expect(prompt).toContain('⚖️ THE DUAL-AUDIENCE JUSTIFICATION RULE:');
   });
 
   it('should include the strict JSON output schema', () => {
