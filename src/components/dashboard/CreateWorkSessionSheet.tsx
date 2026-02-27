@@ -127,10 +127,11 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
 
            {/* Gold Standard Inputs */}
            <div className="space-y-4 border p-4 rounded-md bg-muted/20">
-              <h3 className="font-semibold text-sm">Gold Standard Data (Optional)</h3>
+              <h3 className="font-semibold text-sm">Gold Standard Data (Internal Only)</h3>
+              <p className="text-xs text-muted-foreground">These files are used by the AI for grading and are NEVER shown to students.</p>
 
               <div className="space-y-2">
-                <Label>Marking Scheme (PDF/Image)</Label>
+                <Label>Marking Scheme / Rubric (PDF/Image)</Label>
                 <div className="flex items-center gap-2">
                     <Input type="file" onChange={(e) => handleFileUpload(e, "markingScheme")} accept=".pdf,.jpg,.png" disabled={uploading} />
                     {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -147,11 +148,11 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
                 <Input type="hidden" {...register("goldStandardUrl")} />
                 {goldStandardUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded</div>}
               </div>
+           </div>
 
-              <div className="space-y-2">
-                <Label>Manual Instructions</Label>
-                <Textarea placeholder="Paste marking scheme or specific instructions here..." {...register("instructions")} />
-              </div>
+           <div className="space-y-2">
+             <Label>Instructions to Students</Label>
+             <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour'). Do NOT paste the marking scheme here." {...register("instructions")} />
            </div>
 
            {/* Calibration Engine */}
