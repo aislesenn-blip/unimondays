@@ -32,18 +32,46 @@ export default function CloudMarkingPage() {
   const [cloudLink, setCloudLink] = useState("");
   const [sessionTitle, setSessionTitle] = useState("");
   const [markingScheme, setMarkingScheme] = useState("");
+  const [markingSchemeUrl, setMarkingSchemeUrl] = useState("");
   const [totalMarks, setTotalMarks] = useState(100);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Calibration State
   const [strictness, setStrictness] = useState("MODERATE");
   const [calibration, setCalibration] = useState({
-    methodology: "Standard",
-    grammar: "Ignore unless critical",
-    verbosity: "Concise",
-    incomplete: "Grade present work",
+    methodology: "partial_marks",
+    grammar: "ignore_grammar",
+    verbosity: "concise",
+    incomplete: "grade_available",
     custom: ""
   });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', `bulk_uploads/schemes`); // Centralized folder
+
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      setMarkingSchemeUrl(data.path); // Store path
+      toast.success("Marking scheme uploaded");
+    } catch (error: any) {
+      toast.error(`Failed to upload marking scheme: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleStartCloudMarking = async () => {
     if (!cloudLink || !sessionTitle) {
@@ -53,6 +81,9 @@ export default function CloudMarkingPage() {
 
     setLoading(true);
     try {
+      // Prioritize URL if uploaded, else text
+      const finalMarkingScheme = markingSchemeUrl || markingScheme;
+
       const res = await fetch("/api/cloud-marking/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,7 +91,7 @@ export default function CloudMarkingPage() {
           title: sessionTitle,
           cloudLink,
           totalMarks,
-          markingScheme,
+          markingScheme: finalMarkingScheme,
           strictness,
           calibration
         }),
@@ -180,43 +211,107 @@ export default function CloudMarkingPage() {
 
                         <div className="space-y-2">
                             <Label>Marking Scheme / Gold Standard</Label>
-                            <Textarea
-                                placeholder="Paste your marking scheme text here, or describe the gold standard answer..."
-                                className="min-h-[150px]"
-                                value={markingScheme}
-                                onChange={(e) => setMarkingScheme(e.target.value)}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                * For file-based marking schemes (PDF), please upload to the same cloud folder and name it "MARKING_SCHEME.pdf".
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <Input
+                                        type="file"
+                                        onChange={handleFileUpload}
+                                        accept=".pdf,.jpg,.png"
+                                        disabled={uploading}
+                                        className="cursor-pointer"
+                                    />
+                                    {uploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                                </div>
+                                {markingSchemeUrl && (
+                                    <div className="text-xs text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-200">
+                                        <FileText className="w-3 h-3"/> File Uploaded & Ready
+                                    </div>
+                                )}
+                                <div className="text-xs text-muted-foreground text-center uppercase tracking-wider font-bold">OR</div>
+                                <Textarea
+                                    placeholder="Paste your marking scheme text here, or describe the gold standard answer..."
+                                    className="min-h-[100px]"
+                                    value={markingScheme}
+                                    onChange={(e) => setMarkingScheme(e.target.value)}
+                                    disabled={!!markingSchemeUrl}
+                                />
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                                Upload a PDF/Image of the marking scheme, or paste the text directly.
                             </p>
                         </div>
 
-                        <Accordion type="single" collapsible className="w-full">
-                            <AccordionItem value="calibration">
-                                <AccordionTrigger className="text-sm font-medium">Advanced Calibration</AccordionTrigger>
-                                <AccordionContent>
-                                    <div className="space-y-4 pt-2">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Methodology</Label>
-                                            <Input
-                                                className="h-8"
-                                                value={calibration.methodology}
-                                                onChange={(e) => setCalibration({...calibration, methodology: e.target.value})}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Custom Instruction</Label>
-                                            <Input
-                                                className="h-8"
-                                                placeholder="e.g. Ignore spelling mistakes"
-                                                value={calibration.custom}
-                                                onChange={(e) => setCalibration({...calibration, custom: e.target.value})}
-                                            />
-                                        </div>
-                                    </div>
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
+                        {/* ADVANCED CALIBRATION ENGINE (Ported from WorkSession) */}
+                        <div className="space-y-4 border p-4 rounded-md bg-blue-50/50 dark:bg-blue-900/10">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                                    <Settings2 className="h-4 w-4" /> AI Grading Persona (Calibration)
+                                </h3>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-medium text-muted-foreground">1. Methodology & Steps</Label>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                        value={calibration.methodology}
+                                        onChange={(e) => setCalibration({...calibration, methodology: e.target.value})}
+                                    >
+                                        <option value="partial_marks">Award partial marks for correct steps (Lenient)</option>
+                                        <option value="final_answer_only">Strictly grade final answer only</option>
+                                        <option value="steps_mandatory">Steps are mandatory for full marks</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-medium text-muted-foreground">2. Grammar & Language</Label>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                        value={calibration.grammar}
+                                        onChange={(e) => setCalibration({...calibration, grammar: e.target.value})}
+                                    >
+                                        <option value="ignore_grammar">Ignore grammar, focus only on facts</option>
+                                        <option value="penalize_poor">Penalize poor grammar/spelling</option>
+                                        <option value="strict_language">Strict academic language required</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-medium text-muted-foreground">3. Verbosity</Label>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                        value={calibration.verbosity}
+                                        onChange={(e) => setCalibration({...calibration, verbosity: e.target.value})}
+                                    >
+                                        <option value="ignore_noise">Search for the fact, ignore the noise</option>
+                                        <option value="concise">Penalize excessive verbosity (Be concise)</option>
+                                        <option value="detailed">Reward detailed explanations</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-medium text-muted-foreground">4. Incomplete Sections</Label>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                        value={calibration.incomplete}
+                                        onChange={(e) => setCalibration({...calibration, incomplete: e.target.value})}
+                                    >
+                                        <option value="grade_available">Grade part A, give 0 to B</option>
+                                        <option value="zero_if_incomplete">Zero if section is incomplete</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs font-medium text-muted-foreground">5. Custom Expectations</Label>
+                                <Textarea
+                                    placeholder="Specific instructions (e.g. 'Allow Swahili keywords', 'Check for units')"
+                                    className="h-20"
+                                    value={calibration.custom}
+                                    onChange={(e) => setCalibration({...calibration, custom: e.target.value})}
+                                />
+                            </div>
+                        </div>
 
                     </div>
                 </CardContent>
@@ -254,7 +349,7 @@ export default function CloudMarkingPage() {
                          <Button
                             className="w-full h-12 text-lg font-semibold shadow-xl shadow-primary/20"
                             onClick={handleStartCloudMarking}
-                            disabled={loading}
+                            disabled={loading || uploading}
                          >
                             {loading ? (
                                 <>

@@ -40,6 +40,34 @@ export interface GradeConfig {
   context?: string; // New Context Injection Field
 }
 
+// Map Technical Enums to Human Instructions
+const METHODOLOGY_MAP: Record<string, string> = {
+    'partial_marks': 'Award partial marks for correct steps (Lenient)',
+    'final_answer_only': 'Strictly grade final answer only',
+    'steps_mandatory': 'Steps are mandatory for full marks',
+    'Standard': 'Standard' // Fallback
+};
+
+const GRAMMAR_MAP: Record<string, string> = {
+    'ignore_grammar': 'Ignore grammar, focus only on facts',
+    'penalize_poor': 'Penalize poor grammar/spelling',
+    'strict_language': 'Strict academic language required',
+    'Ignore unless critical': 'Ignore unless critical'
+};
+
+const VERBOSITY_MAP: Record<string, string> = {
+    'ignore_noise': 'Search for the fact, ignore the noise',
+    'concise': 'Penalize excessive verbosity (Be concise)',
+    'detailed': 'Reward detailed explanations',
+    'Concise': 'Concise'
+};
+
+const INCOMPLETE_MAP: Record<string, string> = {
+    'grade_available': 'Grade part A, give 0 to B',
+    'zero_if_incomplete': 'Zero if section is incomplete',
+    'Grade present work': 'Grade present work'
+};
+
 export async function gradeSubmission(
   ocrText: string,
   rubric: string,
@@ -49,6 +77,12 @@ export async function gradeSubmission(
   if (!deepseek) {
     throw new Error("DEEPSEEK_API_KEY is not set. Grading service unavailable.");
   }
+
+  // Resolve Calibration to Human Text
+  const methodology = METHODOLOGY_MAP[config.calibration?.methodology || 'Standard'] || config.calibration?.methodology || "Standard";
+  const grammar = GRAMMAR_MAP[config.calibration?.grammar || 'Ignore unless critical'] || config.calibration?.grammar || "Ignore unless critical";
+  const verbosity = VERBOSITY_MAP[config.calibration?.verbosity || 'Concise'] || config.calibration?.verbosity || "Concise";
+  const incomplete = INCOMPLETE_MAP[config.calibration?.incomplete || 'Grade present work'] || config.calibration?.incomplete || "Grade present work";
 
   // Optimize prompt: Remove excessive whitespace, focus on JSON strictness
   const systemPrompt = `You are an expert academic grader. Grade the student's submission strictly based on the provided rubric and marking scheme.
@@ -71,10 +105,10 @@ ${config.context || "No specific context provided."}
 
 Config:
 - Strictness: ${config.strictness} (1.0=Neutral).
-- Methodology: ${config.calibration?.methodology || "Standard"}
-- Grammar: ${config.calibration?.grammar || "Ignore unless critical"}
-- Verbosity: ${config.calibration?.verbosity || "Concise"}
-- Incomplete: ${config.calibration?.incomplete || "Grade present work"}
+- Methodology: ${methodology}
+- Grammar: ${grammar}
+- Verbosity: ${verbosity}
+- Incomplete: ${incomplete}
 - Custom: ${config.calibration?.custom || "None"}
 - Notes: ${config.lecturerNotes || "None"}
 
