@@ -1,39 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import { saveBuffer } from '@/lib/storage';
-
-// Magic Number Signatures
-const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // %PDF
-const JPEG_MAGIC = [0xFF, 0xD8, 0xFF];
-const PNG_MAGIC = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-
-async function validateFileSignature(buffer: Buffer): Promise<boolean> {
-  try {
-    // MANDATE 3: RELAXED MAGIC BYTE CHECK
-    // Scanners often add garbage headers or Byte Order Marks (BOM).
-    // We search the first 128 bytes for the signature instead of enforcing index 0.
-    const header = buffer.slice(0, 128);
-
-    const containsSequence = (magic: number[]) => {
-        for (let i = 0; i <= header.length - magic.length; i++) {
-            let match = true;
-            for (let j = 0; j < magic.length; j++) {
-                if (header[i + j] !== magic[j]) {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) return true;
-        }
-        return false;
-    };
-
-    return containsSequence(PDF_MAGIC) || containsSequence(JPEG_MAGIC) || containsSequence(PNG_MAGIC);
-  } catch (e) {
-    return false;
-  }
-}
+import { supabase } from '@/lib/supabase'; // Admin Client
 
 export async function POST(req: NextRequest) {
   try {
@@ -58,18 +26,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized: Missing User ID' }, { status: 401 });
     }
 
-    // 2. Parse Form Data
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const workSessionId = formData.get('workSessionId') as string;
-    const workCode = formData.get('workCode') as string;
+    // 2. Parse Body (JSON)
+    // MANDATE 1: Client-Side Upload Protocol
+    const body = await req.json();
+    const { filePath, workSessionId, workCode } = body;
 
-    if (!file) {
-        return NextResponse.json({ error: 'Missing file' }, { status: 400 });
-    }
-
-    if (file.size === 0) {
-        return NextResponse.json({ error: 'File is empty.' }, { status: 400 });
+    if (!filePath) {
+        return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
     }
 
     let targetWorkSessionId = workSessionId;
@@ -110,19 +73,37 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // 4. Security: File Validation
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // 4. Security: Verify File Exists in Storage (Server-Side Check)
+    // We use the Admin Client to verify metadata. This prevents users from linking arbitrary files.
+    // We verify the file exists in the 'exam_pdfs' bucket (or default bucket).
 
-    const validMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-    if (!validMimes.includes(file.type)) {
-        return NextResponse.json({ error: 'Invalid file type. Only PDF, JPG, and PNG are allowed.' }, { status: 400 });
+    // Cleanup path if it contains bucket name or leading slash
+    // Supabase path: 'submissions/xyz.pdf'
+    let cleanPath = filePath;
+    if (cleanPath.startsWith('/')) cleanPath = cleanPath.slice(1);
+
+    // List files in the folder to see if our file is there
+    // This is cheaper/safer than downloading it.
+    // Or we can try getPublicUrl head check, but listing is good.
+    const folder = cleanPath.split('/').slice(0, -1).join('/');
+    const filename = cleanPath.split('/').pop();
+
+    const { data: fileList, error: listError } = await supabase
+        .storage
+        .from('exam_pdfs')
+        .list(folder, {
+            search: filename
+        });
+
+    if (listError || !fileList || fileList.length === 0) {
+        console.warn(`[Security] File not found in storage: ${cleanPath} for user ${userId}`);
+        return NextResponse.json({ error: 'Security Verification Failed: Uploaded file not found.' }, { status: 400 });
     }
 
-    const isValidSignature = await validateFileSignature(buffer);
-    if (!isValidSignature) {
-        console.warn(`Security Block: User ${userId} attempted to upload malformed file: ${file.name}`);
-        return NextResponse.json({ error: 'Security Warning: File signature verification failed. Please upload a valid standard file.' }, { status: 400 });
+    // Double check exact match
+    const foundFile = fileList.find(f => f.name === filename);
+    if (!foundFile) {
+         return NextResponse.json({ error: 'Security Verification Failed: File mismatch.' }, { status: 400 });
     }
 
     // 5. Verify Work Session & Deadline
@@ -156,8 +137,8 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // 6. Upload File (Securely)
-    const fileUrl = await saveBuffer(buffer, file.name, 'submissions');
+    // 6. Use the verified file path
+    const fileUrl = cleanPath;
 
     // 7. Create or Update Submission (Idempotent)
     const existingSubmission = await prisma.submission.findUnique({

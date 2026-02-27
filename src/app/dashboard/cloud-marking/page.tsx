@@ -23,6 +23,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
+import { supabaseClient } from "@/lib/supabase-client";
+import { v4 as uuidv4 } from "uuid";
 
 // Reusing existing components logic where applicable, or inline for specific new feature
 import { Textarea } from "@/components/ui/textarea";
@@ -52,18 +54,18 @@ export default function CloudMarkingPage() {
     if (!file) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('folder', `bulk_uploads/schemes`); // Centralized folder
-
     try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      // Direct Client-Side Upload
+      const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const filePath = `bulk_uploads/schemes/${filename}`;
 
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const { data, error } = await supabaseClient
+        .storage
+        .from('exam_pdfs')
+        .upload(filePath, file);
+
+      if (error) throw new Error(error.message);
+
       setMarkingSchemeUrl(data.path); // Store path
       toast.success("Marking scheme uploaded");
     } catch (error: any) {
