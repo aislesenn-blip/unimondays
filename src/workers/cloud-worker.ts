@@ -167,7 +167,7 @@ export async function handleCloudMarking(job: Job) {
                 const batchPromises = batchSplits.map(async (split) => {
                     try {
                          // Validate range
-                         if (split.startPage < 1 || split.endPage > pageCount) return false;
+                         if (split.startPage < 1 || split.endPage > pageCount) return 0; // Return 0 for invalid ranges
 
                          // Create new document for this split
                         const newDoc = await PDFDocument.create();
@@ -217,12 +217,13 @@ export async function handleCloudMarking(job: Job) {
                         return pageIndices.length; // Return number of pages processed
                     } catch (err) {
                         console.error(`[CLOUD_WORKER] Failed to process split for ${split.regNo}`, err);
-                        return 0;
+                        return 0; // Return 0 on error
                     }
                 });
 
                 const results = await Promise.all(batchPromises);
-                const pagesProcessedInBatch = results.reduce((a, b) => a + b, 0);
+                // Safe reduce for TS (although logic guarantees numbers now, defensive programming helps)
+                const pagesProcessedInBatch = results.reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
                 processedCount += pagesProcessedInBatch;
 
                  // Update progress
