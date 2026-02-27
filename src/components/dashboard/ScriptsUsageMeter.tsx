@@ -1,7 +1,8 @@
 "use client";
 
-import { Sparkles, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PlaybookAI } from "@/components/icons/PlaybookAI";
 
 export function ScriptsUsageMeter({ className }: { className?: string }) {
   const [used, setUsed] = useState<number | null>(null);
@@ -28,7 +29,7 @@ export function ScriptsUsageMeter({ className }: { className?: string }) {
     <div className={`space-y-3 p-4 bg-muted/30 rounded-lg border ${className}`}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Scripts Processed</span>
-        <Sparkles className="h-4 w-4 text-primary" />
+        <PlaybookAI className="h-4 w-4 text-primary" />
       </div>
 
       <div className="space-y-1">
