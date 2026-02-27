@@ -1,0 +1,17 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+- Experiments (use with caution):
+  · serverActions
+
+✓ Starting...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 3.5s
+○ Compiling /student/login ...
+ GET /student/login 200 in 6.3s (compile: 5.9s, proxy.ts: 6ms, render: 386ms)
+○ Compiling /login ...
+ GET /login 200 in 7.1s (compile: 5.9s, proxy.ts: 21ms, render: 1191ms)

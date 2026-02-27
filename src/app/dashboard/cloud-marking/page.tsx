@@ -41,13 +41,13 @@ export default function CloudMarkingPage() {
 
   // Calibration State
   const [strictness, setStrictness] = useState("MODERATE");
-  const [calibration, setCalibration] = useState({
-    methodology: "partial_marks",
-    grammar: "ignore_grammar",
-    verbosity: "concise",
-    incomplete: "grade_available",
+  const [calibration] = useState({
+    methodology: "Standard",
+    grammar: "Ignore unless critical",
+    verbosity: "Concise",
+    incomplete: "Grade present work",
     custom: ""
-  });
+  }); // Locked to standard defaults
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -243,75 +243,33 @@ export default function CloudMarkingPage() {
                             </p>
                         </div>
 
-                        {/* ADVANCED CALIBRATION ENGINE (Ported from WorkSession) */}
-                        <div className="space-y-4 border p-4 rounded-md bg-blue-50/50 dark:bg-blue-900/10">
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-200 flex items-center gap-2">
-                                    <Settings2 className="h-4 w-4" /> AI Grading Persona (Calibration)
+                        {/* Deterministic AI Transparency (The Wow Factor) */}
+                        <div className="space-y-4 border p-5 rounded-md bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <h3 className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100 uppercase">
+                                    v3.0 Deterministic Engine Active
                                 </h3>
                             </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-medium text-muted-foreground">1. Methodology & Steps</Label>
-                                    <select
-                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                        value={calibration.methodology}
-                                        onChange={(e) => setCalibration({...calibration, methodology: e.target.value})}
-                                    >
-                                        <option value="partial_marks">Award partial marks for correct steps (Lenient)</option>
-                                        <option value="final_answer_only">Strictly grade final answer only</option>
-                                        <option value="steps_mandatory">Steps are mandatory for full marks</option>
-                                    </select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-medium text-muted-foreground">2. Grammar & Language</Label>
-                                    <select
-                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                        value={calibration.grammar}
-                                        onChange={(e) => setCalibration({...calibration, grammar: e.target.value})}
-                                    >
-                                        <option value="ignore_grammar">Ignore grammar, focus only on facts</option>
-                                        <option value="penalize_poor">Penalize poor grammar/spelling</option>
-                                        <option value="strict_language">Strict academic language required</option>
-                                    </select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-medium text-muted-foreground">3. Verbosity</Label>
-                                    <select
-                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                        value={calibration.verbosity}
-                                        onChange={(e) => setCalibration({...calibration, verbosity: e.target.value})}
-                                    >
-                                        <option value="ignore_noise">Search for the fact, ignore the noise</option>
-                                        <option value="concise">Penalize excessive verbosity (Be concise)</option>
-                                        <option value="detailed">Reward detailed explanations</option>
-                                    </select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-medium text-muted-foreground">4. Incomplete Sections</Label>
-                                    <select
-                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                        value={calibration.incomplete}
-                                        onChange={(e) => setCalibration({...calibration, incomplete: e.target.value})}
-                                    >
-                                        <option value="grade_available">Grade part A, give 0 to B</option>
-                                        <option value="zero_if_incomplete">Zero if section is incomplete</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label className="text-xs font-medium text-muted-foreground">5. Custom Expectations</Label>
-                                <Textarea
-                                    placeholder="Specific instructions (e.g. 'Allow Swahili keywords', 'Check for units')"
-                                    className="h-20"
-                                    value={calibration.custom}
-                                    onChange={(e) => setCalibration({...calibration, custom: e.target.value})}
-                                />
+                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                Bulk submissions are powered by our locked, institutional-grade grading engine. No prompt engineering required. The engine strictly enforces a 3-Tier Semantic Logic:
+                            </p>
+                            <ul className="space-y-2 mt-2">
+                                <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                                    <span className="font-bold text-slate-900 dark:text-white mt-0.5">1.</span>
+                                    <span><strong className="text-emerald-600 dark:text-emerald-400">Direct Match:</strong> Exact semantic alignment with your rubric.</span>
+                                </li>
+                                <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                                    <span className="font-bold text-slate-900 dark:text-white mt-0.5">2.</span>
+                                    <span><strong className="text-amber-600 dark:text-amber-400">Equivalent Concept:</strong> Scientifically correct alternative phrasing (Flagged for your review).</span>
+                                </li>
+                                <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                                    <span className="font-bold text-slate-900 dark:text-white mt-0.5">3.</span>
+                                    <span><strong className="text-rose-600 dark:text-rose-400">Out of Scope:</strong> Factually true but irrelevant to the question (Zero Marks).</span>
+                                </li>
+                            </ul>
+                            <div className="pt-2 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                                The Marking Scheme is the Absolute Authority.
                             </div>
                         </div>
 

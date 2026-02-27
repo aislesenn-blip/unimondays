@@ -65,18 +65,15 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
   const onSubmit = async (data: any) => {
     try {
       // Construct calibration object
-      const calibration = {
-        methodology: data.cal_methodology,
-        grammar: data.cal_grammar,
-        verbosity: data.cal_verbosity,
-        incomplete: data.cal_incomplete,
-        custom: data.cal_custom
-      };
-
       const payload = {
         ...data,
-        calibration: JSON.stringify(calibration),
-        saveAsDefault: data.saveAsDefault
+        calibration: JSON.stringify({
+          methodology: "Standard",
+          grammar: "Ignore unless critical",
+          verbosity: "Concise",
+          incomplete: "Grade present work",
+          custom: ""
+        }) // Locked defaults
       };
 
       const res = await fetch(`/api/classes/${classId}/work-sessions`, {
@@ -162,61 +159,37 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
              <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour'). Do NOT paste the marking scheme here." {...register("instructions")} />
            </div>
 
-           {/* Calibration Engine */}
-           <div className="space-y-4 border p-4 rounded-md bg-blue-50/50">
-              <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-sm text-blue-900">AI Grading Persona (Calibration)</h3>
+           {/* Deterministic AI Transparency (The Wow Factor) */}
+           <div className="space-y-4 border p-5 rounded-md bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <h3 className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100 uppercase">
+                      v3.0 Deterministic Engine Active
+                  </h3>
               </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">1. Methodology & Steps</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_methodology")}>
-                    <option value="partial_marks">Award partial marks for correct steps (Lenient)</option>
-                    <option value="final_answer_only">Strictly grade final answer only</option>
-                    <option value="steps_mandatory">Steps are mandatory for full marks</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">2. Grammar & Language</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_grammar")}>
-                    <option value="ignore_grammar">Ignore grammar, focus only on facts</option>
-                    <option value="penalize_poor">Penalize poor grammar/spelling</option>
-                    <option value="strict_language">Strict academic language required</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">3. Verbosity</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_verbosity")}>
-                    <option value="ignore_noise">Search for the fact, ignore the noise</option>
-                    <option value="concise">Penalize excessive verbosity (Be concise)</option>
-                    <option value="detailed">Reward detailed explanations</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">4. Incomplete Sections</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_incomplete")}>
-                    <option value="grade_available">Grade part A, give 0 to B</option>
-                    <option value="zero_if_incomplete">Zero if section is incomplete</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">5. Custom Expectations</Label>
-                <Textarea placeholder="Specific instructions (e.g. 'Allow Swahili keywords', 'Check for units')" className="h-20" {...register("cal_custom")} />
-              </div>
-
-              <div className="flex items-center space-x-2 pt-2">
-                <input type="checkbox" id="saveDefault" className="h-4 w-4 rounded border-gray-300" {...register("saveAsDefault")} />
-                <label htmlFor="saveDefault" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Save as my default settings
-                </label>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  This session is powered by our locked, institutional-grade grading engine. No prompt engineering required. The engine strictly enforces a 3-Tier Semantic Logic:
+              </p>
+              <ul className="space-y-2 mt-2">
+                  <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                      <span className="font-bold text-slate-900 dark:text-white mt-0.5">1.</span>
+                      <span><strong className="text-emerald-600 dark:text-emerald-400">Direct Match:</strong> Exact semantic alignment with your rubric.</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                      <span className="font-bold text-slate-900 dark:text-white mt-0.5">2.</span>
+                      <span><strong className="text-amber-600 dark:text-amber-400">Equivalent Concept:</strong> Scientifically correct alternative phrasing (Flagged for your review).</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                      <span className="font-bold text-slate-900 dark:text-white mt-0.5">3.</span>
+                      <span><strong className="text-rose-600 dark:text-rose-400">Out of Scope:</strong> Factually true but irrelevant to the question (Zero Marks).</span>
+                  </li>
+              </ul>
+              <div className="pt-2 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                  The Marking Scheme is the Absolute Authority.
               </div>
            </div>
 
-          <div className="space-y-2">
+           <div className="space-y-2">
             <Label htmlFor="totalMarks">Total Marks</Label>
             <Input id="totalMarks" type="number" defaultValue={100} {...register("totalMarks")} />
           </div>
