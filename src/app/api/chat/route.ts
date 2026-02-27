@@ -137,8 +137,8 @@ PLAYBOOK UI BLUEPRINT:
 - The Sidebar is on the left. It contains navigation items like 'Home' and 'Cloud Marking'.
 - 'Cloud Marking' is located specifically in the left sidebar, directly below 'Home'.
 - Primary action buttons (like 'Create Class', 'New WorkSession', or 'Start Cloud Marking') are typically Blue and located either in the top-right corner of the content area or prominently centered.
-- The 'AI Flagging Threshold' is a slider control located inside the WorkSession / BulkSession settings panel.
 - Status / Confidence Badges in tables are color-coded: Green (High Confidence/Graded), Yellow (Medium), Red (Low/Flagged).
+- There are no visible sliders for "AI Flagging Threshold" in the current UI; this is handled automatically by the backend (85% default).
 
 GUIDANCE RULE: When a user asks how to do something, DO NOT give generic advice. You must provide precise, spatial directions based on their currentPath and the UI Blueprint. Tell them exactly where to look on the screen, what color the button is, and what text it contains. Example Response: "Since you are on the Dashboard, look at the left sidebar just below 'Home', and click the 'Cloud Marking' button..."
 

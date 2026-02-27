@@ -106,7 +106,8 @@ export async function handleAiGrade(job: Job) {
           const ms = submission.workSession.markingScheme;
           if (!ms) return undefined;
 
-          if (ms.startsWith('rubrics/') || ms.includes('/') || ms.toLowerCase().endsWith('.pdf')) {
+          // Check for URL-like paths (uploaded files) including 'rubrics/', 'bulk_uploads/', or pdf extensions
+          if (ms.startsWith('rubrics/') || ms.startsWith('bulk_uploads/') || ms.includes('/') || ms.toLowerCase().endsWith('.pdf')) {
               try {
                   console.log(`[SUPABASE_FETCH] Marking Scheme: ${ms}`);
                   const buffer = await readFile(ms, 'exam_pdfs');
