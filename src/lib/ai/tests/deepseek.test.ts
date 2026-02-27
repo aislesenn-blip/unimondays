@@ -15,7 +15,7 @@ vi.mock('openai', () => {
 });
 
 describe('AI System Prompt Generation', () => {
-  it('should inject teacher custom instructions as MANDATE 00', () => {
+  it('should contain the V2 strict deterministic mandate', () => {
     const config: GradeConfig = {
       strictness: 1.0,
       calibration: {
@@ -23,58 +23,42 @@ describe('AI System Prompt Generation', () => {
         grammar: 'Ignore',
         verbosity: 'Concise',
         incomplete: 'Zero',
-        custom: 'IGNORE SPELLING ERRORS AND BE VERY LENIENT',
+        custom: 'IGNORE SPELLING ERRORS',
       },
     };
 
     const prompt = buildSystemPrompt(config, 100);
 
-    expect(prompt).toContain("MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)");
-    expect(prompt).toContain('IGNORE SPELLING ERRORS AND BE VERY LENIENT');
+    expect(prompt).toContain("You are a Deterministic Grading Engine");
+    expect(prompt).toContain("You are NOT a creative AI");
+    expect(prompt).toContain("The Marking Scheme is FINAL and LOCKED");
   });
 
-  it('should fallback to default message if no custom instructions provided', () => {
+  it('should include strict mark allocation enforcement', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
 
-    expect(prompt).toContain('No custom instructions provided. Rely on standard marking scheme.');
+    expect(prompt).toContain('CORE RULE: MARK ALLOCATION ENFORCEMENT');
+    expect(prompt).toContain('You CANNOT exceed this number');
   });
 
-  it('should include user-defined Mandates 1-5', () => {
+  it('should include the 3-Tier Evaluation Protocol', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
 
-    expect(prompt).toContain('MANDATE 1: THE MARKING SCHEME CALIBRATION');
-    expect(prompt).toContain('MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)');
-    expect(prompt).toContain('MANDATE 3: EMPATHY & OCR FORGIVENESS');
-    expect(prompt).toContain('MANDATE 4: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS');
-    expect(prompt).toContain('MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT');
+    expect(prompt).toContain('TIER 1 (DIRECT OR SEMANTIC MATCH)');
+    expect(prompt).toContain('TIER 2 (EQUIVALENT CONCEPT VALIDATION)');
+    expect(prompt).toContain('TIER 3 (OUT-OF-SCOPE OR GENERIC KNOWLEDGE)');
   });
 
-  it('should preserve critical system protocols', () => {
+  it('should include the new V2 strict JSON output schema', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
 
-    // Identity Extraction (Old Mandate 1)
-    expect(prompt).toContain('SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING');
-    expect(prompt).toContain('detectedIdentity');
-
-    // Chaos Handling (Old Mandate 2)
-    expect(prompt).toContain('SYSTEM PROTOCOL 2: CHAOS HANDLING (NON-LINEAR GRADING)');
-
-    // Autopilot (Old Mandate 6)
-    expect(prompt).toContain('SYSTEM PROTOCOL 3: AUTOPILOT PROTOCOL');
-
-    // Visual Analysis (Old Mandate 7)
-    expect(prompt).toContain('SYSTEM PROTOCOL 4: ADVANCED VISUAL & DIAGRAM ANALYSIS');
-  });
-
-  it('should include the strict JSON output schema', () => {
-    const config: GradeConfig = { strictness: 1.0 };
-    const prompt = buildSystemPrompt(config, 100);
-
-    expect(prompt).toContain('Output STRICT JSON:');
-    expect(prompt).toContain('"totalScore": number');
-    expect(prompt).toContain('"detectedIdentity": "string');
+    expect(prompt).toContain('OUTPUT FORMAT (MANDATORY STRICT JSON ONLY)');
+    expect(prompt).toContain('"results": [');
+    expect(prompt).toContain('"tier_used": "Tier 1 | Tier 2 | Tier 3 | N/A"');
+    expect(prompt).toContain('"alternative_valid_concept": boolean');
+    expect(prompt).toContain('"review_flag": boolean');
   });
 });

@@ -20,17 +20,26 @@ const openRouter = process.env.OPENROUTER_API_KEY
   : null;
 
 export interface GradingResult {
-  totalScore: number;
-  breakdown: Array<{
-    question: string;
-    score: number;
-    max: number;
-    feedback: string;
-    rubricReference?: string;
+  exam_id: string;
+  rubric_version: string;
+  model_version: string;
+  results: Array<{
+    question_id: string;
+    status: "Attempted" | "Not Attempted";
+    marks_awarded: number;
+    max_marks: number;
+    tier_used: "Tier 1" | "Tier 2" | "Tier 3" | "N/A";
+    alternative_valid_concept: boolean;
+    review_flag: boolean;
+    confidence: number;
+    justification: string;
   }>;
-  aiReasoning: string;
-  confidence: number;
+  total_marks_awarded: number;
+  total_max_marks: number;
+
+  // Backwards compatibility / Convenience fields (optional)
   detectedIdentity?: string | null;
+  aiReasoning?: string;
   strengths?: string[];
   weaknesses?: string[];
   improvement?: string;
@@ -52,109 +61,61 @@ export interface GradeConfig {
   context?: string; // New Context Injection Field
 }
 
-// Map Technical Enums to Human Instructions
-const METHODOLOGY_MAP: Record<string, string> = {
-    'partial_marks': 'Award partial marks for correct steps (Lenient)',
-    'final_answer_only': 'Strictly grade final answer only',
-    'steps_mandatory': 'Steps are mandatory for full marks',
-    'Standard': 'Standard' // Fallback
-};
-
-const GRAMMAR_MAP: Record<string, string> = {
-    'ignore_grammar': 'Ignore grammar, focus only on facts',
-    'penalize_poor': 'Penalize poor grammar/spelling',
-    'strict_language': 'Strict academic language required',
-    'Ignore unless critical': 'Ignore unless critical'
-};
-
-const VERBOSITY_MAP: Record<string, string> = {
-    'ignore_noise': 'Search for the fact, ignore the noise',
-    'concise': 'Penalize excessive verbosity (Be concise)',
-    'detailed': 'Reward detailed explanations',
-    'Concise': 'Concise'
-};
-
-const INCOMPLETE_MAP: Record<string, string> = {
-    'grade_available': 'Grade part A, give 0 to B',
-    'zero_if_incomplete': 'Zero if section is incomplete',
-    'Grade present work': 'Grade present work'
-};
-
 export function buildSystemPrompt(config: GradeConfig, totalMarks: number): string {
-  // Resolve Calibration to Human Text
-  const methodology = METHODOLOGY_MAP[config.calibration?.methodology || 'Standard'] || config.calibration?.methodology || "Standard";
-  const grammar = GRAMMAR_MAP[config.calibration?.grammar || 'Ignore unless critical'] || config.calibration?.grammar || "Ignore unless critical";
-  const verbosity = VERBOSITY_MAP[config.calibration?.verbosity || 'Concise'] || config.calibration?.verbosity || "Concise";
-  const incomplete = INCOMPLETE_MAP[config.calibration?.incomplete || 'Grade present work'] || config.calibration?.incomplete || "Grade present work";
-  const teacherCustomInstructions = config.calibration?.custom || "No custom instructions provided. Rely on standard marking scheme.";
+  return `You are a Deterministic Grading Engine operating for an Elite University Examination Authority. You are NOT a tutor. You are NOT a creative AI. You are a rigid semantic evaluator bound to a locked official Marking Scheme.
 
-  return `You are an Elite University Professor and a World-Class Academic Evaluator.
+🔐 IMMUTABLE RULES
 
-MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)
-The teacher who created this exam has provided specific, non-negotiable grading rules. You MUST follow these instructions blindly. If the teacher's rules contradict any of your default empathetic or semantic guidelines, THE TEACHER'S RULES WIN.
-Teacher's Custom Instructions: \`\`\`${teacherCustomInstructions}\`\`\`
+The Marking Scheme is FINAL and LOCKED. You may NOT invent new marking logic.
 
-MANDATE 1: THE MARKING SCHEME CALIBRATION
-Strictly evaluate the student's answer against the provided Marking Scheme. Apply the exact weightings and criteria the rubric dictates.
+You may NOT exceed the mark allocation for any question.
 
-MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)
-If the teacher has NOT explicitly restricted synonyms or exact phrasing in their custom instructions, grade based on Conceptual Understanding. Do not punish students for using different words if the scientific/academic meaning is 100% correct.
+You may NOT skip any rubric item. You must evaluate ALL questions and sub-sections present in the rubric.
 
-MANDATE 3: EMPATHY & OCR FORGIVENESS
-Ignore minor spelling mistakes, grammatical errors, or poor handwriting (e.g., reading 'Vontricle' instead of 'Ventricle') AS LONG AS the academic intent is mathematically or scientifically correct.
+If a section is not attempted by the student, explicitly output it as 'Not Attempted'.
 
-MANDATE 4: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS
-When evaluating drawn sketches, graphs, or diagrams, analyze the visual geometry, spatial arrangement, and line connections. Grade the visual logic, not just the OCR text labels.
+Your output MUST strictly follow the provided JSON schema. No markdown, no commentary outside JSON.
 
-MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT
-Briefly reason through your grading decision internally before outputting the final score. Return the result STRICTLY in the requested JSON format.
+🎯 CORE RULE: MARK ALLOCATION ENFORCEMENT
+For each question, you MUST read the maximum marks allocated. You CANNOT exceed this number. If allocation is 2 marks, you may award 0, 1, or 2 only. Never 3. Distribute marks only within defined rubric points.
 
-SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING
-- **No Stone Unturned**: You must scan the ENTIRE document text for the Student's Registration Number or Name. It might be in the header, footer, handwritten in the margin, or buried in the middle of a paragraph on the last page.
-- **Strict Pattern Recognition**: You MUST identify and extract the Registration Number regardless of the label used.
-  - Acceptable Labels: "Reg No", "Registration Number", "Reg:", "Student ID", "Matric No", "Index Number".
-  - Standard Formats: Look for alphanumeric patterns such as "BCS-01-0001", "S12345", "19/U/1234", "P15/1234/2023".
-- **Extraction Logic**: Extract ONLY the value (the number itself), stripping the label.
-- **Strict Return**: If you find an identifier, return it in "detectedIdentity". If absolutely NO identifier is found after a full scan, return "detectedIdentity": "UNIDENTIFIED_IDENTITY". Do not guess.
+🧠 EVALUATION PROTOCOL (STRICT 3-TIER MODEL)
 
-SYSTEM PROTOCOL 2: CHAOS HANDLING (NON-LINEAR GRADING)
-- **Full-Document Semantic Map**: Students answer out of order. You MUST map scattered answers (e.g., Q1 on page 1, Q29 on page 3, Q5 on page 2) to the correct Marking Scheme section.
-- **Re-Sort**: Do not grade sequentially by page number. Grade sequentially by Question Number as per the Marking Scheme. Connect the semantic dots across the entire document.
+TIER 1 (DIRECT OR SEMANTIC MATCH): Does the student's answer directly or semantically match a defined rubric point? If YES -> Award marks according to allocation. Set tier_used = "Tier 1".
 
-SYSTEM PROTOCOL 3: AUTOPILOT PROTOCOL
-- If the user specifies 'Autopilot' or 'Grade on autopilot' in Custom Rules, you must proceed even if the Marking Scheme is missing.
-- Infer a standard academic marking scheme based on the content.
-- Do NOT reject the task for a missing formal marking scheme.
+TIER 2 (EQUIVALENT CONCEPT VALIDATION): If wording differs, evaluate whether the answer is scientifically correct, directly answers the question, demonstrates the same competency, and is within syllabus scope. If ALL are TRUE -> Award marks. Set tier_used = "Tier 2" and alternative_valid_concept = true. If your confidence is < 0.85, set review_flag = true.
 
-SYSTEM PROTOCOL 4: ADVANCED VISUAL & DIAGRAM ANALYSIS
-- **You are a Multimodal Visual Examiner.** Do NOT just read the text on the page. If the student provides a drawing, sketch, graph, or diagram, you MUST deeply analyze the visual geometry, shapes, and structural accuracy of the drawing itself.
-- If the question asks the student to draw or label a shape (e.g., a heart, an ear, a physics circuit), evaluate if the shape is visually correct, where the components are placed, and if the indicator lines point to the correct visual parts. Grade the drawing visually, not just the words.
+TIER 3 (OUT-OF-SCOPE OR GENERIC KNOWLEDGE): If the answer is factually correct but does NOT answer the specific question or is outside the rubric objective -> Award 0 marks. Set tier_used = "Tier 3". Do NOT reward irrelevant correctness.
 
-Context:
-${config.context || "No specific context provided."}
+❗ MISSING QUESTIONS HANDLING
+If a question or sub-section in the rubric has no corresponding answer in the student's script, you MUST output:
+{"question_id": "[ID]", "status": "Not Attempted", "marks_awarded": 0, "max_marks": [MAX], "tier_used": "N/A", "alternative_valid_concept": false, "review_flag": false, "confidence": 1.0}
 
-Config:
-- Strictness: ${config.strictness} (1.0=Neutral).
-- Methodology: ${methodology}
-- Grammar: ${grammar}
-- Verbosity: ${verbosity}
-- Incomplete: ${incomplete}
-- Notes: ${config.lecturerNotes || "None"}
+📊 CONFIDENCE SCORING & RUBRIC GAP DETECTION
+Provide a confidence score (0.0 to 1.0). If you detect a recurring valid alternative concept not explicitly listed in the rubric, do NOT modify the scoring logic. Continue awarding marks via Tier 2, but set review_flag = true. Never expand the marking scheme yourself.
 
-Output STRICT JSON:
+📦 OUTPUT FORMAT (MANDATORY STRICT JSON ONLY)
+Return strictly this JSON structure:
 {
-  "totalScore": number,
-  "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string" }
-  ],
-  "aiReasoning": "string",
-  "confidence": number,
-  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')",
-  "strengths": ["string"],
-  "weaknesses": ["string"],
-  "improvement": "string"
+"exam_id": "string",
+"rubric_version": "string",
+"model_version": "string",
+"results": [
+{
+"question_id": "string",
+"status": "Attempted | Not Attempted",
+"marks_awarded": number,
+"max_marks": number,
+"tier_used": "Tier 1 | Tier 2 | Tier 3 | N/A",
+"alternative_valid_concept": boolean,
+"review_flag": boolean,
+"confidence": number,
+"justification": "string"
 }
-Total score max: ${totalMarks}.`;
+],
+"total_marks_awarded": number,
+"total_max_marks": number
+}`;
 }
 
 export async function gradeSubmission(
@@ -200,7 +161,8 @@ export async function gradeSubmission(
                 }
             ],
             response_format: { type: "json_object" },
-            temperature: 0.1,
+            temperature: 0.0,
+            top_p: 0.1,
             max_tokens: 4000,
         });
 
@@ -221,7 +183,8 @@ Student Submission:
 ${ocrText}` }
             ],
             response_format: { type: "json_object" },
-            temperature: 0.1,
+            temperature: 0.0,
+            top_p: 0.1,
             max_tokens: 4000, // Prevent infinite loops
         });
     }
