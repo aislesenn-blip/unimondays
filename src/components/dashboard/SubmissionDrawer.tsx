@@ -255,14 +255,34 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                     <h3 className="text-sm font-medium mb-3">Grading Breakdown</h3>
                     <div className="border rounded-md">
                         {breakdown.map((item: any, i: number) => (
-                            <div key={i} className="flex justify-between p-3 text-sm border-b last:border-0">
-                                <div className="flex-1 pr-4">
-                                    <span className="font-medium text-foreground">{item.question}</span>
-                                    <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
+                            <div key={i} className="flex flex-col p-3 border-b last:border-0">
+                                <div className="flex justify-between text-sm">
+                                    <div className="flex-1 pr-4">
+                                        <span className="font-medium text-foreground">{item.question_id || item.question}</span>
+                                        <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${item.status === "Attempted" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+                                            {item.status || "Attempted"}
+                                        </span>
+                                        <p className="text-muted-foreground text-xs mt-1">{item.justification || item.feedback}</p>
+                                        {item.tier_used && (
+                                            <p className="text-muted-foreground text-[10px] mt-1 italic">
+                                                Evaluated via: {item.tier_used}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="font-mono font-medium whitespace-nowrap">
+                                        {item.marks_awarded ?? item.score}/{item.max_marks ?? item.max}
+                                    </div>
                                 </div>
-                                <div className="font-mono font-medium">
-                                    {item.score}/{item.max}
-                                </div>
+                                {(item.review_flag || item.alternative_valid_concept) && (
+                                    <Alert variant="destructive" className="mt-2 bg-yellow-50 border-yellow-200 text-yellow-800 py-2">
+                                        <AlertTriangle className="h-4 w-4 text-yellow-600 !mt-0" />
+                                        <AlertTitle className="text-xs font-semibold mb-0">Review Required</AlertTitle>
+                                        <AlertDescription className="text-xs mt-1">
+                                             {item.alternative_valid_concept && `AI flagged an alternative valid concept for ${item.question_id || item.question} with ${Math.round((item.confidence || 0) * 100)}% confidence. Please review.`}
+                                            {(!item.alternative_valid_concept && item.review_flag) && `AI flagged this for review with ${Math.round((item.confidence || 0) * 100)}% confidence.`}
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
                             </div>
                         ))}
                     </div>
