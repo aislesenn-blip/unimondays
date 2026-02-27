@@ -10,6 +10,7 @@ export async function handleAiGrade(job: Job) {
   try {
      data = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
   } catch (e) {
+     console.error("[GRADING FATAL ERROR]: Invalid job payload JSON", e);
      throw new Error("Invalid job payload JSON");
   }
   const { submissionId } = data;
@@ -70,7 +71,7 @@ export async function handleAiGrade(job: Job) {
               });
               return { text, buffer, mimeType };
           } catch (ocrError: any) {
-              console.error("[OCR_FATAL_ERROR]", ocrError);
+              console.error("[GRADING FATAL ERROR]: OCR Processing Failed", ocrError);
               throw new Error(`OCR Processing Failed: ${ocrError.message}`);
           }
       };
@@ -97,6 +98,7 @@ export async function handleAiGrade(job: Job) {
               }
               return text;
           } catch (e: any) {
+              console.error("[GRADING FATAL ERROR]: Rubric OCR failed", e);
               console.warn("[OCR_WARN] Rubric OCR failed, defaulting.", e.message);
               return "Grade based on general academic standards and common sense.";
           }
@@ -117,6 +119,7 @@ export async function handleAiGrade(job: Job) {
                   console.log(`[OCR_SUCCESS] Marking Scheme extracted: ${text.length} chars.`);
                   return text;
               } catch (e: any) {
+                  console.error("[GRADING FATAL ERROR]: Marking Scheme OCR failed", e);
                   console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
                   return undefined;
               }
@@ -136,6 +139,7 @@ export async function handleAiGrade(job: Job) {
               markingSchemeOcrTask()
           ]);
       } catch (e: any) {
+          console.error("[GRADING FATAL ERROR]: Prerequisite Check Failed", e);
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
@@ -150,7 +154,9 @@ export async function handleAiGrade(job: Job) {
       let calibrationSettings;
       try {
           calibrationSettings = submission.workSession.calibration ? JSON.parse(submission.workSession.calibration) : undefined;
-      } catch (e) {}
+      } catch (e) {
+          console.error("[GRADING FATAL ERROR]: Failed to parse calibration JSON", e);
+      }
 
       // Build Context String
       const lecturerName = submission.workSession.lecturer.fullName || "Lecturer";
@@ -321,7 +327,7 @@ Student Identifier: ${studentId}.
       };
 
   } catch (fatalError: any) {
-      console.error(`[AI_FATAL_ERROR] Pipeline Crashed:`, fatalError);
+      console.error(`[GRADING FATAL ERROR] Pipeline Crashed:`, fatalError);
 
       // RATE LIMIT ARMOR: Do not fail the submission if it's just a rate limit.
       // The queue processor will catch this and retry.
