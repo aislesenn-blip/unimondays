@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
 export function GlobalAIAssistant() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Array<{ role: string, content: string }>>([
       { role: "assistant", content: "Hello! I'm your Playbook AI Assistant. How can I help you with your assessments today?" }
@@ -28,7 +30,10 @@ export function GlobalAIAssistant() {
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: [...messages, userMsg] })
+            body: JSON.stringify({
+              messages: [...messages, userMsg],
+              currentPath: pathname
+            })
         });
 
         if (res.ok) {
