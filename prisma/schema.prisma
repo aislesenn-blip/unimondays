@@ -32,6 +32,7 @@ model User {
   workSessions WorkSession[] // As lecturer
   submissions  Submission[]
   auditLogs    AuditLog[]
+  bulkSessions BulkSession[] // New relationship
 
   @@map("users")
 }
@@ -73,6 +74,7 @@ model WorkSession {
   strictness   String?   // 'LENIENT', 'MODERATE', 'STRICT'
   totalMarks   Int?      @map("total_marks")
   releaseMode  String?   @default("MANUAL") @map("release_mode")
+  bulkSessionId String?  @map("bulk_session_id")
 
   // V2.0 Enterprise Logic
   strictDeadline Boolean? @default(false) @map("strict_deadline")
@@ -89,6 +91,7 @@ model WorkSession {
   lecturer     User       @relation(fields: [lecturerId], references: [id])
   class        Classes?   @relation(fields: [classId], references: [id])
   submissions  Submission[]
+  bulkSession  BulkSession? @relation(fields: [bulkSessionId], references: [id])
 
   @@map("work_sessions")
 }
@@ -181,4 +184,33 @@ model Appeal {
 
   @@map("appeals")
   @@index([submissionId])
+}
+
+// 11. BULK SESSIONS (New Cloud Marking Feature)
+model BulkSession {
+  id              String    @id @default(uuid())
+  title           String
+  cloudLink       String    @map("cloud_link") // Google Drive / Dropbox Link
+  lecturerId      String    @map("lecturer_id")
+  status          String    @default("PENDING") // PENDING, PROCESSING, READY, COMPLETED, FAILED
+  totalFiles      Int?      @default(0) @map("total_files")
+  processedFiles  Int?      @default(0) @map("processed_files")
+
+  // Configuration for the Bulk Job
+  markingScheme   String?   @map("marking_scheme") // Text or URL
+  goldStandardUrl String?   @map("gold_standard_url") // Uploaded PDF
+  calibration     String?   // JSON string
+  totalMarks      Int?      @default(100) @map("total_marks")
+
+  // Results
+  successCount    Int?      @default(0) @map("success_count")
+  unidentifiedCount Int?    @default(0) @map("unidentified_count")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  lecturer        User          @relation(fields: [lecturerId], references: [id])
+  workSessions    WorkSession[] // If converted/synced
+
+  @@map("bulk_sessions")
 }
