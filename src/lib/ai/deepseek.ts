@@ -83,6 +83,7 @@ export async function gradeSubmission(
   const grammar = GRAMMAR_MAP[config.calibration?.grammar || 'Ignore unless critical'] || config.calibration?.grammar || "Ignore unless critical";
   const verbosity = VERBOSITY_MAP[config.calibration?.verbosity || 'Concise'] || config.calibration?.verbosity || "Concise";
   const incomplete = INCOMPLETE_MAP[config.calibration?.incomplete || 'Grade present work'] || config.calibration?.incomplete || "Grade present work";
+  const customRules = config.calibration?.custom || "None";
 
   // Optimize prompt: Remove excessive whitespace, focus on JSON strictness
   const systemPrompt = `You are an expert academic grader. Grade the student's submission strictly based on the provided rubric and marking scheme.
@@ -100,6 +101,11 @@ MANDATE 2: CHAOS HANDLING (NON-LINEAR GRADING)
 - **Full-Document Semantic Map**: Students answer out of order. You MUST map scattered answers (e.g., Q1 on page 1, Q29 on page 3, Q5 on page 2) to the correct Marking Scheme section.
 - **Re-Sort**: Do not grade sequentially by page number. Grade sequentially by Question Number as per the Marking Scheme. Connect the semantic dots across the entire document.
 
+MANDATE 5: LECTURER CUSTOM RULES
+- **SUPREME AUTHORITY**: You MUST prioritize the following custom expectations over general grading rules.
+- **Custom Rules**: [${customRules}]
+- Failure to follow these specific instructions will result in an incorrect grade. If the custom rule says "Ignore spelling", do not penalize spelling even if the rubric says otherwise.
+
 Context:
 ${config.context || "No specific context provided."}
 
@@ -109,7 +115,6 @@ Config:
 - Grammar: ${grammar}
 - Verbosity: ${verbosity}
 - Incomplete: ${incomplete}
-- Custom: ${config.calibration?.custom || "None"}
 - Notes: ${config.lecturerNotes || "None"}
 
 Output STRICT JSON:

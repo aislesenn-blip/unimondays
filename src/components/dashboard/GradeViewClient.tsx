@@ -39,6 +39,7 @@ interface GradeViewClientProps {
 export function GradeViewClient({ sessionId, workId, submission }: GradeViewClientProps) {
   const [score, setScore] = useState(submission.score);
   const [feedback, setFeedback] = useState("");
+  const [activeTab, setActiveTab] = useState<'document' | 'grading'>('document'); // Mobile Tab State
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] -m-6 md:-m-8">
@@ -57,7 +58,8 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Desktop Pagination */}
+        <div className="hidden md:flex items-center gap-2">
           <Button variant="outline" size="sm" disabled>
             <ChevronLeft className="mr-2 h-4 w-4" /> Prev
           </Button>
@@ -68,23 +70,43 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-             <div className="text-right">
+             <div className="text-right hidden sm:block">
                <div className="text-xs text-muted-foreground">Total Score</div>
                <div className="text-xl font-bold text-primary">{score} <span className="text-sm text-muted-foreground">/ {submission.maxScore}</span></div>
              </div>
           </div>
           <Button>
             <Save className="mr-2 h-4 w-4" />
-            Save & Publish
+            <span className="hidden sm:inline">Save & Publish</span>
+            <span className="sm:hidden">Save</span>
           </Button>
         </div>
       </header>
 
-      {/* Main Content: Split View */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Mobile Tabs */}
+      <div className="flex md:hidden border-b bg-muted/20">
+          <button
+            className={cn("flex-1 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'document' ? "border-primary text-primary" : "border-transparent text-muted-foreground")}
+            onClick={() => setActiveTab('document')}
+          >
+            Document
+          </button>
+          <button
+            className={cn("flex-1 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'grading' ? "border-primary text-primary" : "border-transparent text-muted-foreground")}
+            onClick={() => setActiveTab('grading')}
+          >
+            Grading
+          </button>
+      </div>
+
+      {/* Main Content: Split View (Desktop) / Tab View (Mobile) */}
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left Pane: Script Preview */}
-        <div className="flex-1 bg-muted/30 p-8 overflow-y-auto flex justify-center border-r">
-          <div className="bg-white shadow-xl rounded-sm w-[600px] min-h-[850px] relative border flex flex-col shrink-0 mb-8">
+        <div className={cn(
+            "flex-1 bg-muted/30 p-4 md:p-8 overflow-y-auto flex justify-center border-r transition-transform duration-300 absolute inset-0 md:static z-0",
+            activeTab === 'document' ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}>
+          <div className="bg-white shadow-xl rounded-sm w-full md:w-[600px] min-h-[500px] md:min-h-[850px] relative border flex flex-col shrink-0 mb-8">
             <div className="bg-gray-50 p-3 border-b flex justify-between items-center text-xs text-gray-500">
               <span className="font-mono">Document Viewer</span>
               {submission.fileUrl && (
@@ -120,7 +142,10 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
         </div>
 
         {/* Right Pane: Grading Panel */}
-        <div className="w-[400px] bg-background border-l flex flex-col overflow-y-auto shrink-0">
+        <div className={cn(
+            "w-full md:w-[400px] bg-background border-l flex flex-col overflow-y-auto shrink-0 transition-transform duration-300 absolute inset-0 md:static z-10 md:z-0",
+            activeTab === 'grading' ? "translate-x-0" : "translate-x-full md:translate-x-0"
+        )}>
           <div className="p-6 space-y-6">
 
             <Card className="bg-primary/5 border-primary/10 shadow-none">

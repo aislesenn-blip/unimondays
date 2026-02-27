@@ -75,24 +75,25 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
   };
 
   const handleCreateNewClass = async () => {
+      if (!session) return;
       setSyncing(true);
       try {
-          // This would call an API to convert the BulkSession -> Class + WorkSession
-          // Since we already created a WorkSession in the worker (type=BULK), we just need to finalize it.
-          // For now, let's redirect to the WorkSession created by the worker.
-          // We need to fetch the workSessionId.
+          const res = await fetch(`/api/cloud-marking/${session.id}/convert`, {
+              method: 'POST'
+          });
 
-          // Assuming the API returns the linked WorkSession ID if available
-          // Or we just redirect to the bulk session page which IS the work session effectively?
-          // No, Mandate says "Convert this entire bulk session into a brand new Class".
+          if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.error || "Conversion failed");
+          }
 
-          toast.success("Converting to Class...");
-          // Simulate delay
-          await new Promise(r => setTimeout(r, 1000));
+          const data = await res.json();
+          toast.success("Converted to Class successfully!");
 
-          // In a real app, we'd have a specific route.
-          // Here, let's just go back to dashboard as if it's done.
-          router.push('/dashboard');
+          // Redirect to the newly created Class/WorkSession
+          router.push(`/dashboard/classes/${data.classId}`);
+      } catch (error: any) {
+          toast.error(error.message);
       } finally {
           setSyncing(false);
       }
