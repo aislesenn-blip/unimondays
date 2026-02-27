@@ -8,7 +8,8 @@ import {
   Users,
   UserPlus,
   ArrowRight,
-  GitMerge
+  GitMerge,
+  Cpu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -52,9 +53,10 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
           const data = await res.json();
           setSession(data);
 
+          // Only stop main loader if session is technically "done" with the slicing/uploading phase.
+          // Grading might still be happening in the background.
           if (data.status === 'READY' || data.status === 'COMPLETED' || data.status === 'FAILED') {
              setLoading(false);
-             clearInterval(interval);
           }
         }
       } catch (e) {
@@ -68,6 +70,14 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
     return () => clearInterval(interval);
   }, [params]);
 
+  // Derived Grading Progress
+  const gradingProgress = session?.submissions?.length
+      ? (session.submissions.filter((s: any) => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status)).length / session.submissions.length) * 100
+      : 0;
+
+  const isGradingComplete = session?.submissions?.length
+      ? session.submissions.every((s: any) => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status))
+      : false;
 
   const handleSyncToClass = async () => {
     // Ideally this opens a modal to select a class.
@@ -112,9 +122,19 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
                 {session.status === 'PROCESSING' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                 {session.status}
              </Badge>
+
+             {/* Slicing Progress */}
              <span className="text-muted-foreground text-sm">
-                {session.processedFiles} / {session.totalFiles} Scripts Processed
+                {session.processedFiles} / {session.totalFiles} Pages Processed
              </span>
+
+             {/* Grading Progress Indicator */}
+             {session.status === 'READY' && !isGradingComplete && (
+                 <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 flex items-center gap-1">
+                     <Cpu className="h-3 w-3 animate-pulse" />
+                     Grading: {Math.round(gradingProgress)}%
+                 </Badge>
+             )}
           </div>
         </div>
         <div className="flex gap-2">
@@ -123,7 +143,12 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
                    <Button variant="outline" onClick={() => router.push('/dashboard/cloud-marking')}>
                         Cancel
                    </Button>
-                   <Button onClick={handleCreateNewClass} disabled={syncing}>
+                   <Button
+                        onClick={handleCreateNewClass}
+                        disabled={syncing || !isGradingComplete}
+                        className={!isGradingComplete ? "opacity-50 cursor-not-allowed" : ""}
+                        title={!isGradingComplete ? "Wait for grading to finish" : "Sync to Class"}
+                    >
                         {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GitMerge className="mr-2 h-4 w-4" />}
                         Convert to Class
                    </Button>
@@ -223,7 +248,12 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
               {/* LIVE TABLE PREVIEW */}
               <Card className="md:col-span-2">
                   <CardHeader>
-                      <CardTitle>Submission Preview</CardTitle>
+                      <CardTitle className="flex justify-between items-center">
+                          <span>Submission Preview</span>
+                          <span className="text-sm font-normal text-muted-foreground">
+                              {session.submissions?.length} Submissions
+                          </span>
+                      </CardTitle>
                   </CardHeader>
                   <CardContent>
                       <Table>
@@ -238,13 +268,22 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
                               {session.submissions?.map((sub: any) => (
                                   <TableRow key={sub.id}>
                                       <TableCell>
-                                          {sub.studentRegNo || sub.score?.detectedIdentity || <span className="text-amber-600 italic">Unidentified</span>}
+                                          <div className="flex flex-col">
+                                              <span className="font-medium">
+                                                  {sub.studentName || sub.studentRegNo || sub.score?.detectedIdentity || <span className="text-amber-600 italic">Unidentified</span>}
+                                              </span>
+                                              {(sub.studentName || sub.score?.detectedIdentity) && sub.studentRegNo && (
+                                                  <span className="text-xs text-muted-foreground">{sub.studentRegNo}</span>
+                                              )}
+                                          </div>
                                       </TableCell>
                                       <TableCell>
-                                          <Badge variant={sub.status === 'GRADED' ? 'default' : 'secondary'}>{sub.status}</Badge>
+                                          <Badge variant={sub.status === 'GRADED' ? 'default' : sub.status === 'FLAGGED' ? 'destructive' : 'secondary'}>
+                                              {sub.status}
+                                          </Badge>
                                       </TableCell>
                                       <TableCell className="text-right font-mono">
-                                          {sub.score?.totalMarks || '-'}
+                                          {sub.score?.totalMarks !== undefined ? sub.score.totalMarks : '-'}
                                       </TableCell>
                                   </TableRow>
                               ))}

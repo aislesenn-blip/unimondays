@@ -2,6 +2,8 @@ import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { saveBuffer, deleteFile } from '@/lib/storage';
 import { PDFDocument } from 'pdf-lib';
+import { analyzePdfStructure, PdfSplit } from '@/lib/ai/gemini';
+import { v4 as uuidv4 } from 'uuid';
 
 async function resolveGDriveLink(url: string): Promise<Buffer> {
     const fileIdMatch = url.match(/[-\w]{25,}/);
@@ -140,34 +142,63 @@ export async function handleCloudMarking(job: Job) {
             });
         }
 
-        // 3. Slice & Process (Batch Concurrency Control)
-        const BATCH_SIZE = 5;
+        // MANDATE 1: Smart Collation
+        let splits: PdfSplit[] = [];
+        try {
+            console.log(`[CLOUD_WORKER] Analyzing PDF Structure...`);
+            // Only analyze structure if reasonable size to avoid timeouts on huge files
+            if (pageCount <= 100) {
+                splits = await analyzePdfStructure(fileBuffer);
+                console.log(`[CLOUD_WORKER] Smart Collation found ${splits.length} scripts.`);
+            } else {
+                console.log(`[CLOUD_WORKER] PDF too large for single-pass analysis, falling back to page-by-page.`);
+            }
+        } catch (structureError) {
+            console.warn(`[CLOUD_WORKER] Smart Collation failed, falling back to default slicing.`, structureError);
+        }
+
         let processedCount = 0;
+        const BATCH_SIZE = 5;
 
-        for (let i = 0; i < pageCount; i += BATCH_SIZE) {
-            const batchPromises = [];
-
-            // Process batch
-            for (let j = i; j < Math.min(i + BATCH_SIZE, pageCount); j++) {
-                batchPromises.push((async () => {
+        // BRANCH A: Smart Collation (Splits Found)
+        if (splits.length > 0) {
+            for (let i = 0; i < splits.length; i += BATCH_SIZE) {
+                const batchSplits = splits.slice(i, i + BATCH_SIZE);
+                const batchPromises = batchSplits.map(async (split) => {
                     try {
-                        // Create new document for this slice
+                         // Validate range
+                         if (split.startPage < 1 || split.endPage > pageCount) return false;
+
+                         // Create new document for this split
                         const newDoc = await PDFDocument.create();
-                        const [copiedPage] = await newDoc.copyPages(srcDoc, [j]);
-                        newDoc.addPage(copiedPage);
+
+                        // Copy pages (0-based index)
+                        const pageIndices = [];
+                        for (let p = split.startPage; p <= split.endPage; p++) {
+                            pageIndices.push(p - 1);
+                        }
+                        const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
+                        copiedPages.forEach(page => newDoc.addPage(page));
+
                         const pdfBytes = await newDoc.save();
                         const sliceBuffer = Buffer.from(pdfBytes);
 
+                        // Identity (sanitize)
+                        const safeRegNo = split.regNo?.replace(/[^a-zA-Z0-9]/g, '') || 'UNIDENTIFIED';
+                        const uniqueSuffix = uuidv4().substring(0, 8); // Prevent collisions
+                        const fileName = `bulk_${bulkSession.id}_${safeRegNo}_${uniqueSuffix}.pdf`;
+
                         // Upload to Supabase
-                        const slicePath = await saveBuffer(sliceBuffer, `bulk_${bulkSession.id}_p${j + 1}.pdf`, 'exam_pdfs');
+                        const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
                         createdSlicePaths.push(slicePath);
 
-                        // Create Submission
+                        // Create Submission (with Pre-filled Identity)
                         const submission = await prisma.submission.create({
                             data: {
-                                workSessionId: workSession!.id, // Non-null assertion safe due to create above
+                                workSessionId: workSession!.id,
                                 userId: null,
-                                studentRegNo: null,
+                                studentRegNo: split.regNo === 'UNIDENTIFIED' ? null : split.regNo,
+                                studentName: split.name,
                                 filePath: slicePath,
                                 status: 'PENDING',
                                 submittedAt: new Date()
@@ -183,26 +214,90 @@ export async function handleCloudMarking(job: Job) {
                             }
                         });
 
-                        return true;
+                        return pageIndices.length; // Return number of pages processed
                     } catch (err) {
-                        console.error(`[CLOUD_WORKER] Failed to process page ${j + 1}`, err);
-                        return false;
+                        console.error(`[CLOUD_WORKER] Failed to process split for ${split.regNo}`, err);
+                        return 0;
                     }
-                })());
+                });
+
+                const results = await Promise.all(batchPromises);
+                const pagesProcessedInBatch = results.reduce((a, b) => a + b, 0);
+                processedCount += pagesProcessedInBatch;
+
+                 // Update progress
+                await prisma.bulkSession.update({
+                    where: { id: bulkSession.id },
+                    data: { processedFiles: processedCount }
+                });
             }
 
-            // Await batch
-            const results = await Promise.all(batchPromises);
-            const successInBatch = results.filter(r => r).length;
-            processedCount += successInBatch;
+        } else {
+            // BRANCH B: Fallback (Page-by-Page)
+            for (let i = 0; i < pageCount; i += BATCH_SIZE) {
+                const batchPromises = [];
 
-            // Update progress occasionally
-            await prisma.bulkSession.update({
-                where: { id: bulkSession.id },
-                data: { processedFiles: processedCount }
-            });
+                // Process batch
+                for (let j = i; j < Math.min(i + BATCH_SIZE, pageCount); j++) {
+                    batchPromises.push((async () => {
+                        try {
+                            // Create new document for this slice
+                            const newDoc = await PDFDocument.create();
+                            const [copiedPage] = await newDoc.copyPages(srcDoc, [j]);
+                            newDoc.addPage(copiedPage);
+                            const pdfBytes = await newDoc.save();
+                            const sliceBuffer = Buffer.from(pdfBytes);
 
-            console.log(`[CLOUD_WORKER] Batch ${Math.floor(i/BATCH_SIZE) + 1} complete. Total processed: ${processedCount}`);
+                            // Generate unique filename for page fallback
+                            const uniqueSuffix = uuidv4().substring(0, 8);
+                            const fileName = `bulk_${bulkSession.id}_p${j + 1}_${uniqueSuffix}.pdf`;
+
+                            // Upload to Supabase
+                            const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
+                            createdSlicePaths.push(slicePath);
+
+                            // Create Submission
+                            const submission = await prisma.submission.create({
+                                data: {
+                                    workSessionId: workSession!.id, // Non-null assertion safe due to create above
+                                    userId: null,
+                                    studentRegNo: null,
+                                    filePath: slicePath,
+                                    status: 'PENDING',
+                                    submittedAt: new Date()
+                                }
+                            });
+
+                            // Trigger Grading Job
+                            await prisma.job.create({
+                                data: {
+                                    type: 'AI_GRADE_SUBMISSION',
+                                    payload: JSON.stringify({ submissionId: submission.id }),
+                                    status: 'PENDING'
+                                }
+                            });
+
+                            return true;
+                        } catch (err) {
+                            console.error(`[CLOUD_WORKER] Failed to process page ${j + 1}`, err);
+                            return false;
+                        }
+                    })());
+                }
+
+                // Await batch
+                const results = await Promise.all(batchPromises);
+                const successInBatch = results.filter(r => r).length;
+                processedCount += successInBatch;
+
+                // Update progress occasionally
+                await prisma.bulkSession.update({
+                    where: { id: bulkSession.id },
+                    data: { processedFiles: processedCount }
+                });
+
+                console.log(`[CLOUD_WORKER] Batch ${Math.floor(i/BATCH_SIZE) + 1} complete. Total processed: ${processedCount}`);
+            }
         }
 
         // 4. Finalize
