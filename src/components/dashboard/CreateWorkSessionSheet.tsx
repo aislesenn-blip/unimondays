@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { Plus, Upload, FileText, Loader2, Save } from "lucide-react";
+import { supabaseClient } from "@/lib/supabase-client";
+import { v4 as uuidv4 } from "uuid";
 
 interface CreateWorkSessionSheetProps {
   classId: string;
@@ -39,22 +41,22 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
     if (!file) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('folder', `rubrics/${classId}`); // Reuse folder logic, storage service maps to bucket
-
     try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      // Direct Client-Side Upload
+      const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const filePath = `rubrics/${classId}/${filename}`;
 
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const { data, error } = await supabaseClient
+        .storage
+        .from('exam_pdfs')
+        .upload(filePath, file);
+
+      if (error) throw new Error(error.message);
+
       setValue(field, data.path); // Store path
       toast.success(`${field} uploaded`);
-    } catch (error) {
-      toast.error(`Failed to upload ${field}`);
+    } catch (error: any) {
+      toast.error(`Failed to upload ${field}: ${error.message}`);
     } finally {
       setUploading(false);
     }

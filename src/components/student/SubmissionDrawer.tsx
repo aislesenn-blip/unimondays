@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/sheet";
 import { Upload, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { supabaseClient } from "@/lib/supabase-client";
+import { v4 as uuidv4 } from "uuid";
 
 interface SubmissionDrawerProps {
   session: any;
@@ -30,13 +32,30 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("workSessionId", session.id);
+      // 1. Upload to Supabase Storage (Client-side)
+      const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const filePath = `submissions/${filename}`;
 
+      const { error: uploadError } = await supabaseClient
+        .storage
+        .from('exam_pdfs')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      // 2. Submit Metadata to API
       const res = await fetch("/api/student/submit", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filePath,
+          workSessionId: session.id,
+          filename: file.name
+        }),
       });
 
       const data = await res.json();
@@ -50,8 +69,9 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
       onSuccess();
       onOpenChange(false);
       setFile(null); // Reset file
-    } catch (error) {
-      toast.error("An unexpected error occurred during submission");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "An unexpected error occurred during submission");
     } finally {
       setLoading(false);
     }
