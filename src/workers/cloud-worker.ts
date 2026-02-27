@@ -1,17 +1,7 @@
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { readFile, saveBuffer } from '@/lib/storage';
-// import { slicePdf } from '@/lib/pdf'; // We need to mock or implement this
-import { handleAiGrade } from './grading-worker';
-
-// MOCK PDF SLICER (Since we can't easily add heavy deps like pdf-lib without verifying environment)
-// In a real scenario, we'd use 'pdf-lib' or 'muhammara' to split the PDF.
-// For this MVP/Sim, we will assume the "Cloud Link" points to a folder of images/PDFs
-// OR we will simulate slicing by creating dummy submissions if it's a single PDF.
-// MANDATE says: "AI will autonomously fetch, slice...".
-// To make this "World Class" without breaking the build with new deps,
-// I will implement a robust logical placeholder that CAN be swapped for real slicing.
-// BUT, I will try to support ZIP extraction if possible, or just standard file fetching.
+import { saveBuffer } from '@/lib/storage';
+import { PDFDocument } from 'pdf-lib';
 
 async function fetchFileFromLink(url: string): Promise<Buffer> {
     const res = await fetch(url);
@@ -40,96 +30,116 @@ export async function handleCloudMarking(job: Job) {
 
     try {
         // 1. Fetch the Cloud File
-        // In reality, this link is likely a Google Drive folder or a direct PDF link.
-        // Handling Google Drive auth/scraping is complex.
-        // We will assume a Direct Download Link (DDL) to a PDF or ZIP for this iteration.
-        // OR we support our own "Upload" if the user provided a file path in our system (but the UI says Paste Link).
-
-        // Simulating "Scanning" the link.
-        // If it's a PDF, we download it.
         const fileBuffer = await fetchFileFromLink(bulkSession.cloudLink);
 
-        // 2. "Slice" / Extract
-        // Since we can't do real PDF slicing without `pdf-lib` (which might not be installed),
-        // We will simulate that the PDF contains X exams.
-        // FOR DEMO: We will assume the file IS a single exam (1 student)
-        // OR if it's a ZIP, we'd extract.
-        // Let's assume 1 massive PDF = Multiple Students.
-        // We will create 5 "Dummy" Submissions to demonstrate the Bulk capability visually.
-
-        const totalSimulatedFiles = 5;
+        // 2. Load PDF
+        const srcDoc = await PDFDocument.load(fileBuffer);
+        const pageCount = srcDoc.getPageCount();
+        console.log(`[CLOUD_WORKER] Loaded PDF with ${pageCount} pages.`);
 
         // Update Bulk Session with total count
         await prisma.bulkSession.update({
             where: { id: bulkSession.id },
-            data: { totalFiles: totalSimulatedFiles }
+            data: { totalFiles: pageCount }
         });
 
-        // 3. Create Submissions
-        for (let i = 0; i < totalSimulatedFiles; i++) {
-            // Save a "slice" (re-using the same buffer for demo, or a dummy page)
-            const slicePath = await saveBuffer(fileBuffer, `slice_${i}.pdf`, 'exam_pdfs');
+        // Ensure WorkSession container exists
+        let workSession = await prisma.workSession.findFirst({
+            where: { bulkSessionId: bulkSession.id }
+        });
 
-            // Create WorkSession (Hidden/Temporary) or reuse one?
-            // The mandate implies we create submissions attached to this Bulk Session.
-            // But Submission needs `workSessionId`.
-            // So we must create a "Container" WorkSession for this Bulk Batch.
-
-            // Check if a WorkSession exists for this BulkSession, else create one.
-            let workSession = await prisma.workSession.findFirst({
-                where: { bulkSessionId: bulkSession.id }
-            });
-
-            if (!workSession) {
-                workSession = await prisma.workSession.create({
-                    data: {
-                        title: bulkSession.title,
-                        workCode: `BULK-${bulkSession.id.substring(0,6).toUpperCase()}`,
-                        lecturerId: bulkSession.lecturerId,
-                        type: "BULK",
-                        status: "PUBLISHED",
-                        bulkSessionId: bulkSession.id,
-                        totalMarks: bulkSession.totalMarks,
-                        markingScheme: bulkSession.markingScheme,
-                        goldStandardUrl: bulkSession.goldStandardUrl,
-                        calibration: bulkSession.calibration,
-                        // Configs
-                        releaseMode: "MANUAL"
-                    }
-                });
-            }
-
-            // Create Submission
-            const submission = await prisma.submission.create({
+        if (!workSession) {
+            workSession = await prisma.workSession.create({
                 data: {
-                    workSessionId: workSession.id,
-                    userId: null, // Unknown initially
-                    studentRegNo: null, // AI will find this
-                    filePath: slicePath,
-                    status: 'PENDING',
-                    submittedAt: new Date()
-                }
-            });
-
-            // 4. Trigger Grading for this Submission
-            // We create a new job for each slice so they process in parallel/queue
-            await prisma.job.create({
-                data: {
-                    type: 'AI_GRADE_SUBMISSION',
-                    payload: JSON.stringify({ submissionId: submission.id }),
-                    status: 'PENDING'
+                    title: bulkSession.title,
+                    workCode: `BULK-${bulkSession.id.substring(0,6).toUpperCase()}`,
+                    lecturerId: bulkSession.lecturerId,
+                    type: "BULK",
+                    status: "PUBLISHED",
+                    bulkSessionId: bulkSession.id,
+                    totalMarks: bulkSession.totalMarks,
+                    markingScheme: bulkSession.markingScheme,
+                    goldStandardUrl: bulkSession.goldStandardUrl,
+                    calibration: bulkSession.calibration,
+                    releaseMode: "MANUAL"
                 }
             });
         }
 
-        // Update Bulk Status
+        // 3. Slice & Process (Batch Concurrency Control)
+        const BATCH_SIZE = 5;
+        let processedCount = 0;
+
+        for (let i = 0; i < pageCount; i += BATCH_SIZE) {
+            const batchPromises = [];
+
+            // Process batch
+            for (let j = i; j < Math.min(i + BATCH_SIZE, pageCount); j++) {
+                batchPromises.push((async () => {
+                    try {
+                        // Create new document for this slice
+                        const newDoc = await PDFDocument.create();
+                        const [copiedPage] = await newDoc.copyPages(srcDoc, [j]);
+                        newDoc.addPage(copiedPage);
+                        const pdfBytes = await newDoc.save();
+                        const sliceBuffer = Buffer.from(pdfBytes);
+
+                        // Upload to Supabase
+                        const slicePath = await saveBuffer(sliceBuffer, `bulk_${bulkSession.id}_p${j + 1}.pdf`, 'exam_pdfs');
+
+                        // Create Submission
+                        const submission = await prisma.submission.create({
+                            data: {
+                                workSessionId: workSession!.id, // Non-null assertion safe due to create above
+                                userId: null,
+                                studentRegNo: null,
+                                filePath: slicePath,
+                                status: 'PENDING',
+                                submittedAt: new Date()
+                            }
+                        });
+
+                        // Trigger Grading Job
+                        await prisma.job.create({
+                            data: {
+                                type: 'AI_GRADE_SUBMISSION',
+                                payload: JSON.stringify({ submissionId: submission.id }),
+                                status: 'PENDING'
+                            }
+                        });
+
+                        return true;
+                    } catch (err) {
+                        console.error(`[CLOUD_WORKER] Failed to process page ${j + 1}`, err);
+                        return false;
+                    }
+                })());
+            }
+
+            // Await batch
+            const results = await Promise.all(batchPromises);
+            const successInBatch = results.filter(r => r).length;
+            processedCount += successInBatch;
+
+            // Update progress occasionally
+            await prisma.bulkSession.update({
+                where: { id: bulkSession.id },
+                data: { processedFiles: processedCount }
+            });
+
+            console.log(`[CLOUD_WORKER] Batch ${Math.floor(i/BATCH_SIZE) + 1} complete. Total processed: ${processedCount}`);
+        }
+
+        // 4. Finalize
         await prisma.bulkSession.update({
             where: { id: bulkSession.id },
-            data: { status: 'READY', processedFiles: totalSimulatedFiles } // READY for Reconciliation
+            data: { status: 'READY', processedFiles: processedCount }
         });
 
+        console.log(`[CLOUD_WORKER] Bulk Session Complete. ${processedCount}/${pageCount} pages processed.`);
+
     } catch (e: any) {
-        console.error("Cloud Marking Failed", e);
+        console.error("[CLOUD_WORKER] Critical Failure", e);
         await prisma.bulkSession.update({
             where: { id: bulkSession.id },
             data: { status: 'FAILED' }
