@@ -85,6 +85,20 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('You cannot exceed the maximum marks (max_marks) allocated for any question or sub-question.');
   });
 
+  it('should include Protocol 5 (Orphaned Answer Handling) and Protocol 6 (Aggressive Spatial Parsing)', () => {
+    const config: GradeConfig = { strictness: 1.0 };
+    const prompt = buildSystemPrompt(config, 100);
+
+    // Protocol 5
+    expect(prompt).toContain('>>> PROTOCOL 5: THE ORPHANED ANSWER HANDLING <<<');
+    expect(prompt).toContain('You must NEVER silently skip a student\'s answer just because it is missing from the Marking Scheme.');
+    expect(prompt).toContain('"Attempted but Rubric Missing"');
+
+    // Protocol 6
+    expect(prompt).toContain('>>> PROTOCOL 6: AGGRESSIVE SPATIAL PARSING (MESSY SCRIPTS) <<<');
+    expect(prompt).toContain('Actively scan the margins, bottom corners, and crossed-out sections');
+  });
+
   it('should preserve critical system protocols', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
