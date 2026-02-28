@@ -152,6 +152,7 @@ export async function handleCloudMarking(job: Job) {
                     totalMarks: bulkSession.totalMarks,
                     markingScheme: bulkSession.markingScheme,
                     goldStandardUrl: bulkSession.goldStandardUrl,
+                    questionPaperUrl: bulkSession.questionPaperUrl, // Deep Audit Fix: Propagate Master Skeleton
                     calibration: bulkSession.calibration,
                     releaseMode: "MANUAL"
                 }

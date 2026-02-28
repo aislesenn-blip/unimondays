@@ -270,13 +270,10 @@ export async function gradeSubmission(
 
   const MAX_RETRIES = 3;
   let attempt = 0;
+  let useFallbackModel = false; // Model Fallback Switch State
 
-  while (attempt < MAX_RETRIES) {
-    try {
-      let completion: OpenAI.Chat.Completions.ChatCompletion;
-
-      // Build Prompt payload incorporating Master Skeleton if provided
-      const userContentText = `Question Paper (Master Skeleton):
+  // Build Prompt payload incorporating Master Skeleton if provided
+  const userContentText = `Question Paper (Master Skeleton):
 ${config.questionPaper || "Not provided. Rely solely on Marking Scheme and Rubric for question tracking."}
 
 Marking Scheme:
@@ -288,7 +285,11 @@ ${rubric}
 Student Submission:
 ${ocrText}`;
 
-      // BRANCH: MULTIMODAL (Visual Analysis)
+  while (attempt < MAX_RETRIES) {
+    try {
+      let completion: OpenAI.Chat.Completions.ChatCompletion;
+
+      // BRANCH A: MULTIMODAL (Visual Analysis)
       if (imageBuffer && openRouter && mimeType) {
           console.log(`[AI_ROUTER] Routing request to Gemini 2.5 Flash (Multimodal) via OpenRouter. Attempt ${attempt + 1}/${MAX_RETRIES}`);
           const base64Data = imageBuffer.toString("base64");
@@ -319,19 +320,38 @@ ${ocrText}`;
           });
 
       } else {
-          // BRANCH: TEXT-ONLY (DeepSeek V3)
-          console.log(`[AI_ROUTER] Routing request to DeepSeek V3 (Text-Only). Attempt ${attempt + 1}/${MAX_RETRIES}`);
-          completion = await deepseek.chat.completions.create({
-              model: "deepseek-chat",
-              messages: [
-                  { role: "system", content: systemPrompt },
-                  { role: "user", content: userContentText }
-              ],
-              response_format: { type: "json_object" },
-              temperature: 0.0,
-              top_p: 0.1,
-              max_tokens: 16384, // Prevent infinite loops
-          });
+          // BRANCH B: TEXT-ONLY (Primary vs. Fallback Switch)
+          if (!useFallbackModel) {
+              // PRIMARY PATH: DeepSeek V3
+              console.log(`[AI_ROUTER] Routing request to Primary Model: DeepSeek V3. Attempt ${attempt + 1}/${MAX_RETRIES}`);
+              completion = await deepseek.chat.completions.create({
+                  model: "deepseek-chat",
+                  messages: [
+                      { role: "system", content: systemPrompt },
+                      { role: "user", content: userContentText }
+                  ],
+                  response_format: { type: "json_object" },
+                  temperature: 0.0,
+                  top_p: 0.1,
+                  max_tokens: 16384,
+              });
+          } else {
+              // AUTONOMOUS FALLBACK PATH: Gemini 1.5 Pro via OpenRouter
+              console.log(`[AI_FALLBACK] ⚠️ Primary Engine Failure. Executing Model Switch to Gemini 1.5 Pro (Fallback)...`);
+              if (!openRouter) throw new Error("OpenRouter API missing for fallback logic.");
+
+              completion = await openRouter.chat.completions.create({
+                  model: "google/gemini-1.5-pro",
+                  messages: [
+                      { role: "system", content: systemPrompt },
+                      { role: "user", content: userContentText }
+                  ],
+                  response_format: { type: "json_object" },
+                  temperature: 0.0,
+                  top_p: 0.1,
+                  max_tokens: 16384,
+              });
+          }
       }
 
       const content = completion.choices[0].message.content;
@@ -350,10 +370,16 @@ ${ocrText}`;
       const isRateLimit = error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503');
 
       if (attempt >= MAX_RETRIES) {
-          if (isRateLimit) {
-              throw new Error("RATE_LIMIT_HIT: AI Service overloaded.");
+          if (!imageBuffer && !useFallbackModel) {
+              // INITIATE FALLBACK PROTOCOL
+              console.warn(`[AI_FALLBACK_TRIGGER] DeepSeek V3 exhausted all retries. Activating Fallback Switch...`);
+              attempt = 0; // Reset attempts for the secondary model
+              useFallbackModel = true;
+              continue; // Retry loop entirely with the new model
+          } else if (isRateLimit) {
+              throw new Error("RATE_LIMIT_HIT: AI Service and Fallback exhausted.");
           }
-          throw new Error(`Failed to grade submission after ${MAX_RETRIES} attempts: ${error.message}`);
+          throw new Error(`Failed to grade submission after maximum failovers: ${error.message}`);
       }
 
       // Idempotent retry delay (exponential backoff)
@@ -361,5 +387,5 @@ ${ocrText}`;
     }
   }
 
-  throw new Error("AI Grading Service completely failed: Maximum network retries (3) exceeded.");
+  throw new Error("AI Grading Service completely failed: Maximum failover states exceeded.");
 }
