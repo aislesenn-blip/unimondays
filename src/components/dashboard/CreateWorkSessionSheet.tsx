@@ -135,7 +135,17 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
               <p className="text-xs text-muted-foreground">These files are used by the AI for grading and are NEVER shown to students.</p>
 
               <div className="space-y-2">
-                <Label>Marking Scheme / Rubric (PDF/Image)</Label>
+                <Label className="flex items-center gap-1">Blank Question Paper (PDF/Image) <span className="text-xs text-muted-foreground ml-1 font-normal">(Optional but highly recommended for 100% grading accuracy & question tracking)</span></Label>
+                <div className="flex items-center gap-2">
+                    <Input type="file" onChange={(e) => handleFileUpload(e, "questionPaperUrl")} accept=".pdf,.jpg,.png" disabled={uploading} />
+                    {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                </div>
+                <Input type="hidden" {...register("questionPaperUrl")} />
+                {watch("questionPaperUrl") && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded</div>}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Marking Scheme / Rubric (PDF/Image) <span className="text-destructive">*</span></Label>
                 <div className="flex items-center gap-2">
                     <Input type="file" onChange={(e) => handleFileUpload(e, "markingScheme")} accept=".pdf,.jpg,.png" disabled={uploading} />
                     {uploading && <Loader2 className="h-4 w-4 animate-spin" />}

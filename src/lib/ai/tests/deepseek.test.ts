@@ -99,6 +99,15 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('Actively scan the margins, bottom corners, and crossed-out sections');
   });
 
+  it('should include Protocol 7 (Independent Sub-Question Evaluation)', () => {
+    const config: GradeConfig = { strictness: 1.0 };
+    const prompt = buildSystemPrompt(config, 100);
+
+    expect(prompt).toContain('>>> PROTOCOL 7: INDEPENDENT SUB-QUESTION EVALUATION <<<');
+    expect(prompt).toContain('You must process sub-questions independently.');
+    expect(prompt).toContain('NEVER drop or skip the legible parts of a rubric just because the bottom half of the page is missing.');
+  });
+
   it('should preserve critical system protocols', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);

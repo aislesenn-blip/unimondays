@@ -35,6 +35,7 @@ export default function CloudMarkingPage() {
   const [sessionTitle, setSessionTitle] = useState("");
   const [markingScheme, setMarkingScheme] = useState("");
   const [markingSchemeUrl, setMarkingSchemeUrl] = useState("");
+  const [questionPaperUrl, setQuestionPaperUrl] = useState("");
   const [totalMarks, setTotalMarks] = useState(100);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -49,7 +50,7 @@ export default function CloudMarkingPage() {
     custom: ""
   }); // Locked to standard defaults
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: "markingScheme" | "questionPaperUrl") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -66,10 +67,15 @@ export default function CloudMarkingPage() {
 
       if (error) throw new Error(error.message);
 
-      setMarkingSchemeUrl(data.path); // Store path
-      toast.success("Marking scheme uploaded");
+      if (fieldName === "markingScheme") {
+        setMarkingSchemeUrl(data.path);
+        toast.success("Marking scheme uploaded");
+      } else {
+        setQuestionPaperUrl(data.path);
+        toast.success("Question Paper uploaded");
+      }
     } catch (error: any) {
-      toast.error(`Failed to upload marking scheme: ${error.message}`);
+      toast.error(`Failed to upload ${fieldName}: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -94,6 +100,7 @@ export default function CloudMarkingPage() {
           cloudLink,
           totalMarks,
           markingScheme: finalMarkingScheme,
+          questionPaperUrl,
           strictness,
           calibration
         }),
@@ -212,12 +219,31 @@ export default function CloudMarkingPage() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Marking Scheme / Gold Standard</Label>
+                            <Label className="flex items-center gap-1">Blank Question Paper <span className="text-xs text-muted-foreground ml-1 font-normal">(Optional but highly recommended for 100% grading accuracy & question tracking)</span></Label>
+                            <div className="flex items-center gap-3">
+                                <Input
+                                    type="file"
+                                    onChange={(e) => handleFileUpload(e, "questionPaperUrl")}
+                                    accept=".pdf,.jpg,.png"
+                                    disabled={uploading}
+                                    className="cursor-pointer"
+                                />
+                                {uploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                            </div>
+                            {questionPaperUrl && (
+                                <div className="text-xs text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-200 mt-2">
+                                    <FileText className="w-3 h-3"/> Question Paper Uploaded
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Marking Scheme / Gold Standard <span className="text-destructive">*</span></Label>
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3">
                                     <Input
                                         type="file"
-                                        onChange={handleFileUpload}
+                                        onChange={(e) => handleFileUpload(e, "markingScheme")}
                                         accept=".pdf,.jpg,.png"
                                         disabled={uploading}
                                         className="cursor-pointer"
@@ -226,7 +252,7 @@ export default function CloudMarkingPage() {
                                 </div>
                                 {markingSchemeUrl && (
                                     <div className="text-xs text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-200">
-                                        <FileText className="w-3 h-3"/> File Uploaded & Ready
+                                        <FileText className="w-3 h-3"/> Marking Scheme Uploaded
                                     </div>
                                 )}
                                 <div className="text-xs text-muted-foreground text-center uppercase tracking-wider font-bold">OR</div>

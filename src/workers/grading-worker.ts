@@ -134,16 +134,37 @@ export async function handleAiGrade(job: Job) {
           return ms;
       };
 
+      // PARALLEL TASK 4: Question Paper OCR (Master Skeleton)
+      const questionPaperOcrTask = async (): Promise<string | undefined> => {
+          const qp = submission.workSession.questionPaperUrl;
+          if (!qp) return undefined;
+
+          try {
+              console.log(`[SUPABASE_FETCH] Question Paper: ${qp}`);
+              const buffer = await readFile(qp, 'exam_pdfs');
+              const mimeType = qp.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+              const text = await ocrDocument(buffer, mimeType);
+              console.log(`[OCR_SUCCESS] Question Paper extracted: ${text.length} chars.`);
+              return text;
+          } catch (e: any) {
+              console.error("[GRADING FATAL ERROR]: Question Paper OCR failed", e);
+              console.warn("[OCR_WARN] Question Paper OCR failed.", e.message);
+              return undefined;
+          }
+      };
+
       // EXECUTE PARALLEL TASKS
       let submissionData: { text: string, buffer: Buffer, mimeType: string };
       let rubricContent: string;
       let markingSchemeText: string | undefined;
+      let questionPaperText: string | undefined;
 
       try {
-          [submissionData, rubricContent, markingSchemeText] = await Promise.all([
+          [submissionData, rubricContent, markingSchemeText, questionPaperText] = await Promise.all([
               submissionOcrTask(),
               rubricOcrTask(),
-              markingSchemeOcrTask()
+              markingSchemeOcrTask(),
+              questionPaperOcrTask()
           ]);
       } catch (e: any) {
           console.error("[GRADING FATAL ERROR]: Prerequisite Check Failed", e);
@@ -181,6 +202,7 @@ Student Identifier: ${studentId}.
       const config: GradeConfig = {
         strictness: strictnessVal,
         markingScheme: markingSchemeText,
+        questionPaper: questionPaperText,
         lecturerNotes: submission.workSession.instructions || undefined,
         calibration: calibrationSettings,
         context: contextString

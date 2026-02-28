@@ -52,6 +52,7 @@ export interface CalibrationSettings {
 export interface GradeConfig {
   strictness: number; // 0.5 (lenient) to 1.5 (strict)
   markingScheme?: string;
+  questionPaper?: string; // Optional Blank Question Paper (Master Skeleton)
   lecturerNotes?: string;
   calibration?: CalibrationSettings;
   context?: string; // New Context Injection Field
@@ -176,6 +177,13 @@ Assume student scripts will be messy, photographed poorly, or written out of ord
 Actively scan the margins, bottom corners, and crossed-out sections for stray calculations or continued answers.
 If a mathematical calculation lacks a clear Question ID, use semantic deduction to link the numbers/variables to the most logical question in the rubric before giving up.
 
+>>> PROTOCOL 7: INDEPENDENT SUB-QUESTION EVALUATION <<<
+You must process sub-questions independently. Do not let a corrupted or missing rubric for one sub-question crash or omit the evaluation of another.
+Example: If you are grading Question 6, and the rubric clearly defines 6(A) but is cut-off/missing for 6(B):
+You MUST grade 6(A) normally and award marks.
+You MUST flag ONLY 6(B) with "status": "Attempted but Rubric Missing" and "marks_awarded": 0.
+NEVER drop or skip the legible parts of a rubric just because the bottom half of the page is missing. Grade whatever is visible. Extract maximum value from the provided text.
+
 ❗ VISIBLE UNATTEMPTED QUESTIONS:
 Do NOT skip unattempted questions in the JSON. The examiner must see that you checked them.
 If a question is not attempted, output the full schema, but strictly use this exact string for justification:
@@ -261,6 +269,19 @@ export async function gradeSubmission(
     try {
       let completion: OpenAI.Chat.Completions.ChatCompletion;
 
+      // Build Prompt payload incorporating Master Skeleton if provided
+      const userContentText = `Question Paper (Master Skeleton):
+${config.questionPaper || "Not provided. Rely solely on Marking Scheme and Rubric for question tracking."}
+
+Marking Scheme:
+${config.markingScheme || "None"}
+
+Rubric:
+${rubric}
+
+Student Submission:
+${ocrText}`;
+
       // BRANCH: MULTIMODAL (Visual Analysis)
       if (imageBuffer && openRouter && mimeType) {
           console.log(`[AI_ROUTER] Routing request to Gemini 2.5 Flash (Multimodal) via OpenRouter. Attempt ${attempt + 1}/${MAX_RETRIES}`);
@@ -274,7 +295,7 @@ export async function gradeSubmission(
                   {
                       role: "user",
                       content: [
-                          { type: "text", text: `Marking Scheme:\n${config.markingScheme || "None"}\n\nRubric:\n${rubric}\n\nStudent Text (OCR):\n${ocrText}` },
+                          { type: "text", text: userContentText },
                           {
                               type: "image_url",
                               image_url: {
@@ -298,14 +319,7 @@ export async function gradeSubmission(
               model: "deepseek-chat",
               messages: [
                   { role: "system", content: systemPrompt },
-                  { role: "user", content: `Marking Scheme:
-${config.markingScheme || "None"}
-
-Rubric:
-${rubric}
-
-Student Submission:
-${ocrText}` }
+                  { role: "user", content: userContentText }
               ],
               response_format: { type: "json_object" },
               temperature: 0.0,

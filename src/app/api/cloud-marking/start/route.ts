@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, cloudLink, totalMarks, markingScheme, strictness, calibration } = body;
+    const { title, cloudLink, totalMarks, markingScheme, questionPaperUrl, strictness, calibration } = body;
 
     if (!title || !cloudLink) {
         return NextResponse.json({ error: "Title and Cloud Link are required" }, { status: 400 });
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
         status: "PENDING",
         totalMarks: totalMarks || 100,
         markingScheme: markingScheme || "",
+        questionPaperUrl: questionPaperUrl || null,
         calibration: JSON.stringify(calibration || {}),
       }
     });
