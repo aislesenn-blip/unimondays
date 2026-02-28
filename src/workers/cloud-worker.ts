@@ -20,14 +20,30 @@ async function resolveGDriveLink(url: string): Promise<Buffer> {
     if (contentType.includes('text/html')) {
         const html = await res.text();
 
-        // Extract confirm token: href="/uc?export=download&id=...&confirm=XXXX"
-        // Regex looks for &confirm=([a-zA-Z0-9_-]+)
+        // 1. Look for <a id="uc-download-link" href="...">
+        let confirmToken: string | null = null;
+
+        // Match the `confirm=` parameter precisely within an href, or look for input fields
         const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
 
         if (confirmMatch) {
-            const confirmToken = confirmMatch[1];
+            confirmToken = confirmMatch[1];
+        } else {
+            // Alternative layout sometimes has a hidden input field
+            const inputMatch = html.match(/<input type="hidden" name="confirm" value="([^"]+)">/);
+            if (inputMatch) {
+                confirmToken = inputMatch[1];
+            }
+        }
+
+        if (confirmToken) {
             const bypassUrl = `${directUrl}&confirm=${confirmToken}`;
             res = await fetch(bypassUrl);
+
+            // If the bypass *also* returns HTML, Google completely blocked the file
+            if ((res.headers.get('content-type') || '').includes('text/html')) {
+                throw new Error("Google Drive blocked the download (Virus Scan Interstitial). Please use a direct Dropbox link or upload manually.");
+            }
         } else {
              // If we can't find a token but it's Drive HTML, fail gracefully
              throw new Error("Google Drive blocked the download (Virus Scan). Please use a direct Dropbox link or upload manually.");
