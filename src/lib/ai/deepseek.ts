@@ -357,10 +357,24 @@ ${ocrText}`;
       const content = completion.choices[0].message.content;
       if (!content) throw new Error("No content returned from AI Service");
 
-      // Sanitize JSON (Markdown Stripping)
-      const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+      // Sanitize JSON (Markdown Stripping & Robust Extraction)
+      let cleanContent = content;
+      const objectMatch = content.match(/\{[\s\S]*\}/);
 
-      const result = JSON.parse(cleanContent);
+      if (objectMatch) {
+          cleanContent = objectMatch[0];
+      } else {
+          // Fallback
+          cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+      }
+
+      let result;
+      try {
+          result = JSON.parse(cleanContent);
+      } catch (parseError) {
+          throw new Error(`Failed to parse AI response as JSON. Cleaned Content: ${cleanContent.substring(0, 100)}...`);
+      }
+
       return result as GradingResult;
 
     } catch (error: any) {

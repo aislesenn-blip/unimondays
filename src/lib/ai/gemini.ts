@@ -121,11 +121,30 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
       response_format: { type: "json_object" }, // Gemini supports JSON mode via OpenRouter usually
     });
 
-    const text = response.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim();
-    if (!text) throw new Error("No content returned");
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new Error("No content returned");
 
-    // Handle potential wrapper object like { "splits": [...] } or direct array
-    let json = JSON.parse(text);
+    // Robust JSON Extraction: Find the first [ or { and the last ] or }
+    let cleanContent = content;
+    const arrayMatch = content.match(/\[[\s\S]*\]/);
+    const objectMatch = content.match(/\{[\s\S]*\}/);
+
+    if (arrayMatch && (!objectMatch || arrayMatch[0].length > objectMatch[0].length)) {
+      cleanContent = arrayMatch[0];
+    } else if (objectMatch) {
+      cleanContent = objectMatch[0];
+    } else {
+      // Fallback to old behavior if no clear boundaries
+      cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    }
+
+    let json;
+    try {
+        json = JSON.parse(cleanContent);
+    } catch (parseError) {
+        throw new Error(`Failed to parse AI response as JSON. Cleaned Content: ${cleanContent.substring(0, 100)}...`);
+    }
+
     if (Array.isArray(json)) return json as PdfSplit[];
     if (json.splits && Array.isArray(json.splits)) return json.splits as PdfSplit[];
 

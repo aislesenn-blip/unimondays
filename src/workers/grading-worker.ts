@@ -265,41 +265,49 @@ Student Identifier: ${studentId}.
       }
 
       // 4. Save Score & Feedback
-      if (typeof result.total_marks_awarded !== 'number') {
-          throw new Error("Invalid AI Result: Missing total_marks_awarded");
+      // Database Write Integrity Fix: Ensure total_marks_awarded is a number.
+      let finalMarks = Number(result.total_marks_awarded);
+      if (isNaN(finalMarks)) {
+          console.error(`[GRADING FATAL ERROR] Invalid total_marks_awarded from AI: ${result.total_marks_awarded}. Falling back to 0.`);
+          finalMarks = 0;
       }
 
       // Transform the new V2 results format into the expected breakdown format
       const formattedBreakdown = result.results?.map((item) => ({
-        question: item.question_id,
-        score: item.marks_awarded,
-        max: item.max_marks,
-        feedback: item.justification,
-        rubricReference: item.tier_used,
-        status: item.status,
-        alternative_valid_concept: item.alternative_valid_concept,
-        review_flag: item.review_flag,
-        confidence: item.confidence
+        question: item.question_id || "Unknown",
+        score: Number(item.marks_awarded) || 0,
+        max: Number(item.max_marks) || 0,
+        feedback: item.justification || "No justification provided.",
+        rubricReference: item.tier_used || "N/A",
+        status: item.status || "Attempted",
+        alternative_valid_concept: !!item.alternative_valid_concept,
+        review_flag: !!item.review_flag,
+        confidence: typeof item.confidence === 'number' && !isNaN(item.confidence) ? item.confidence : 1.0
       })) || [];
       const breakdownStr = JSON.stringify(formattedBreakdown);
 
-      await prisma.score.upsert({
-        where: { submissionId: submission.id },
-        update: {
-          totalMarks: result.total_marks_awarded,
-          breakdown: breakdownStr,
-          remarks: result.aiReasoning,
-          detectedIdentity: result.detectedIdentity,
-          gradedAt: new Date()
-        },
-        create: {
-          submissionId: submission.id,
-          totalMarks: result.total_marks_awarded,
-          breakdown: breakdownStr,
-          remarks: result.aiReasoning,
-          detectedIdentity: result.detectedIdentity
-        }
-      });
+      try {
+          await prisma.score.upsert({
+            where: { submissionId: submission.id },
+            update: {
+              totalMarks: finalMarks,
+              breakdown: breakdownStr,
+              remarks: result.aiReasoning || "No remarks.",
+              detectedIdentity: result.detectedIdentity || null,
+              gradedAt: new Date()
+            },
+            create: {
+              submissionId: submission.id,
+              totalMarks: finalMarks,
+              breakdown: breakdownStr,
+              remarks: result.aiReasoning || "No remarks.",
+              detectedIdentity: result.detectedIdentity || null
+            }
+          });
+      } catch (dbError) {
+          console.error("[GRADING FATAL ERROR] Failed to write Score to Database:", dbError);
+          throw new Error("Failed to write Score to Database");
+      }
 
       // 5. Update Submission Status (Dynamic Confidence Threshold)
       // UNIDENTIFIED FALLBACK: If AI returns null identity OR 'UNIDENTIFIED_IDENTITY' literal, handle flagging.
@@ -345,14 +353,19 @@ Student Identifier: ${studentId}.
       });
 
       // Create Audit Log
-      await prisma.auditLog.create({
-        data: {
-          userId: submission.userId,
-          action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
-          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.total_marks_awarded}`,
-          severity: status === 'GRADED' ? 'INFO' : 'WARNING'
-        }
-      });
+      try {
+          // Prisma might fail if userId is undefined instead of null, but in schema it is `String?`
+          await prisma.auditLog.create({
+            data: {
+              userId: submission.userId || null,
+              action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
+              details: `Submission for ${submission.workSession.title} ${status}. Score: ${finalMarks}`,
+              severity: status === 'GRADED' ? 'INFO' : 'WARNING'
+            }
+          });
+      } catch (auditError) {
+          console.error("[GRADING WARNING] Failed to create AuditLog. Proceeding anyway.", auditError);
+      }
 
       // Increment Lecturer Quota
       if (submission.workSession.lecturerId) {
