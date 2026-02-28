@@ -22,31 +22,49 @@ export async function POST(req: NextRequest) {
   let rateLimitHit = false;
 
   try {
-    // 1. Fetch Pending Jobs (Leaky Bucket / Batch Processing)
-    // We take 5 at a time to avoid Vercel timeouts
-    const jobs = await prisma.job.findMany({
-        where: {
-            status: 'PENDING',
-            type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
-            retryCount: { lt: 3 } // Max 3 retries
-        },
-        orderBy: { createdAt: 'asc' }, // FIFO
-        take: 5
-    });
+    // 1. Fetch & Claim Pending Jobs (Atomic Claim Mechanism to prevent race conditions)
+    // We process up to 5 at a time to avoid Vercel timeouts
+    const BATCH_SIZE = 5;
+    const claimedJobs = [];
 
-    if (jobs.length === 0) {
-        return NextResponse.json({ message: 'No pending jobs found.' });
+    for (let i = 0; i < BATCH_SIZE; i++) {
+        // Find the oldest pending job
+        const job = await prisma.job.findFirst({
+            where: {
+                status: 'PENDING',
+                type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
+                retryCount: { lt: 3 } // Max 3 retries
+            },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        if (!job) break; // No more pending jobs
+
+        // Attempt to claim it atomically
+        const result = await prisma.job.updateMany({
+            where: {
+                id: job.id,
+                status: 'PENDING' // Only update if it is STILL pending
+            },
+            data: {
+                status: 'PROCESSING',
+                processedAt: new Date()
+            }
+        });
+
+        if (result.count > 0) {
+            claimedJobs.push(job);
+        }
     }
 
-    console.log(`[QUEUE] Processing ${jobs.length} jobs...`);
+    if (claimedJobs.length === 0) {
+        return NextResponse.json({ message: 'No pending jobs found or all claimed by other workers.' });
+    }
+
+    console.log(`[QUEUE] Successfully claimed and processing ${claimedJobs.length} jobs...`);
 
     // 2. Process Jobs (SERIAL EXECUTION)
-    for (const job of jobs) {
-        // Mark as PROCESSING (Optimistic Locking)
-        await prisma.job.update({
-            where: { id: job.id },
-            data: { status: 'PROCESSING', processedAt: new Date() }
-        });
+    for (const job of claimedJobs) {
 
         try {
             // EXECUTE WORKER BASED ON TYPE
@@ -105,7 +123,7 @@ export async function POST(req: NextRequest) {
     // 3. Recursive Trigger (The "Hydraulic Press")
     // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
     // If rate limit hit, we STOP to let the API cool down.
-    if (!rateLimitHit && jobs.length === 5) {
+    if (!rateLimitHit && claimedJobs.length === 5) {
         const protocol = req.headers.get('x-forwarded-proto') || 'http';
         const host = req.headers.get('host');
         const baseUrl = `${protocol}://${host}`;

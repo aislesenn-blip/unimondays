@@ -200,21 +200,36 @@ export async function handleCloudMarking(job: Job) {
             splits = []; // Ensure fallback happens cleanly
         }
 
-        // Deep Audit Fix: Validate contiguous page boundaries. If a student forgot their name on page 2,
-        // it might be orphaned. If there's a gap between endPage of script N and startPage of N+1,
-        // we conservatively merge the orphaned pages to the preceding script to prevent data loss.
+        // Deep Audit Fix: Validate contiguous page boundaries mathematically.
+        // We must ensure that from page 1 to pageCount, there are exactly 0 orphaned pages and 0 overlaps.
         if (splits.length > 0) {
+            // 1. Sort splits by start page
             splits.sort((a, b) => a.startPage - b.startPage);
+
+            // 2. The first script MUST start on page 1
+            if (splits[0].startPage > 1) {
+                console.warn(`[CLOUD_WORKER] Split 0 started on page ${splits[0].startPage}. Forcing to page 1.`);
+                splits[0].startPage = 1;
+            }
+
+            // 3. Ensure no gaps and no overlaps between scripts
             for (let i = 0; i < splits.length - 1; i++) {
-                if (splits[i].endPage < splits[i+1].startPage - 1) {
-                    // Gap detected. Merge forward.
-                    splits[i].endPage = splits[i+1].startPage - 1;
+                const current = splits[i];
+                const next = splits[i+1];
+
+                // The current script MUST end exactly 1 page before the next script starts
+                if (current.endPage !== next.startPage - 1) {
+                    current.endPage = next.startPage - 1;
                 }
             }
-            // Ensure last split reaches the end of the document if there are trailing pages
-            if (splits[splits.length - 1].endPage < pageCount) {
+
+            // 4. Ensure last split reaches the absolute end of the document
+            if (splits[splits.length - 1].endPage !== pageCount) {
                 splits[splits.length - 1].endPage = pageCount;
             }
+
+            // 5. Filter out crushed splits (e.g., if a startPage ended up > endPage due to AI hallucinations)
+            splits = splits.filter(s => s.startPage <= s.endPage);
         }
 
         let processedCount = 0;
