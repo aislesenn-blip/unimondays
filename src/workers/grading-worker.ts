@@ -96,55 +96,30 @@ export async function handleAiGrade(job: Job) {
           }
       };
 
-      // PARALLEL TASK 2: Rubric OCR (with Caching)
-      const rubricOcrTask = async (): Promise<string> => {
-          if (submission.workSession.rubric) return submission.workSession.rubric;
-          if (!submission.workSession.rubricUrl) return "Grade based on general academic standards and common sense.";
-
-          try {
-              console.log(`[SUPABASE_FETCH] Rubric File: ${submission.workSession.rubricUrl}`);
-              const buffer = await readFile(submission.workSession.rubricUrl, 'exam_pdfs');
-              const mimeType = submission.workSession.rubricUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-
-              console.log(`[OCR_START] Processing Rubric...`);
-              const text = await ocrDocument(buffer, mimeType);
-              console.log(`[OCR_SUCCESS] Rubric extracted: ${text.length} chars.`);
-
-              if (text && text.length > 50) {
-                  await prisma.workSession.update({
-                      where: { id: submission.workSession.id },
-                      data: { rubric: text }
-                  }).catch(e => console.warn("[DB_WARN] Failed to cache rubric", e));
-              }
-              return text;
-          } catch (e: any) {
-              console.error("[GRADING FATAL ERROR]: Rubric OCR failed", e);
-              console.warn("[OCR_WARN] Rubric OCR failed, defaulting.", e.message);
-              return "Grade based on general academic standards and common sense.";
+      // PARALLEL TASK 2: Fetch Standardized Rubric (Phase 2)
+      // Instead of raw OCR text, fetch the structured JSON representation.
+      const fetchStandardizedRubricTask = async () => {
+          if (!submission.workSession.standardizedRubricId) {
+               throw new Error("No Standardized Rubric linked to this WorkSession. Grading aborted in Phase 2 Atomic Mode.");
           }
-      };
-
-      // PARALLEL TASK 3: Marking Scheme OCR
-      const markingSchemeOcrTask = async (): Promise<string | undefined> => {
-          const ms = submission.workSession.markingScheme;
-          if (!ms) return undefined;
-
-          // Check for URL-like paths (uploaded files) including 'rubrics/', 'bulk_uploads/', or pdf extensions
-          if (ms.startsWith('rubrics/') || ms.startsWith('bulk_uploads/') || ms.includes('/') || ms.toLowerCase().endsWith('.pdf')) {
-              try {
-                  console.log(`[SUPABASE_FETCH] Marking Scheme: ${ms}`);
-                  const buffer = await readFile(ms, 'exam_pdfs');
-                  const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-                  const text = await ocrDocument(buffer, mimeType);
-                  console.log(`[OCR_SUCCESS] Marking Scheme extracted: ${text.length} chars.`);
-                  return text;
-              } catch (e: any) {
-                  console.error("[GRADING FATAL ERROR]: Marking Scheme OCR failed", e);
-                  console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
-                  return undefined;
+          const rubric = await prisma.standardizedRubric.findUnique({
+              where: { id: submission.workSession.standardizedRubricId },
+              include: {
+                  questions: {
+                      include: {
+                          conceptUnits: true,
+                          evaluationTiers: true,
+                          outOfScopeRules: true,
+                          penaltyRules: true
+                      }
+                  }
               }
+          });
+
+          if (!rubric) {
+               throw new Error("Linked Standardized Rubric not found in database. Grading aborted.");
           }
-          return ms;
+          return JSON.stringify(rubric, null, 2);
       };
 
       // PARALLEL TASK 4: Question Paper OCR (Master Skeleton)
@@ -169,14 +144,12 @@ export async function handleAiGrade(job: Job) {
       // EXECUTE PARALLEL TASKS
       let submissionData: { text: string, buffer: Buffer, mimeType: string };
       let rubricContent: string;
-      let markingSchemeText: string | undefined;
       let questionPaperText: string | undefined;
 
       try {
-          [submissionData, rubricContent, markingSchemeText, questionPaperText] = await Promise.all([
+          [submissionData, rubricContent, questionPaperText] = await Promise.all([
               submissionOcrTask(),
-              rubricOcrTask(),
-              markingSchemeOcrTask(),
+              fetchStandardizedRubricTask(),
               questionPaperOcrTask()
           ]);
       } catch (e: any) {
@@ -214,7 +187,6 @@ Student Identifier: ${studentId}.
 
       const config: GradeConfig = {
         strictness: strictnessVal,
-        markingScheme: markingSchemeText,
         questionPaper: questionPaperText,
         lecturerNotes: submission.workSession.instructions || undefined,
         calibration: calibrationSettings,
@@ -238,57 +210,74 @@ Student Identifier: ${studentId}.
           const sim = await simulateDeepSeekCall(ocrText);
           if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
 
-          result = {
-              total_marks_awarded: sim.score,
-              total_max_marks: totalMarks,
-              exam_id: "sim",
-              rubric_version: "sim",
-              model_version: "sim",
-              results: (sim.breakdown as any).map((b: any) => ({
-                  question_id: b.question,
-                  marks_awarded: b.score,
-                  max_marks: b.max,
-                  justification: b.feedback,
-                  status: "Attempted",
-                  tier_used: "Tier 1",
-                  alternative_valid_concept: false,
-                  review_flag: false,
-                  confidence: 1.0
-              })),
-              studentRemarks: sim.reasoning,
-              teacherRemarks: sim.reasoning,
-              confidence: sim.confidence
-          };
+          // We won't maintain the simulator in Phase 2 for brevity, just throw or bypass
+          throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
       } else {
           // Pass image buffer for multimodal grading
           result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
-          console.log(`[AI_SUCCESS] Graded. Score: ${result.total_marks_awarded}/${totalMarks}`);
+          console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
       }
 
-      // 4. Save Score & Feedback
-      // Database Write Integrity Fix: Ensure total_marks_awarded is a number.
-      let finalMarks = Number(result.total_marks_awarded);
+      // --- DETERMINISTIC MATH ENGINE ---
+      let computedTotalMarks = 0;
+      let totalConfidenceSum = 0;
+      let reviewFlagsCount = 0;
+      let validQuestionsCount = 0;
+
+      // Ensure we have a valid parsed rubric to match against for limits
+      const standardRubric = JSON.parse(rubricContent);
+
+      const formattedBreakdown = result.results?.map((qResult) => {
+          let questionScore = 0;
+
+          // Match the question in the DB rubric to find limits
+          const dbQuestion = standardRubric.questions.find((q: any) => q.questionId === qResult.question_id);
+          const maxMarksForQuestion = dbQuestion ? dbQuestion.marksAllocated : 0;
+
+          // 1. Sum up concepts
+          for (const concept of qResult.concept_results || []) {
+              const awarded = Number(concept.awardedMarks) || 0;
+              questionScore += awarded;
+          }
+
+          // 2. Cap at Max Marks
+          if (questionScore > maxMarksForQuestion) {
+              questionScore = maxMarksForQuestion;
+          }
+
+          // Note: OutOfScope and Penalties logic would be applied here based on AI flags.
+          // For V3 MVP, we just sum concepts and cap at max marks.
+
+          computedTotalMarks += questionScore;
+          totalConfidenceSum += (typeof qResult.confidence === 'number' && !isNaN(qResult.confidence) ? qResult.confidence : 1.0);
+          if (qResult.review_flag) reviewFlagsCount++;
+          validQuestionsCount++;
+
+          return {
+              question: qResult.question_id || "Unknown",
+              score: questionScore,
+              max: maxMarksForQuestion,
+              feedback: qResult.justification || "No justification provided.",
+              status: qResult.status || "Attempted",
+              review_flag: !!qResult.review_flag,
+              confidence: qResult.confidence
+          };
+      }) || [];
+
+      // Calculate True Confidence based on variance/ambiguity (review flags)
+      const baseConfidence = validQuestionsCount > 0 ? (totalConfidenceSum / validQuestionsCount) : 1.0;
+      // Penalty for excessive review flags: -10% per flag
+      let computedConfidence = Math.max(0, Math.min(100, Math.round((baseConfidence - (reviewFlagsCount * 0.1)) * 100)));
+
+      let finalMarks = computedTotalMarks;
       if (isNaN(finalMarks)) {
-          console.error(`[GRADING FATAL ERROR] Invalid total_marks_awarded from AI: ${result.total_marks_awarded}. Falling back to 0.`);
           finalMarks = 0;
       }
 
-      // Transform the new V2 results format into the expected breakdown format
-      const formattedBreakdown = result.results?.map((item) => ({
-        question: item.question_id || "Unknown",
-        score: Number(item.marks_awarded) || 0,
-        max: Number(item.max_marks) || 0,
-        feedback: item.justification || "No justification provided.",
-        rubricReference: item.tier_used || "N/A",
-        status: item.status || "Attempted",
-        alternative_valid_concept: !!item.alternative_valid_concept,
-        review_flag: !!item.review_flag,
-        confidence: typeof item.confidence === 'number' && !isNaN(item.confidence) ? item.confidence : 1.0
-      })) || [];
       const breakdownStr = JSON.stringify(formattedBreakdown);
 
       try {
-          await prisma.score.upsert({
+          const scoreRecord = await prisma.score.upsert({
             where: { submissionId: submission.id },
             update: {
               totalMarks: finalMarks,
@@ -309,6 +298,26 @@ Student Identifier: ${studentId}.
               detectedIdentity: result.detectedIdentity || null
             }
           });
+
+          // Insert Concept Results
+          if (result.results && Array.isArray(result.results)) {
+              for (const q of result.results) {
+                  if (q.concept_results && Array.isArray(q.concept_results)) {
+                      for (const c of q.concept_results) {
+                          await prisma.studentConceptResult.create({
+                              data: {
+                                  scoreId: scoreRecord.id,
+                                  conceptId: c.conceptId,
+                                  status: c.status,
+                                  awardedMarks: c.awardedMarks,
+                                  reasoning: c.reasoning
+                              }
+                          });
+                      }
+                  }
+              }
+          }
+
       } catch (dbError) {
           console.error("[GRADING FATAL ERROR] Failed to write Score to Database:", dbError);
           throw new Error("Failed to write Score to Database");
@@ -327,20 +336,20 @@ Student Identifier: ${studentId}.
           if (isContextMissing) {
               // GHOST SUBMISSION: No AI ID, No DB ID.
               status = 'FLAGGED';
-              result.confidence = 0;
+              computedConfidence = 0;
               result.teacherRemarks = `IDENTITY CRISIS: ${result.teacherRemarks || "System could not identify student."} Please manually assign ownership.`;
               console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
           } else {
               // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
               // We proceed but maybe lower confidence? For now, we trust the auth context but log it.
               console.log(`[AI_IDENTITY] AI missed identity, but using Auth Context: ${submission.user?.fullName}`);
-              status = (result.confidence ?? 0) >= threshold ? 'GRADED' : 'FLAGGED';
+              status = computedConfidence >= threshold ? 'GRADED' : 'FLAGGED';
           }
       } else {
-          status = (result.confidence ?? 0) >= threshold ? 'GRADED' : 'FLAGGED';
+          status = computedConfidence >= threshold ? 'GRADED' : 'FLAGGED';
       }
 
-      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
+      console.log(`[AI_CONFIDENCE] True Confidence: ${computedConfidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
         strengths: [],
@@ -352,7 +361,7 @@ Student Identifier: ${studentId}.
         where: { id: submission.id },
         data: {
           status,
-          confidenceScore: result.confidence,
+          confidenceScore: computedConfidence,
           feedback: feedbackStr
         }
       });
@@ -382,7 +391,7 @@ Student Identifier: ${studentId}.
 
       return {
         success: true,
-        score: result.total_marks_awarded,
+        score: computedTotalMarks,
         status
       };
 

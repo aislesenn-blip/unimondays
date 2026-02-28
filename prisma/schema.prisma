@@ -79,6 +79,7 @@ model WorkSession {
   totalMarks       Int?      @map("total_marks")
   releaseMode      String?   @default("MANUAL") @map("release_mode")
   bulkSessionId    String?   @map("bulk_session_id")
+  standardizedRubricId String? @map("standardized_rubric_id")
 
   // V2.0 Enterprise Logic
   strictDeadline       Boolean?  @default(false) @map("strict_deadline")
@@ -97,10 +98,12 @@ model WorkSession {
   class       Classes?     @relation(fields: [classId], references: [id])
   submissions Submission[]
   bulkSession BulkSession? @relation(fields: [bulkSessionId], references: [id])
+  standardizedRubric StandardizedRubric? @relation(fields: [standardizedRubricId], references: [id])
 
   @@index([classId])
   @@index([lecturerId])
   @@index([bulkSessionId])
+  @@index([standardizedRubricId])
   @@map("work_sessions")
 }
 
@@ -145,9 +148,25 @@ model Score {
   isOverridden     Boolean?  @default(false) @map("is_overridden")
   gradedAt         DateTime? @default(now()) @map("graded_at")
 
-  submission Submission @relation(fields: [submissionId], references: [id])
+  submission     Submission             @relation(fields: [submissionId], references: [id])
+  conceptResults StudentConceptResult[] // Phase 2: Atomic concept tracking
 
   @@map("scores")
+}
+
+// 7.5 STUDENT CONCEPT RESULTS (Phase 2 Atomic Grading)
+model StudentConceptResult {
+  id           String @id @default(uuid())
+  scoreId      String @map("score_id")
+  conceptId    String @map("concept_id") // Links to ConceptUnit.conceptId
+  status       String // "MET" | "PARTIALLY_MET" | "FAILED"
+  awardedMarks Float  @map("awarded_marks")
+  reasoning    String
+
+  score Score @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+
+  @@index([scoreId])
+  @@map("student_concept_results")
 }
 
 // 8. JOBS
@@ -245,6 +264,7 @@ model StandardizedRubric {
 
   lecturer  User             @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
   questions RubricQuestion[]
+  workSessions WorkSession[]
 
   @@index([lecturerId])
   @@map("standardized_rubrics")
