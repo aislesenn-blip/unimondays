@@ -4,10 +4,9 @@ import { useState, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Maximize2, Minimize2, Download } from "lucide-react";
+import { Maximize2, Minimize2, Download, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import * as XLSX from 'xlsx';
 
 interface WorkSession {
   id: string;
@@ -38,6 +37,7 @@ interface MasterCASpreadsheetProps {
 export function MasterCASpreadsheet({ workSessions: initialSessions, students, classId }: MasterCASpreadsheetProps) {
   const [sessions, setSessions] = useState(initialSessions);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Toggle "Include in Final"
   const toggleInclude = async (sessionId: string, currentVal: boolean) => {
@@ -83,28 +83,33 @@ export function MasterCASpreadsheet({ workSessions: initialSessions, students, c
     }).sort((a, b) => b.percentage - a.percentage); // Rank by percentage
   }, [students, sessions]);
 
-  const exportToExcel = () => {
-    if (!processedStudents || processedStudents.length === 0) return;
-    const data = processedStudents.map(s => {
-      // Enterprise Data Separation
-      const row: any = {
-        'Student Name': s.name,
-        'Reg No': s.secondaryInfo || s.regNo, // Explicit separate column
-      };
-      // Add each session
-      sessions.forEach(sess => {
-        row[sess.title] = s.scores[sess.id] !== undefined ? s.scores[sess.id] : '-';
-      });
-      // Final Calcs
-      row['Total Score'] = s.totalScore;
-      row['Percentage'] = `${s.percentage.toFixed(1)}%`;
-      return row;
-    });
+  const exportToExcel = async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch(`/api/classes/${classId}/export`);
+      if (!res.ok) throw new Error("Export generation failed");
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "CA Sheet");
-    XLSX.writeFile(wb, `CA_Sheet_${classId}.xlsx`);
+      // Extract filename from header
+      const disposition = res.headers.get("Content-Disposition");
+      let filename = `CA_Sheet_${classId}.xlsx`;
+      if (disposition && disposition.includes("filename=")) {
+        filename = disposition.split("filename=")[1].replace(/"/g, "");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (e) {
+      toast.error("Failed to export Excel file");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -118,8 +123,9 @@ export function MasterCASpreadsheet({ workSessions: initialSessions, students, c
              </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportToExcel}>
-                <Download className="mr-2 h-4 w-4" /> Export Excel
+            <Button variant="outline" size="sm" onClick={exportToExcel} disabled={isExporting}>
+                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Export Excel
             </Button>
             <Button variant="ghost" size="icon" onClick={() => setIsFullscreen(!isFullscreen)}>
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}

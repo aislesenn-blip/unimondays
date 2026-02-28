@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { MasterCASpreadsheet } from "@/components/dashboard/MasterCASpreadsheet";
 import { redirect, notFound } from "next/navigation";
+import { resolveIdentity, upgradeIdentity } from "@/lib/edtech/identity-resolver";
 
 export default async function CAPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
@@ -40,46 +41,28 @@ export default async function CAPage({ params }: { params: Promise<{ id: string 
   const studentMap = new Map();
 
   submissions.forEach(sub => {
-    // Identity Priority:
-    // 1. Registered User ID
-    // 2. Student Registration Number (Explicitly matched or uploaded)
-    // 3. AI Detected Identity
-    // 4. Ghost Fallback (Submission ID) to prevent null-null merging
-    const userId = sub.userId;
-    let regNo = sub.studentRegNo || sub.score?.detectedIdentity;
-
-    if (regNo === 'UNIDENTIFIED_IDENTITY' || regNo === 'UNIDENTIFIED') {
-      regNo = null;
-    }
-
-    // Deep Audit Fix: Prevent 'null-null' collisions that wipe out the CA Matrix by using submission ID for fully anonymous rows
-    const key = userId || regNo || `ghost-${sub.id}`;
-
-    // Priority Logic for Name Display
-    const detectedName = sub.score?.detectedIdentity;
-    const primaryName = detectedName || sub.user?.fullName || sub.studentName || `Unidentified Script (${sub.id.substring(0,6)})`;
-
-    // Secondary Info (Email or RegNo)
-    const secondaryInfo = sub.studentRegNo || sub.user?.email || '';
+    const identity = resolveIdentity(sub);
+    const key = identity.key;
 
     if (!studentMap.has(key)) {
       studentMap.set(key, {
         id: key,
-        name: primaryName,
-        secondaryInfo: secondaryInfo,
-        regNo: sub.studentRegNo || sub.score?.detectedIdentity || sub.user?.email || 'N/A',
+        name: identity.primaryName,
+        primaryName: identity.primaryName,
+        secondaryInfo: identity.secondaryInfo,
+        regNo: identity.regNo || identity.secondaryInfo,
         scores: {}
       });
     }
 
     const student = studentMap.get(key);
 
-    // Upgrade the name/identity dynamically if a subsequent submission has better AI extraction data
-    if (detectedName && detectedName !== 'UNIDENTIFIED_IDENTITY' && student.name.startsWith('Unidentified')) {
-        student.name = detectedName;
-    } else if (sub.user?.fullName && student.name.startsWith('Unidentified')) {
-        student.name = sub.user.fullName;
-    }
+    // Dynamic Identity Upgrade
+    upgradeIdentity(student, identity);
+
+    // Re-map the upgraded identity back to the generic model props
+    student.name = student.primaryName || student.name;
+    student.secondaryInfo = student.secondaryInfo || student.secondaryInfo;
 
     // Only assign score if one exists (FLAGGED might be null in some weird edge cases, though our AI always creates a score)
     if (sub.score && typeof sub.score.totalMarks === 'number') {
