@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,28 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
   const rubricUrl = watch("rubricUrl");
   const markingSchemeUrl = watch("markingScheme"); // This is actually a URL now
   const goldStandardUrl = watch("goldStandardUrl");
+
+  // State Persistence
+  useEffect(() => {
+    const savedDraft = localStorage.getItem("createSessionDraft");
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft);
+        // We do not restore file paths since the files are not re-attached
+        const { questionPaperUrl, markingScheme, goldStandardUrl, ...rest } = parsed;
+        reset(rest);
+      } catch (e) {
+        console.error("Failed to parse draft", e);
+      }
+    }
+  }, [reset]);
+
+  useEffect(() => {
+    const subscription = watch((value) => {
+      localStorage.setItem("createSessionDraft", JSON.stringify(value));
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
     const file = e.target.files?.[0];
@@ -90,6 +112,7 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
       const session = await res.json();
       toast.success(`Session ${session.workCode} created`);
       setOpen(false);
+      localStorage.removeItem("createSessionDraft");
       reset();
       router.refresh();
     } catch (error: any) {
@@ -112,26 +135,35 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
             Create a new assignment or exam. Configure the AI grading persona below.
           </SheetDescription>
         </SheetHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 py-6">
-          <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" placeholder="e.g. Mid-Semester Exam" {...register("title", { required: true })} />
-            {errors.title && <span className="text-sm text-destructive">Required</span>}
-          </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 py-6">
 
-          <div className="space-y-2">
-            <Label htmlFor="deadline" className="flex items-center gap-1">
-              Deadline (Optional)
-              <span className="text-xs text-muted-foreground ml-1 font-normal">
-                (Sets the cutoff time for student submissions. It is also used to trigger automated result releases if 'Release on Deadline' mode is selected.)
-              </span>
-            </Label>
-            <Input id="deadline" type="datetime-local" {...register("deadline")} />
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold mb-2 border-b pb-2">Basic Info</h3>
+            <div className="space-y-2">
+              <Label htmlFor="title">Title</Label>
+              <Input id="title" placeholder="e.g. Mid-Semester Exam" {...register("title", { required: true })} />
+              {errors.title && <span className="text-sm text-destructive">Required</span>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="deadline" className="flex items-center gap-1">
+                Deadline (Optional)
+                <span className="text-xs text-muted-foreground ml-1 font-normal">
+                  (Sets the cutoff time for student submissions. It is also used to trigger automated result releases if 'Release on Deadline' mode is selected.)
+                </span>
+              </Label>
+              <Input id="deadline" type="datetime-local" {...register("deadline")} />
+            </div>
+
+            <div className="space-y-2">
+               <Label>Instructions to Students</Label>
+               <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour'). Do NOT paste the marking scheme here." {...register("instructions")} />
+             </div>
           </div>
 
            {/* Gold Standard Inputs */}
-           <div className="space-y-4 border p-4 rounded-md bg-muted/20">
-              <h3 className="font-semibold text-sm">Gold Standard Data (Internal Only)</h3>
+           <div className="space-y-4 border p-5 rounded-md bg-muted/20 shadow-sm">
+              <h3 className="text-lg font-semibold mb-2 border-b pb-2 border-slate-200 dark:border-slate-800">Gold Standard Data</h3>
               <p className="text-xs text-muted-foreground">These files are used by the AI for grading and are NEVER shown to students.</p>
 
               <div className="space-y-2">
@@ -164,13 +196,8 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
               </div>
            </div>
 
-           <div className="space-y-2">
-             <Label>Instructions to Students</Label>
-             <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour'). Do NOT paste the marking scheme here." {...register("instructions")} />
-           </div>
-
            {/* Deterministic AI Transparency (The Wow Factor) */}
-           <div className="space-y-4 border p-5 rounded-md bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+           <div className="space-y-4 border p-5 rounded-md bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
                   <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
                   <h3 className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100 uppercase">
@@ -199,28 +226,34 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
               </div>
            </div>
 
-           <div className="space-y-2">
-            <Label htmlFor="totalMarks">Total Marks</Label>
-            <Input id="totalMarks" type="number" defaultValue={100} {...register("totalMarks")} />
-          </div>
+          <div className="space-y-4 border p-5 rounded-md bg-muted/10 shadow-sm">
+            <h3 className="text-lg font-semibold mb-2 border-b pb-2">Settings</h3>
+            <div className="space-y-2">
+              <Label htmlFor="totalMarks">Total Marks</Label>
+              <Input id="totalMarks" type="number" defaultValue={100} {...register("totalMarks")} />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="releaseMode">Result Release Mode</Label>
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              {...register("releaseMode")}
-            >
-              <option value="MANUAL">Manual Approval (Recommended)</option>
-              <option value="AUTO">Auto-Release (Immediate)</option>
-              <option value="DEADLINE">Release on Deadline</option>
-            </select>
+            <div className="space-y-2">
+              <Label htmlFor="releaseMode">Result Release Mode</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                {...register("releaseMode")}
+              >
+                <option value="MANUAL">Manual Approval (Recommended)</option>
+                <option value="AUTO">Auto-Release (Immediate)</option>
+                <option value="DEADLINE">Release on Deadline</option>
+              </select>
+            </div>
           </div>
 
           <SheetFooter>
             <SheetClose asChild>
                 <Button variant="outline" type="button">Cancel</Button>
             </SheetClose>
-            <Button type="submit" disabled={isSubmitting || uploading}>
+            <Button type="submit" disabled={isSubmitting || uploading} className="relative">
+              {watch("title") && markingSchemeUrl && !uploading && (
+                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-500 animate-pulse border-2 border-white dark:border-slate-950"></div>
+              )}
               {isSubmitting ? "Creating..." : "Create Session"}
             </Button>
           </SheetFooter>

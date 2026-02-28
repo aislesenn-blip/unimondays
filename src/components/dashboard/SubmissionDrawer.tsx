@@ -167,7 +167,7 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
 
                 {/* AI Confidence Card */}
                 {submission.status !== 'PENDING' && (
-                    <div className="bg-background rounded border p-3">
+                    <div className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 border-l-4 border-primary rounded border p-3 shadow-sm">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                                 {isHighTrust ? <ShieldCheck className="h-3 w-3 text-green-500" /> : <ShieldAlert className="h-3 w-3 text-yellow-500" />}
@@ -229,8 +229,10 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
 
             {/* AI Feedback */}
             {feedback && (
-                <div className="space-y-3">
-                    <h3 className="text-sm font-medium">AI Feedback</h3>
+                <div className="space-y-3 border border-indigo-100 bg-indigo-50/30 p-4 rounded-md shadow-sm">
+                    <h3 className="text-sm font-bold text-indigo-800 dark:text-indigo-400 flex items-center gap-2">
+                        Playbook AI Insights
+                    </h3>
                     {feedback.strengths?.length > 0 && (
                         <div className="text-sm">
                             <span className="font-semibold text-green-600">Strengths:</span> {feedback.strengths.join(", ")}
@@ -242,7 +244,7 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                         </div>
                     )}
                     {feedback.improvement && (
-                        <div className="text-sm bg-blue-50 p-3 rounded text-blue-800">
+                        <div className="text-sm bg-indigo-50/80 p-3 rounded text-indigo-900 border border-indigo-100">
                             <span className="font-semibold">Improvement:</span> {feedback.improvement}
                         </div>
                     )}

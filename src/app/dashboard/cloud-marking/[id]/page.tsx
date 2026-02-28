@@ -74,6 +74,26 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
     };
   }, [params]);
 
+  const [processingMessage, setProcessingMessage] = useState("AI is Grading & Organizing...");
+
+  useEffect(() => {
+    if (session?.status === 'PROCESSING' || session?.status === 'PENDING') {
+      const messages = [
+        "Slicing PDF Document...",
+        "Extracting Student Identities...",
+        "Applying v3.0 AI Evaluator...",
+        "Cross-referencing Marking Scheme...",
+        "Organizing Submissions..."
+      ];
+      let i = 0;
+      const interval = setInterval(() => {
+        setProcessingMessage(messages[i]);
+        i = (i + 1) % messages.length;
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [session?.status]);
+
   // Derived Grading Progress
   const gradingProgress = session?.submissions?.length
       ? (session.submissions.filter((s: any) => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status)).length / session.submissions.length) * 100
@@ -184,7 +204,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
                   <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center animate-pulse">
                       <Loader2 className="h-8 w-8 text-primary animate-spin" />
                   </div>
-                  <h3 className="text-xl font-semibold">AI is Grading & Organizing...</h3>
+                  <h3 className="text-xl font-semibold min-h-[30px] transition-all duration-300">{processingMessage}</h3>
                   <p className="text-muted-foreground max-w-md">
                       The system is autonomously fetching, slicing, and grading the submissions.
                       Results will appear here shortly.
@@ -192,7 +212,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
                   {/* Progress Bar Simulation */}
                    <div className="w-full max-w-xs h-2 bg-muted rounded-full overflow-hidden">
                        <div
-                           className="h-full bg-primary transition-all duration-500 ease-out"
+                           className="h-full bg-primary transition-all duration-1000 ease-in-out"
                            style={{ width: `${session.totalFiles > 0 ? (session.processedFiles / session.totalFiles) * 100 : 5}%` }}
                        />
                    </div>

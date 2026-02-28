@@ -137,8 +137,17 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
         <TableBody>
           {(!submissions || submissions.length === 0) ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                No submissions yet. Share code <span className="font-mono font-bold text-foreground bg-muted px-2 py-1 rounded">{workSession.workCode}</span> with students.
+              <TableCell colSpan={7} className="h-48 text-center text-muted-foreground">
+                <div className="flex flex-col items-center justify-center space-y-3 py-6">
+                    <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/50"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div className="text-base font-medium text-foreground">Waiting for submissions</div>
+                    <p className="text-sm max-w-sm mx-auto">
+                        Students can join and submit their work using the class code: <br/>
+                        <span className="font-mono font-bold text-primary bg-primary/10 px-3 py-1 rounded-md inline-block mt-2 text-lg shadow-sm border border-primary/20">{workSession.workCode}</span>
+                    </p>
+                </div>
               </TableCell>
             </TableRow>
           ) : (
