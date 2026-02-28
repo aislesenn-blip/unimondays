@@ -124,7 +124,6 @@ describe('AI System Prompt Generation', () => {
 
     // Visual Analysis (Old Mandate 7)
     expect(prompt).toContain('📊 CONFIDENCE SCORING & RUBRIC GAP DETECTION');
-    expect(prompt).toContain('⚖️ THE DUAL-AUDIENCE JUSTIFICATION RULE:');
   });
 
   it('should include the strict JSON output schema', () => {
@@ -134,5 +133,16 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('📦 OUTPUT FORMAT (MANDATORY STRICT JSON ONLY)');
     expect(prompt).toContain('"total_marks_awarded": number');
     expect(prompt).toContain('"detectedIdentity": "string');
+    expect(prompt).toContain('"studentRemarks": "string');
+    expect(prompt).toContain('"teacherRemarks": "string');
+  });
+
+  it('should include Dual-Persona Feedback Architecture logic', () => {
+    const config: GradeConfig = { strictness: 1.0 };
+    const prompt = buildSystemPrompt(config, 100);
+
+    expect(prompt).toContain('⚖️ THE DUAL-PERSONA FEEDBACK ARCHITECTURE:');
+    expect(prompt).toContain('Student-Facing Feedback (studentRemarks):');
+    expect(prompt).toContain('Teacher-Facing Feedback (teacherRemarks):');
   });
 });

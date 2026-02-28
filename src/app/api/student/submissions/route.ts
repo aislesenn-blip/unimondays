@@ -46,6 +46,8 @@ export async function GET(req: NextRequest) {
                 select: {
                     totalMarks: true,
                     remarks: true,
+                    studentRemarks: true,
+                    teacherRemarks: true,
                     breakdown: true
                 }
             }
@@ -103,6 +105,8 @@ export async function GET(req: NextRequest) {
             score: isReleased ? (sub.score ? sub.score.totalMarks : 0) : null,
             totalMarks: workSession.totalMarks || 100,
             remarks: isReleased ? (sub.score ? sub.score.remarks : null) : null,
+            studentRemarks: isReleased ? (sub.score ? sub.score.studentRemarks : null) : null,
+            teacherRemarks: isReleased ? (sub.score ? sub.score.teacherRemarks : null) : null,
             feedback: isReleased ? sub.feedback : null,
             breakdown: isReleased ? (sub.score ? sub.score.breakdown : null) : null,
             filePath: sub.filePath,
