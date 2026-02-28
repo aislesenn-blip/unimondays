@@ -10,13 +10,23 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, cloudLink, totalMarks, markingScheme, questionPaperUrl, strictness, calibration } = body;
+    const { title, cloudLink, totalMarks, markingScheme, questionPaperUrl, strictness, calibration, rubricId } = body;
 
     if (!title || !cloudLink) {
         return NextResponse.json({ error: "Title and Bulk PDF upload are required" }, { status: 400 });
     }
 
     // 1. Create Bulk Session
+    // We cannot link standardizedRubricId directly to BulkSession because it does not exist in schema.
+    // However, when CloudWorker creates the WorkSession, it will need it. For now, we store the rubric ID in calibration json or wait for cloud worker.
+    // Actually, checking the schema, WorkSession has `standardizedRubricId`.
+    // The standard way to pass config to BulkSession is `calibration` JSON field since the schema hasn't changed.
+
+    let enrichedCalibration = calibration || {};
+    if (rubricId) {
+        enrichedCalibration = { ...enrichedCalibration, rubricId };
+    }
+
     const bulkSession = await prisma.bulkSession.create({
       data: {
         title,
@@ -26,7 +36,7 @@ export async function POST(req: NextRequest) {
         totalMarks: totalMarks || 100,
         markingScheme: markingScheme || "",
         questionPaperUrl: questionPaperUrl || null,
-        calibration: JSON.stringify(calibration || {}),
+        calibration: JSON.stringify(enrichedCalibration),
       }
     });
 
