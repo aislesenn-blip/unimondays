@@ -60,7 +60,7 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
       <div className="flex items-center justify-between border-b pb-6">
         <div>
             <div className="flex items-center gap-2 mb-1">
-                <Link href={`/dashboard/classes/${session.classId}`} className="text-sm text-muted-foreground hover:underline">
+                <Link prefetch={true} href={`/dashboard/classes/${session.classId}`} className="text-sm text-muted-foreground hover:underline">
                     {session.class?.code}
                 </Link>
                 <span className="text-muted-foreground">/</span>

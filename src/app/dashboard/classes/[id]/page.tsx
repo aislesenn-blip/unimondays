@@ -89,13 +89,13 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
             <p className="text-muted-foreground mt-1">{classItem.name}</p>
         </div>
         <div className="flex gap-2">
-            <Link href={`/dashboard/classes/${id}/analytics`}>
+            <Link prefetch={true} href={`/dashboard/classes/${id}/analytics`}>
                 <Button variant="outline">
                     <BarChart3 className="mr-2 h-4 w-4" />
                     Analytics
                 </Button>
             </Link>
-            <Link href={`/dashboard/classes/${id}/ca`}>
+            <Link prefetch={true} href={`/dashboard/classes/${id}/ca`}>
                 <Button variant="outline">
                     <Table2 className="mr-2 h-4 w-4" />
                     Master CA
@@ -120,7 +120,7 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
             ) : (
                 <div className="grid gap-4">
                     {classItem.workSessions.map((session) => (
-                        <Link key={session.id} href={`/dashboard/work-sessions/${session.id}`}>
+                        <Link prefetch={true} key={session.id} href={`/dashboard/work-sessions/${session.id}`}>
                             <Card className="hover:bg-accent/50 transition-all cursor-pointer border-l-4 border-l-blue-500 group">
                                 <CardContent className="p-6 flex items-center justify-between">
                                     <div className="space-y-1">

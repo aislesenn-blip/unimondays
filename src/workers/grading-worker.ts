@@ -4,6 +4,7 @@ import { readFile } from '@/lib/storage';
 import { ocrDocument } from '@/lib/ai/gemini';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
+import sharp from 'sharp';
 
 export async function handleAiGrade(job: Job) {
   let data: any;
@@ -61,14 +62,26 @@ export async function handleAiGrade(job: Job) {
 
           // Deep Audit Fix: Vision Pre-processing (Payload Integrity)
           // Ensure images/PDFs are not absurdly large before sending to vision models to prevent "Math Blindspots"
-          // If a buffer is > 20MB, we log a critical warning (OpenRouter Gemini 2.5 Flash typically handles up to 20MB directly via URL, but base64 inflates it)
-          if (buffer.length > 15 * 1024 * 1024) {
-              console.warn(`[VISION_WARN] Submission buffer is extremely large (${(buffer.length / 1024 / 1024).toFixed(2)} MB). This may cause AI timeouts or vision degradation.`);
+          // If a buffer is > 15MB, we aggressively compress images using sharp.
+          let processedBuffer = buffer;
+          if (processedBuffer.length > 15 * 1024 * 1024) {
+              console.warn(`[VISION_WARN] Submission buffer is extremely large (${(processedBuffer.length / 1024 / 1024).toFixed(2)} MB). Applying compression...`);
+              if (mimeType.startsWith('image/')) {
+                  try {
+                      processedBuffer = await sharp(processedBuffer)
+                          .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+                          .jpeg({ quality: 80 })
+                          .toBuffer();
+                      console.log(`[VISION_OPT] Image compressed to ${(processedBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+                  } catch (sharpError) {
+                      console.error("[VISION_ERROR] Failed to compress image with sharp:", sharpError);
+                  }
+              }
           }
 
           try {
-              console.log(`[OCR_START] Sending ${buffer.length} bytes to Gemini (${mimeType})...`);
-              const text = await ocrDocument(buffer, mimeType);
+              console.log(`[OCR_START] Sending ${processedBuffer.length} bytes to Gemini (${mimeType})...`);
+              const text = await ocrDocument(processedBuffer, mimeType);
               console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
 
               // Save immediately
@@ -76,7 +89,7 @@ export async function handleAiGrade(job: Job) {
                   where: { id: submissionId },
                   data: { ocrText: text, status: 'PROCESSING' }
               });
-              return { text, buffer, mimeType };
+              return { text, buffer: processedBuffer, mimeType };
           } catch (ocrError: any) {
               console.error("[GRADING FATAL ERROR]: OCR Processing Failed", ocrError);
               throw new Error(`OCR Processing Failed: ${ocrError.message}`);

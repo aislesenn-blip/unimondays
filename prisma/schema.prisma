@@ -35,6 +35,7 @@ model User {
   bulkSessions BulkSession[] // New relationship
 
   @@map("users")
+  @@index([email])
 }
 
 // 4. CLASSES
@@ -54,6 +55,7 @@ model Classes {
   workSessions WorkSession[]
 
   @@map("classes")
+  @@index([lecturerId])
 }
 
 // 5. WORK SESSIONS (ex-QUIZZES)
@@ -96,6 +98,9 @@ model WorkSession {
   bulkSession  BulkSession? @relation(fields: [bulkSessionId], references: [id])
 
   @@map("work_sessions")
+  @@index([classId])
+  @@index([lecturerId])
+  @@index([bulkSessionId])
 }
 
 // 6. SUBMISSIONS
@@ -122,6 +127,9 @@ model Submission {
 
   @@map("submissions")
   @@index([workSessionId])
+  @@index([userId])
+  @@index([status])
+  @@index([studentRegNo])
 }
 
 // 7. SCORES
@@ -217,4 +225,6 @@ model BulkSession {
   workSessions    WorkSession[] // If converted/synced
 
   @@map("bulk_sessions")
+  @@index([lecturerId])
+  @@index([status])
 }
