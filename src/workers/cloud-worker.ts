@@ -233,8 +233,8 @@ export async function handleCloudMarking(job: Job) {
         }
 
         let processedCount = 0;
-        // Deep Audit Fix: Concurrency Tuning. Reduce BATCH_SIZE to 3 to prevent memory spikes and API rate limits during mass submission creation.
-        const BATCH_SIZE = 3;
+        // Deep Audit Fix: Concurrency Tuning. BATCH_SIZE increased to 5 to perfectly ride the edge of AI Rate limits.
+        const BATCH_SIZE = 5;
 
         // BRANCH A: Smart Collation (Splits Found)
         if (splits.length > 0) {
@@ -308,8 +308,8 @@ export async function handleCloudMarking(job: Job) {
                     data: { processedFiles: processedCount }
                 });
 
-                // Deep Audit Fix: Concurrency rate limit pause between database/storage writes
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Deep Audit Fix: Concurrency rate limit pause between database/storage writes (optimized to 500ms)
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
 
         } else {
@@ -378,8 +378,8 @@ export async function handleCloudMarking(job: Job) {
 
                 console.log(`[CLOUD_WORKER] Batch ${Math.floor(i/BATCH_SIZE) + 1} complete. Total processed: ${processedCount}`);
 
-                // Deep Audit Fix: Rate limit pause for fallback processing
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Deep Audit Fix: Rate limit pause for fallback processing (optimized to 500ms)
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
 
