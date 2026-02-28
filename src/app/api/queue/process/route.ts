@@ -67,21 +67,35 @@ export async function POST(req: NextRequest) {
     for (const job of claimedJobs) {
 
         try {
-            // EXECUTE WORKER BASED ON TYPE
+                        // EXECUTE WORKER BASED ON TYPE
+            let jobResult: any = null;
             if (job.type === 'CLOUD_MARKING') {
-                await handleCloudMarking(job);
+                jobResult = await handleCloudMarking(job);
             } else if (job.type === 'AI_GRADE_SUBMISSION') {
-                await handleAiGrade(job);
+                jobResult = await handleAiGrade(job);
             } else {
                 throw new Error(`Unknown Job Type: ${job.type}`);
             }
 
-            // Mark COMPLETED
-            await prisma.job.update({
-                where: { id: job.id },
-                data: { status: 'COMPLETED', result: 'Success' }
-            });
-            processedCount++;
+            // Support Job Continuations
+            if (jobResult && jobResult.continuation) {
+                console.log(`[QUEUE] Job ${job.id} requested continuation for phase ${jobResult.nextPayload?.phase}`);
+                await prisma.job.update({
+                    where: { id: job.id },
+                    data: {
+                        payload: JSON.stringify(jobResult.nextPayload),
+                        status: 'PENDING' // Keep it pending so the next queue iteration picks it up
+                    }
+                });
+                processedCount++;
+            } else {
+                // Mark COMPLETED
+                await prisma.job.update({
+                    where: { id: job.id },
+                    data: { status: 'COMPLETED', result: 'Success' }
+                });
+                processedCount++;
+            }
 
         } catch (error: any) {
             console.error(`[QUEUE] Job ${job.id} Failed:`, error);
