@@ -146,19 +146,64 @@ export async function handleCloudMarking(job: Job) {
         let splits: PdfSplit[] = [];
         try {
             console.log(`[CLOUD_WORKER] Analyzing PDF Structure...`);
-            // Only analyze structure if reasonable size to avoid timeouts on huge files
-            if (pageCount <= 100) {
+            // Deep Audit Fix: Stream-based chunking for large PDFs to prevent OOM / Vercel timeouts.
+            if (pageCount <= 50) {
                 splits = await analyzePdfStructure(fileBuffer);
                 console.log(`[CLOUD_WORKER] Smart Collation found ${splits.length} scripts.`);
             } else {
-                console.log(`[CLOUD_WORKER] PDF too large for single-pass analysis, falling back to page-by-page.`);
+                console.log(`[CLOUD_WORKER] PDF too large for single-pass analysis (${pageCount} pages). Chunking analysis...`);
+                // Split analysis into manageable chunks of 50 pages to prevent memory spikes
+                const CHUNK_SIZE = 50;
+                for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
+                    const end = Math.min(start + CHUNK_SIZE, pageCount);
+                    console.log(`[CLOUD_WORKER] Analyzing chunk pages ${start + 1} to ${end}...`);
+
+                    const chunkDoc = await PDFDocument.create();
+                    const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
+                    const copiedPages = await chunkDoc.copyPages(srcDoc, pageIndices);
+                    copiedPages.forEach(page => chunkDoc.addPage(page));
+                    const chunkBytes = await chunkDoc.save();
+
+                    const chunkSplits = await analyzePdfStructure(Buffer.from(chunkBytes));
+
+                    // Adjust page indices to absolute document pages
+                    const adjustedSplits = chunkSplits.map(s => ({
+                        ...s,
+                        startPage: s.startPage + start,
+                        endPage: s.endPage + start
+                    }));
+                    splits.push(...adjustedSplits);
+
+                    // Rate Limit Armor: Delay between chunk analysis to prevent 429 errors from Gemini
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+                console.log(`[CLOUD_WORKER] Chunked Smart Collation complete. Found ${splits.length} scripts total.`);
             }
         } catch (structureError) {
-            console.warn(`[CLOUD_WORKER] Smart Collation failed, falling back to default slicing.`, structureError);
+            console.warn(`[CLOUD_WORKER] Smart Collation failed, falling back to default page-by-page slicing.`, structureError);
+            splits = []; // Ensure fallback happens cleanly
+        }
+
+        // Deep Audit Fix: Validate contiguous page boundaries. If a student forgot their name on page 2,
+        // it might be orphaned. If there's a gap between endPage of script N and startPage of N+1,
+        // we conservatively merge the orphaned pages to the preceding script to prevent data loss.
+        if (splits.length > 0) {
+            splits.sort((a, b) => a.startPage - b.startPage);
+            for (let i = 0; i < splits.length - 1; i++) {
+                if (splits[i].endPage < splits[i+1].startPage - 1) {
+                    // Gap detected. Merge forward.
+                    splits[i].endPage = splits[i+1].startPage - 1;
+                }
+            }
+            // Ensure last split reaches the end of the document if there are trailing pages
+            if (splits[splits.length - 1].endPage < pageCount) {
+                splits[splits.length - 1].endPage = pageCount;
+            }
         }
 
         let processedCount = 0;
-        const BATCH_SIZE = 5;
+        // Deep Audit Fix: Concurrency Tuning. Reduce BATCH_SIZE to 3 to prevent memory spikes and API rate limits during mass submission creation.
+        const BATCH_SIZE = 3;
 
         // BRANCH A: Smart Collation (Splits Found)
         if (splits.length > 0) {
@@ -231,6 +276,9 @@ export async function handleCloudMarking(job: Job) {
                     where: { id: bulkSession.id },
                     data: { processedFiles: processedCount }
                 });
+
+                // Deep Audit Fix: Concurrency rate limit pause between database/storage writes
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
         } else {
@@ -298,6 +346,9 @@ export async function handleCloudMarking(job: Job) {
                 });
 
                 console.log(`[CLOUD_WORKER] Batch ${Math.floor(i/BATCH_SIZE) + 1} complete. Total processed: ${processedCount}`);
+
+                // Deep Audit Fix: Rate limit pause for fallback processing
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
 

@@ -59,6 +59,13 @@ export async function handleAiGrade(job: Job) {
               return { text: submission.ocrText, buffer, mimeType };
           }
 
+          // Deep Audit Fix: Vision Pre-processing (Payload Integrity)
+          // Ensure images/PDFs are not absurdly large before sending to vision models to prevent "Math Blindspots"
+          // If a buffer is > 20MB, we log a critical warning (OpenRouter Gemini 2.5 Flash typically handles up to 20MB directly via URL, but base64 inflates it)
+          if (buffer.length > 15 * 1024 * 1024) {
+              console.warn(`[VISION_WARN] Submission buffer is extremely large (${(buffer.length / 1024 / 1024).toFixed(2)} MB). This may cause AI timeouts or vision degradation.`);
+          }
+
           try {
               console.log(`[OCR_START] Sending ${buffer.length} bytes to Gemini (${mimeType})...`);
               const text = await ocrDocument(buffer, mimeType);
