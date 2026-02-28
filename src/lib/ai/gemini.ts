@@ -86,11 +86,11 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
       Your task is to identify the start and end page numbers for each student's script and extract their identity.
 
       Instructions:
-      1. Look for Registration Numbers (e.g., RegNo, Matric No) or Names at the top of the first page of a script.
+      1. Scan ALL pages of a script for Registration Numbers (e.g., RegNo, Matric No) or Names. Do NOT just look at the first page. A student might write their name on page 3.
       2. Scripts are continuous (e.g., if Student A is on pages 1-3, Student B starts on page 4).
       3. If a page has no clear identity but follows a script, assume it belongs to the previous student.
-      4. If a script has no visible RegNo, use "UNIDENTIFIED" as the regNo.
-      5. Extract the Student Name if visible.
+      4. If a script has no visible RegNo across any of its pages, use "UNIDENTIFIED" as the regNo.
+      5. Extract the Student Name if visible on any of the script's pages.
 
       Output Format:
       Return a STRICT JSON array of objects with keys:
