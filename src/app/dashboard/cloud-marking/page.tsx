@@ -77,7 +77,6 @@ export default function CloudMarkingPage() {
       try {
         const draft = JSON.parse(savedDraft);
         if (draft.sessionTitle) setSessionTitle(draft.sessionTitle);
-        if (draft.cloudLink) setCloudLink(draft.cloudLink);
         if (draft.totalMarks) setTotalMarks(draft.totalMarks);
         if (draft.strictness) setStrictness(draft.strictness);
       } catch (e) {
@@ -91,15 +90,14 @@ export default function CloudMarkingPage() {
     const timeoutId = setTimeout(() => {
       localStorage.setItem("cloudMarkingDraft", JSON.stringify({
         sessionTitle,
-        cloudLink,
         totalMarks,
         strictness
       }));
     }, 500); // Debounce save
     return () => clearTimeout(timeoutId);
-  }, [sessionTitle, cloudLink, totalMarks, strictness]);
+  }, [sessionTitle, totalMarks, strictness]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: "markingScheme" | "questionPaperUrl") => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: "markingScheme" | "questionPaperUrl" | "cloudLink") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -119,9 +117,12 @@ export default function CloudMarkingPage() {
       if (fieldName === "markingScheme") {
         setMarkingSchemeUrl(data.path);
         toast.success("Marking scheme uploaded");
-      } else {
+      } else if (fieldName === "questionPaperUrl") {
         setQuestionPaperUrl(data.path);
         toast.success("Question Paper uploaded");
+      } else if (fieldName === "cloudLink") {
+        setCloudLink(data.path);
+        toast.success("Bulk exams uploaded successfully");
       }
     } catch (error: any) {
       toast.error(`Failed to upload ${fieldName}: ${error.message}`);
@@ -132,7 +133,7 @@ export default function CloudMarkingPage() {
 
   const handleStartCloudMarking = async () => {
     if (!cloudLink || !sessionTitle) {
-      toast.error("Please provide a Session Title and Cloud Link");
+      toast.error("Please provide a Session Title and upload the Bulk Exams PDF");
       return;
     }
 
@@ -191,33 +192,26 @@ export default function CloudMarkingPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-3">
             <div className="space-y-2 text-center group cursor-default">
               <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">1</div>
               <h3 className="font-semibold text-sm">Scan</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Scan all student exams into a single large PDF or folder using your department scanner.
+                Scan all student exams into a single large merged PDF using your department scanner.
               </p>
             </div>
             <div className="space-y-2 text-center group cursor-default">
               <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">2</div>
               <h3 className="font-semibold text-sm">Upload</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Upload files to Google Drive, OneDrive, or Dropbox.
+                Upload the merged PDF file directly below. Large files up to 2GB are supported.
               </p>
             </div>
             <div className="space-y-2 text-center group cursor-default">
               <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">3</div>
-              <h3 className="font-semibold text-sm">Generate Link</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Set permission to "Anyone with the link can view" and copy the link.
-              </p>
-            </div>
-            <div className="space-y-2 text-center group cursor-default">
-              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">4</div>
               <h3 className="font-semibold text-sm">Process</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Paste the link below. The AI will fetch, slice, grade, and organize submissions.
+                The AI will securely process the file, slice, grade, and organize submissions.
               </p>
             </div>
           </div>
@@ -365,19 +359,22 @@ export default function CloudMarkingPage() {
                 <CardContent className="space-y-6">
                     <div className="space-y-4">
                          <div className="space-y-2">
-                            <Label>Cloud Storage Link</Label>
-                            <div className="relative">
-                                <LinkIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Label>Bulk Exams PDF (Max 2GB)</Label>
+                            <div className="flex items-center gap-3">
                                 <Input
-                                    placeholder="https://drive.google.com/..."
-                                    className="pl-9"
-                                    value={cloudLink}
-                                    onChange={(e) => setCloudLink(e.target.value)}
+                                    type="file"
+                                    onChange={(e) => handleFileUpload(e, "cloudLink")}
+                                    accept=".pdf"
+                                    disabled={uploading}
+                                    className="cursor-pointer"
                                 />
+                                {uploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                             </div>
-                            <p className="text-[10px] text-muted-foreground">
-                                Supports Google Drive, OneDrive, Dropbox public links.
-                            </p>
+                            {cloudLink && (
+                                <div className="text-xs text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-200 mt-2">
+                                    <FileText className="w-3 h-3"/> Bulk PDF Uploaded
+                                </div>
+                            )}
                          </div>
 
                          <Separator />
