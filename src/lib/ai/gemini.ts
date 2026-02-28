@@ -44,6 +44,8 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
           ],
         },
       ],
+      temperature: 0.0,
+      top_p: 0.1,
       max_tokens: 4096, // Ensure we get the full text
     });
 
@@ -119,6 +121,8 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
         },
       ],
       response_format: { type: "json_object" }, // Gemini supports JSON mode via OpenRouter usually
+      temperature: 0.0,
+      top_p: 0.1,
     });
 
     const content = response.choices[0]?.message?.content;

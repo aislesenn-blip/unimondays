@@ -77,8 +77,8 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('Actively scan for numbers, operators (+, -, =, x), scribbles, and multi-line working.');
 
     // Protocol 2
-    expect(prompt).toContain('>>> PROTOCOL 2: THE "ACTION VERB" PARTIAL MARK RULE <<<');
-    expect(prompt).toContain('If a question asks the student to "Describe", "Explain", or "Elaborate", and the student only "Mentions"');
+    expect(prompt).toContain('>>> PROTOCOL 2: THE ZERO-VARIANCE & PARTIAL CREDIT MANDATE (HAKI YA MWANAFUNZI) <<<');
+    expect(prompt).toContain('RULE 1: Do not be overly punitive');
 
     // Protocol 3
     expect(prompt).toContain('>>> PROTOCOL 3: ABSOLUTE MARKS ALLOCATION SUPREMACY <<<');

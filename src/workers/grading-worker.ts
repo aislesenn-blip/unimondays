@@ -255,7 +255,8 @@ Student Identifier: ${studentId}.
                   review_flag: false,
                   confidence: 1.0
               })),
-              aiReasoning: sim.reasoning,
+              studentRemarks: sim.reasoning,
+              teacherRemarks: sim.reasoning,
               confidence: sim.confidence
           };
       } else {
@@ -327,7 +328,7 @@ Student Identifier: ${studentId}.
               // GHOST SUBMISSION: No AI ID, No DB ID.
               status = 'FLAGGED';
               result.confidence = 0;
-              result.aiReasoning = `IDENTITY CRISIS: ${result.aiReasoning || "System could not identify student."} Please manually assign ownership.`;
+              result.teacherRemarks = `IDENTITY CRISIS: ${result.teacherRemarks || "System could not identify student."} Please manually assign ownership.`;
               console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
           } else {
               // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).

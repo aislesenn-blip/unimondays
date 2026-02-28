@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, FileText, Download, CheckCircle, AlertTriangle, ArrowUpCircle } from "lucide-react";
 import { AppealModal } from "./AppealModal";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import PlaybookAI from "@/components/icons/PlaybookAI";
+import { PlaybookAI } from "@/components/icons/PlaybookAI";
 
 export function StudentResultDrawer({ submission }: { submission: any }) {
   // Parse logic

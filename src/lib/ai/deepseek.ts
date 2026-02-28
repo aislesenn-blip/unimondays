@@ -32,6 +32,7 @@ export interface GradingResult {
     alternative_valid_concept: boolean;
     review_flag: boolean;
     confidence: number;
+    reasoning_chain?: string;
     justification: string;
   }>;
   total_marks_awarded: number;
@@ -126,11 +127,11 @@ TIER 2 (EQUIVALENT CONCEPT VALIDATION): If wording differs, evaluate whether the
 
 TIER 3 (OUT-OF-SCOPE OR GENERIC KNOWLEDGE): If the answer is factually correct but does NOT answer the specific question or is outside the rubric objective -> Award 0 marks. Set tier_used = "Tier 3". Do NOT reward irrelevant correctness.
 
->>> PROTOCOL 2: THE "ACTION VERB" PARTIAL MARK RULE <<<
-You must distinguish between a conceptual failure and a depth failure.
-If a question asks the student to "Describe", "Explain", or "Elaborate", and the student only "Mentions", "Lists", or "States" the correct concept, DO NOT award 0 marks.
-Action: The concept is correct, but the depth is shallow. You MUST award Partial Marks (e.g., 50% of the allocated marks for that specific point).
-Justification: Explicitly state: "Correct concept mentioned, but lacks description/explanation. Partial marks awarded."
+>>> PROTOCOL 2: THE ZERO-VARIANCE & PARTIAL CREDIT MANDATE (HAKI YA MWANAFUNZI) <<<
+RULE 1: Do not be overly punitive. If the student's answer captures the semantic meaning or core concept of the rubric, award full or partial marks, even if the exact keywords are missing.
+RULE 2: Award partial marks for formulas, working out, or logical attempts even if the final answer is wrong.
+RULE 3: Ignore minor spelling or grammatical errors unless the subject specifically tests grammar.
+RULE 4: ACTION VERB PARTIAL MARKING: If a question asks to "Describe/Explain" and the student only "Mentions/States", award partial marks (e.g., 50%).
 
 >>> DOMAIN-SPECIFIC EVALUATION PROTOCOLS <<<
 You must dynamically adapt your 3-Tier semantic engine based on the nature of the question:
@@ -207,6 +208,9 @@ In addition to brief per-question justification, you must generate two distinct 
 2. Teacher-Facing Feedback (teacherRemarks): Analytical, diagnostic, and pedagogical.
    Example: "This student struggles with SI Unit Conversions. They repeatedly made errors keeping consistent units across kinematics equations. Recommend remedial focus on basic dimensional analysis."
 
+📦 CHAIN-OF-THOUGHT MARK ALLOCATION (UHASIBU WA MAKSI)
+Before awarding marks for any question, you must "think out loud" in the 'reasoning_chain' field. Evaluate the student's answer against the rubric, justify the partial or full marks step-by-step, and THEN finalize the 'marks_awarded'. This forces logical consistency across evaluations.
+
 📦 OUTPUT FORMAT (MANDATORY STRICT JSON ONLY)
 Return strictly this JSON structure:
 {
@@ -223,7 +227,8 @@ Return strictly this JSON structure:
       "alternative_valid_concept": boolean,
       "review_flag": boolean,
       "confidence": number,
-      "justification": "string"
+      "reasoning_chain": "string (Explain step-by-step how the answer matches the rubric BEFORE deciding marks)",
+      "justification": "string (Brief final verdict)"
     }
   ],
   "total_marks_awarded": number,
