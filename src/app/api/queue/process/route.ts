@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
         const job = await prisma.job.findFirst({
             where: {
                 status: 'PENDING',
-                type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
+                type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING', 'AI_GRADE_CHUNK', 'AI_GRADE_AGGREGATE'] },
                 retryCount: { lt: 3 } // Max 3 retries
             },
             orderBy: { createdAt: 'asc' }
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
             let jobResult: any = null;
             if (job.type === 'CLOUD_MARKING') {
                 jobResult = await handleCloudMarking(job);
-            } else if (job.type === 'AI_GRADE_SUBMISSION') {
+            } else if (job.type === 'AI_GRADE_SUBMISSION' || job.type === 'AI_GRADE_CHUNK' || job.type === 'AI_GRADE_AGGREGATE') {
                 jobResult = await handleAiGrade(job);
             } else {
                 throw new Error(`Unknown Job Type: ${job.type}`);
