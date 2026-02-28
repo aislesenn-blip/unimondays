@@ -47,7 +47,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Calculate if grading is fully complete across all work sessions and update status if needed
     let finalStatus = bulkSession.status;
     if (finalStatus === 'READY' || finalStatus === 'PROCESSING') {
-        const isGradingComplete = submissions.length > 0 && submissions.every(s => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status));
+        // A READY session with 0 submissions means no valid scripts were found to grade. It should complete.
+        const isGradingComplete = submissions.length === 0 && finalStatus === 'READY'
+            ? true
+            : (submissions.length > 0 && submissions.every(s => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status)));
+
         if (isGradingComplete) {
             finalStatus = 'COMPLETED';
             // Optionally persist this terminal state update to the database to prevent infinite status checks on refresh

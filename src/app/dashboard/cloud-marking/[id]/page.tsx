@@ -54,10 +54,11 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
           const data = await res.json();
           setSession(data);
 
-          // Only stop main loader if session is technically "done" with the slicing/uploading phase.
-          // Grading might still be happening in the background.
-          if (data.status === 'READY' || data.status === 'COMPLETED' || data.status === 'FAILED' || data.status === 'FLAGGED') {
+          // Deep Audit Optimization: Only stop polling and UI loaders if the session has reached a TRUE terminal state.
+          // READY means slicing is done, but grading might still be progressing in the background.
+          if (data.status === 'COMPLETED' || data.status === 'FAILED') {
              setLoading(false);
+             if (interval) clearInterval(interval);
           }
         }
       } catch (e) {
@@ -66,13 +67,16 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
     };
 
     fetchStatus();
-    interval = setInterval(fetchStatus, 3000); // Poll every 3s
+    // Only poll if we aren't already terminal locally
+    if (session?.status !== 'COMPLETED' && session?.status !== 'FAILED') {
+        interval = setInterval(fetchStatus, 3000); // Poll every 3s
+    }
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
-  }, [params]);
+  }, [params, session?.status]);
 
   const [processingMessage, setProcessingMessage] = useState("AI is Grading & Organizing...");
 
@@ -95,13 +99,21 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
   }, [session?.status]);
 
   // Derived Grading Progress
+  const totalGraded = session?.submissions?.filter((s: any) => s.status === 'GRADED').length || 0;
+  const flaggedCount = session?.submissions?.filter((s: any) => s.status === 'FLAGGED').length || 0;
+  const failedCount = session?.submissions?.filter((s: any) => s.status === 'FAILED').length || 0;
+  const totalCompleted = totalGraded + flaggedCount + failedCount;
+
+  const totalPending = (session?.submissions?.length || 0) - totalCompleted;
+
   const gradingProgress = session?.submissions?.length
-      ? (session.submissions.filter((s: any) => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status)).length / session.submissions.length) * 100
+      ? (totalCompleted / session.submissions.length) * 100
       : 0;
 
-  const isGradingComplete = session?.submissions?.length
+  // If the backend has marked it as COMPLETED, it's complete regardless of local calculation.
+  const isGradingComplete = session?.status === 'COMPLETED' || (session?.submissions?.length
       ? session.submissions.every((s: any) => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status))
-      : false;
+      : session?.status === 'READY'); // Empty but READY means complete
 
   const handleSyncToClass = async () => {
     // Ideally this opens a modal to select a class.
@@ -164,6 +176,16 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
         <div className="flex gap-2">
            {isGradingComplete && session.status !== 'FAILED' && (
                <>
+                   {flaggedCount > 0 && (
+                       <Button
+                           variant="outline"
+                           onClick={() => router.push(`/dashboard/cloud-marking/${session.id}/review`)}
+                           className="border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                       >
+                           <AlertTriangle className="mr-2 h-4 w-4" />
+                           Stratified Review ({flaggedCount})
+                       </Button>
+                   )}
                    <Button variant="outline" onClick={() => router.push('/dashboard/cloud-marking')}>
                         Cancel
                    </Button>
