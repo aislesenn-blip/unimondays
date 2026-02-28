@@ -1,7 +1,7 @@
 import { prisma } from './prisma';
 import { Job } from '@prisma/client';
 
-export type JobType = 'OCR_SPLIT' | 'AI_GRADE' | 'EXPORT_ZIP';
+export type JobType = 'OCR_SPLIT' | 'AI_GRADE' | 'EXPORT_ZIP' | 'AI_GRADE_SUBMISSION' | 'AI_GRADE_CHUNK' | 'AI_GRADE_AGGREGATE';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 export interface JobPayload {

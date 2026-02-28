@@ -1,10 +1,12 @@
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { readFile } from '@/lib/storage';
+import { readFile, saveBuffer } from '@/lib/storage';
 import { ocrDocument } from '@/lib/ai/gemini';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 import sharp from 'sharp';
+import { PDFDocument } from 'pdf-lib';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function handleAiGrade(job: Job) {
   let data: any;
@@ -41,23 +43,101 @@ export async function handleAiGrade(job: Job) {
     throw new Error(`WorkSession not found for submission ${submissionId}.`);
   }
 
-  console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}`);
+  console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}, Job Type: ${job.type}`);
+
+  if (job.type === 'AI_GRADE_SUBMISSION') {
+      // --- FAN-OUT: PDF Chunking ---
+      if (!submission.filePath) throw new Error("No file path for submission.");
+
+      const buffer = await readFile(submission.filePath, 'exam_pdfs');
+      const isPdf = submission.filePath.toLowerCase().endsWith('.pdf') ||
+                    (buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46);
+
+      let needsChunking = false;
+      let pageCount = 1;
+      let srcDoc: PDFDocument | null = null;
+
+      if (isPdf) {
+          srcDoc = await PDFDocument.load(buffer);
+          pageCount = srcDoc.getPageCount();
+          if (pageCount > 5) {
+              needsChunking = true;
+          }
+      }
+
+      if (needsChunking && srcDoc) {
+          console.log(`[FAN_OUT] Submission ${submissionId} has ${pageCount} pages. Chunking...`);
+          const CHUNK_SIZE = 5;
+          const chunks: { path: string, pageCount: number }[] = [];
+
+          for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
+              const end = Math.min(start + CHUNK_SIZE, pageCount);
+              const newDoc = await PDFDocument.create();
+              const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
+              const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
+              copiedPages.forEach(page => newDoc.addPage(page));
+              const chunkBytes = await newDoc.save();
+              const sliceBuffer = Buffer.from(chunkBytes);
+
+              const uniqueSuffix = uuidv4().substring(0, 8);
+              const fileName = `chunk_${submission.id}_${start}_${end}_${uniqueSuffix}.pdf`;
+
+              const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
+              chunks.push({ path: slicePath, pageCount: end - start });
+          }
+
+          console.log(`[FAN_OUT] Created ${chunks.length} chunks. Enqueueing AI_GRADE_CHUNK jobs...`);
+
+          await Promise.all(chunks.map(async (chunk, index) => {
+              await prisma.job.create({
+                  data: {
+                      type: 'AI_GRADE_CHUNK',
+                      payload: JSON.stringify({
+                          submissionId: submission.id,
+                          chunkPath: chunk.path,
+                          chunkIndex: index,
+                          totalChunks: chunks.length
+                      }),
+                      status: 'PENDING'
+                  }
+              });
+          }));
+
+          await prisma.submission.update({
+              where: { id: submissionId },
+              data: { status: 'PROCESSING' }
+          });
+
+          return { success: true, message: `Fan-out complete. Enqueued ${chunks.length} chunks.` };
+      }
+      // If <= 5 pages, fall through to normal grading logic (atomic)
+  }
 
   try {
       // PARALLEL TASK 1: Submission OCR (Return buffer for visual analysis)
       const submissionOcrTask = async (): Promise<{ text: string, buffer: Buffer, mimeType: string }> => {
-          if (!submission.filePath) throw new Error("No file path and no OCR text for submission.");
+          let targetPath = submission.filePath;
+          let ocrText = submission.ocrText;
 
-          console.log(`[SUPABASE_FETCH] Submission File: ${submission.filePath}`);
-          const buffer = await readFile(submission.filePath, 'exam_pdfs');
+          if (job.type === 'AI_GRADE_CHUNK') {
+              const { chunkPath } = data;
+              if (!chunkPath) throw new Error("No chunkPath provided for AI_GRADE_CHUNK.");
+              targetPath = chunkPath;
+              ocrText = null; // Do not use the full submission's cached OCR for a chunk
+          }
 
-          const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
-                           submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+          if (!targetPath) throw new Error("No file path and no OCR text for submission.");
+
+          console.log(`[SUPABASE_FETCH] Target File: ${targetPath}`);
+          const buffer = await readFile(targetPath, 'exam_pdfs');
+
+          const mimeType = targetPath.toLowerCase().endsWith('.png') ? 'image/png' :
+                           targetPath.toLowerCase().endsWith('.jpg') || targetPath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
                            'application/pdf';
 
-          if (submission.ocrText) {
-              console.log(`[OCR_SKIP] Submission already OCR'd. Length: ${submission.ocrText.length}`);
-              return { text: submission.ocrText, buffer, mimeType };
+          if (ocrText) {
+              console.log(`[OCR_SKIP] Submission already OCR'd. Length: ${ocrText.length}`);
+              return { text: ocrText, buffer, mimeType };
           }
 
           // Deep Audit Fix: Vision Pre-processing (Payload Integrity)
@@ -85,10 +165,12 @@ export async function handleAiGrade(job: Job) {
               console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
 
               // Save immediately
-              await prisma.submission.update({
-                  where: { id: submissionId },
-                  data: { ocrText: text, status: 'PROCESSING' }
-              });
+              if (job.type !== 'AI_GRADE_CHUNK') {
+                  await prisma.submission.update({
+                      where: { id: submissionId },
+                      data: { ocrText: text, status: 'PROCESSING' }
+                  });
+              }
               return { text, buffer: processedBuffer, mimeType };
           } catch (ocrError: any) {
               console.error("[GRADING FATAL ERROR]: OCR Processing Failed", ocrError);
@@ -147,11 +229,19 @@ export async function handleAiGrade(job: Job) {
       let questionPaperText: string | undefined;
 
       try {
-          [submissionData, rubricContent, questionPaperText] = await Promise.all([
-              submissionOcrTask(),
-              fetchStandardizedRubricTask(),
-              questionPaperOcrTask()
-          ]);
+          if (job.type === 'AI_GRADE_AGGREGATE') {
+              [rubricContent, questionPaperText] = await Promise.all([
+                  fetchStandardizedRubricTask(),
+                  questionPaperOcrTask()
+              ]);
+              submissionData = { text: "AGGREGATED_JOB", buffer: Buffer.from([]), mimeType: "application/pdf" };
+          } else {
+              [submissionData, rubricContent, questionPaperText] = await Promise.all([
+                  submissionOcrTask(),
+                  fetchStandardizedRubricTask(),
+                  questionPaperOcrTask()
+              ]);
+          }
       } catch (e: any) {
           console.error("[GRADING FATAL ERROR]: Prerequisite Check Failed", e);
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
@@ -204,18 +294,124 @@ Student Identifier: ${studentId}.
 
       let result: GradingResult;
 
-      // Simulator Check
-      if (!process.env.DEEPSEEK_API_KEY) {
-          console.log(`[Simulator] Using DeepSeek Simulator`);
-          const sim = await simulateDeepSeekCall(ocrText);
-          if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
+      if (job.type === 'AI_GRADE_AGGREGATE') {
+          console.log(`[FAN_IN] Aggregating results for ${submissionId}...`);
 
-          // We won't maintain the simulator in Phase 2 for brevity, just throw or bypass
-          throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
+          const chunkJobs = await prisma.job.findMany({
+              where: {
+                  type: 'AI_GRADE_CHUNK',
+                  payload: { contains: `"submissionId":"${submissionId}"` },
+                  status: 'COMPLETED'
+              }
+          });
+
+          if (chunkJobs.length === 0) {
+              throw new Error("No completed chunks found for aggregation.");
+          }
+
+          const mergedResults: Record<string, any> = {};
+          let aggregatedStudentRemarks = "";
+          let aggregatedTeacherRemarks = "";
+          let detectedIdentity: string | null = null;
+
+          for (const chunkJob of chunkJobs) {
+              if (!chunkJob.result) continue;
+              let chunkOutput;
+              try {
+                  chunkOutput = JSON.parse(chunkJob.result);
+              } catch (e) {
+                  console.warn("Failed to parse chunk job result", e);
+                  continue;
+              }
+
+              if (!chunkOutput.result) continue;
+              const chunkGradingResult = chunkOutput.result;
+
+              if (chunkGradingResult.detectedIdentity && !detectedIdentity) {
+                  detectedIdentity = chunkGradingResult.detectedIdentity;
+              }
+
+              if (chunkGradingResult.studentRemarks) {
+                  aggregatedStudentRemarks += chunkGradingResult.studentRemarks + " ";
+              }
+              if (chunkGradingResult.teacherRemarks) {
+                  aggregatedTeacherRemarks += chunkGradingResult.teacherRemarks + " ";
+              }
+
+              for (const qRes of chunkGradingResult.results || []) {
+                  const qId = qRes.question_id;
+                  if (!mergedResults[qId]) {
+                      mergedResults[qId] = {
+                          question_id: qId,
+                          status: qRes.status,
+                          concept_results: [...(qRes.concept_results || [])],
+                          justification: qRes.justification || "",
+                          review_flag: !!qRes.review_flag,
+                          confidence: qRes.confidence || 1.0
+                      };
+                  } else {
+                      // Accumulate concept results
+                      mergedResults[qId].concept_results.push(...(qRes.concept_results || []));
+                      if (qRes.justification) {
+                          mergedResults[qId].justification += "\n" + qRes.justification;
+                      }
+                      mergedResults[qId].review_flag = mergedResults[qId].review_flag || !!qRes.review_flag;
+                      // average confidence
+                      mergedResults[qId].confidence = (mergedResults[qId].confidence + (qRes.confidence || 1.0)) / 2;
+                  }
+              }
+          }
+
+          result = {
+              exam_id: submission.workSessionId,
+              results: Object.values(mergedResults),
+              detectedIdentity: detectedIdentity,
+              studentRemarks: aggregatedStudentRemarks.trim(),
+              teacherRemarks: aggregatedTeacherRemarks.trim()
+          };
+
+          console.log(`[FAN_IN] Aggregation complete. Passing to Deterministic Math Engine.`);
+
       } else {
-          // Pass image buffer for multimodal grading
-          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
-          console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
+          // Simulator Check
+          if (!process.env.DEEPSEEK_API_KEY) {
+              console.log(`[Simulator] Using DeepSeek Simulator`);
+              const sim = await simulateDeepSeekCall(ocrText);
+              if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
+
+              // We won't maintain the simulator in Phase 2 for brevity, just throw or bypass
+              throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
+          } else {
+              // Pass image buffer for multimodal grading
+              result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
+              console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
+          }
+      }
+
+      if (job.type === 'AI_GRADE_CHUNK') {
+          const { totalChunks } = data;
+
+          const completedChunks = await prisma.job.count({
+              where: {
+                  type: 'AI_GRADE_CHUNK',
+                  payload: { contains: `"submissionId":"${submissionId}"` },
+                  status: 'COMPLETED'
+              }
+          });
+
+          // +1 because THIS job is currently PROCESSING and will be COMPLETED right after returning
+          if (completedChunks + 1 === totalChunks) {
+              console.log(`[FAN_IN] All ${totalChunks} chunks completed for ${submissionId}. Enqueueing AI_GRADE_AGGREGATE...`);
+              await prisma.job.create({
+                  data: {
+                      type: 'AI_GRADE_AGGREGATE',
+                      payload: JSON.stringify({ submissionId }),
+                      status: 'PENDING'
+                  }
+              });
+          }
+
+          return { success: true, result }; // will be saved into job.result
       }
 
       // --- DETERMINISTIC MATH ENGINE ---

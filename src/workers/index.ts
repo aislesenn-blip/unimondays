@@ -12,6 +12,9 @@ type JobHandler = (job: Job) => Promise<any>;
 const handlers: Record<string, JobHandler> = {
   'OCR_SPLIT': handleOcrSplit,
   'AI_GRADE': handleAiGrade,
+  'AI_GRADE_SUBMISSION': handleAiGrade,
+  'AI_GRADE_CHUNK': handleAiGrade,
+  'AI_GRADE_AGGREGATE': handleAiGrade,
   'EXPORT_ZIP': handleExportZip
 };
 
