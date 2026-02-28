@@ -68,6 +68,23 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('4. Deterministic Base');
   });
 
+  it('should include the 3 UAT Hard Protocols (Anti-Skip, Partial Mark, Absolute Allocation)', () => {
+    const config: GradeConfig = { strictness: 1.0 };
+    const prompt = buildSystemPrompt(config, 100);
+
+    // Protocol 1
+    expect(prompt).toContain('>>> PROTOCOL 1: THE ANTI-SKIP & MATH RECOGNITION LOCK <<<');
+    expect(prompt).toContain('Actively scan for numbers, operators (+, -, =, x), scribbles, and multi-line working.');
+
+    // Protocol 2
+    expect(prompt).toContain('>>> PROTOCOL 2: THE "ACTION VERB" PARTIAL MARK RULE <<<');
+    expect(prompt).toContain('If a question asks the student to "Describe", "Explain", or "Elaborate", and the student only "Mentions"');
+
+    // Protocol 3
+    expect(prompt).toContain('>>> PROTOCOL 3: ABSOLUTE MARKS ALLOCATION SUPREMACY <<<');
+    expect(prompt).toContain('You cannot exceed the maximum marks (max_marks) allocated for any question or sub-question.');
+  });
+
   it('should preserve critical system protocols', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
