@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { CreateWorkSessionSheet } from "@/components/dashboard/CreateWorkSessionSheet";
+import { resolveIdentity, upgradeIdentity } from "@/lib/edtech/identity-resolver";
 import { CAOverview } from "@/components/dashboard/CAOverview";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -49,17 +50,25 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
 
   const studentMap = new Map();
   submissions.forEach(sub => {
-    const key = sub.userId || sub.studentRegNo || sub.studentName || 'Unknown';
+    const identity = resolveIdentity(sub);
+    const key = identity.key;
+
     if (!studentMap.has(key)) {
         studentMap.set(key, {
             id: key,
-            name: sub.user?.fullName || sub.studentName || sub.studentRegNo || 'Unknown',
+            name: identity.primaryName,
+            primaryName: identity.primaryName, // Map for upgrade helper
+            secondaryInfo: identity.secondaryInfo, // Map for upgrade helper
             totalScore: 0,
             maxScore: 0,
             submissionCount: 0
         });
     }
+
     const student = studentMap.get(key);
+    upgradeIdentity(student, identity);
+    student.name = student.primaryName; // Commit upgrade
+
     if (sub.score) {
         student.totalScore += sub.score.totalMarks;
         student.maxScore += (sub.workSession.totalMarks || 100);
