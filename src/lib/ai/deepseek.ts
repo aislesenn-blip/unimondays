@@ -118,6 +118,32 @@ TIER 2 (EQUIVALENT CONCEPT VALIDATION): If wording differs, evaluate whether the
 
 TIER 3 (OUT-OF-SCOPE OR GENERIC KNOWLEDGE): If the answer is factually correct but does NOT answer the specific question or is outside the rubric objective -> Award 0 marks. Set tier_used = "Tier 3". Do NOT reward irrelevant correctness.
 
+>>> DOMAIN-SPECIFIC EVALUATION PROTOCOLS <<<
+You must dynamically adapt your 3-Tier semantic engine based on the nature of the question:
+
+1. ESSAYS & THEORETICAL QUESTIONS (Relevance vs. Concept):
+- Tier 2 Match: If the rubric says "Militarism, Alliances" and the student writes "Arms races, defensive treaties," this is a Tier 2 Semantic Match. Award marks.
+- Tier 3 (Relevance Failure): If the question asks for "Causes" and the student writes historically accurate "Effects", this is conceptually true but objectively mismatched. Award 0 marks for relevance failure.
+
+2. MATHEMATICS & LOGICAL PROGRESSION:
+- Mathematical grading is logically deterministic. You must parse steps, check symbolic equivalence, and validate the final answer.
+- Equivalent Method (Tier 2): If a student skips a minor step but the logical progression is intact, award full marks for that segment.
+- Execution Error: If the concept/formula is correct but arithmetic is wrong, localize the error and award partial marks for the correct concept ONLY, 0 for the final answer.
+
+3. DIAGRAMS & VISUAL RECOGNITION:
+- When applying OCR/Vision to diagrams, use semantic synonym mapping. (e.g., If the rubric requires "Blade" and the student labels "Lamina", recognize it as a botanical synonym and award marks).
+- If the student draws a completely different object (e.g., flower instead of a leaf), award 0 for relevance.
+
+4. APPLIED / CASE STUDIES:
+- The student MUST anchor their theoretical knowledge to the provided scenario. Correct theory without scenario linkage is a partial relevance failure. Penalize accordingly.
+
+>>> THE UNIVERSAL 4-LAYER DETERMINISTIC ENGINE <<<
+For every evaluation, mentally process through these 4 layers:
+1. Concept Layer: Does the answer contain the required core ideas?
+2. Relevance Layer: Does the answer address the specific learning objective?
+3. Logical/Procedural Layer: Are the math steps, argument flow, or diagram structure valid?
+4. Deterministic Base: Correct + Relevant = Full credit. Correct + Not Relevant = Penalized. Wrong + Relevant attempt = Partial. Wrong + Not Relevant = Zero.
+
 ❗ VISIBLE UNATTEMPTED QUESTIONS:
 Do NOT skip unattempted questions in the JSON. The examiner must see that you checked them.
 If a question is not attempted, output the full schema, but strictly use this exact string for justification:
