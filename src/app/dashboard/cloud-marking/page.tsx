@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   CloudLightning,
   FileText,
@@ -49,6 +49,35 @@ export default function CloudMarkingPage() {
     incomplete: "Grade present work",
     custom: ""
   }); // Locked to standard defaults
+
+  // Load from Draft
+  useEffect(() => {
+    const savedDraft = localStorage.getItem("cloudMarkingDraft");
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        if (draft.sessionTitle) setSessionTitle(draft.sessionTitle);
+        if (draft.cloudLink) setCloudLink(draft.cloudLink);
+        if (draft.totalMarks) setTotalMarks(draft.totalMarks);
+        if (draft.strictness) setStrictness(draft.strictness);
+      } catch (e) {
+        console.error("Failed to parse draft", e);
+      }
+    }
+  }, []);
+
+  // Save to Draft
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem("cloudMarkingDraft", JSON.stringify({
+        sessionTitle,
+        cloudLink,
+        totalMarks,
+        strictness
+      }));
+    }, 500); // Debounce save
+    return () => clearTimeout(timeoutId);
+  }, [sessionTitle, cloudLink, totalMarks, strictness]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: "markingScheme" | "questionPaperUrl") => {
     const file = e.target.files?.[0];
@@ -110,6 +139,7 @@ export default function CloudMarkingPage() {
       if (!res.ok) throw new Error(data.error || "Failed to start session");
 
       toast.success("Cloud Marking Session Started!");
+      localStorage.removeItem("cloudMarkingDraft");
       router.push(`/dashboard/cloud-marking/${data.id}`);
 
     } catch (error: any) {
@@ -134,7 +164,7 @@ export default function CloudMarkingPage() {
       </div>
 
       {/* MANDATE 2: TUTORIAL */}
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-100 dark:border-blue-900">
+      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-100 dark:border-blue-900 shadow-sm">
         <CardHeader>
           <CardTitle className="text-xl flex items-center gap-2 text-blue-800 dark:text-blue-300">
             <CheckCircle2 className="h-5 w-5" /> How Cloud Marking Works
@@ -142,29 +172,29 @@ export default function CloudMarkingPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 md:grid-cols-4">
-            <div className="space-y-2 text-center">
-              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm flex items-center justify-center text-blue-600 font-bold border border-blue-100">1</div>
+            <div className="space-y-2 text-center group cursor-default">
+              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">1</div>
               <h3 className="font-semibold text-sm">Scan</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Scan all student exams into a single large PDF or folder using your department scanner.
               </p>
             </div>
-            <div className="space-y-2 text-center">
-              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm flex items-center justify-center text-blue-600 font-bold border border-blue-100">2</div>
+            <div className="space-y-2 text-center group cursor-default">
+              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">2</div>
               <h3 className="font-semibold text-sm">Upload</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Upload files to Google Drive, OneDrive, or Dropbox.
               </p>
             </div>
-            <div className="space-y-2 text-center">
-              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm flex items-center justify-center text-blue-600 font-bold border border-blue-100">3</div>
+            <div className="space-y-2 text-center group cursor-default">
+              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">3</div>
               <h3 className="font-semibold text-sm">Generate Link</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Set permission to "Anyone with the link can view" and copy the link.
               </p>
             </div>
-            <div className="space-y-2 text-center">
-              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm flex items-center justify-center text-blue-600 font-bold border border-blue-100">4</div>
+            <div className="space-y-2 text-center group cursor-default">
+              <div className="h-10 w-10 mx-auto bg-white dark:bg-card rounded-full shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center text-blue-600 font-bold border border-blue-100">4</div>
               <h3 className="font-semibold text-sm">Process</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Paste the link below. The AI will fetch, slice, grade, and organize submissions.
@@ -174,7 +204,7 @@ export default function CloudMarkingPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-8 md:grid-cols-3">
+      <div className="grid gap-8 md:grid-cols-3 relative items-start">
         {/* MANDATE 3: CONFIGURATION (Left Col) */}
         <div className="md:col-span-2 space-y-6">
             <Card>
@@ -270,7 +300,7 @@ export default function CloudMarkingPage() {
                         </div>
 
                         {/* Deterministic AI Transparency (The Wow Factor) */}
-                        <div className="space-y-4 border p-5 rounded-md bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                        <div className="space-y-4 border p-5 rounded-md bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
                             <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
                                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
                                 <h3 className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100 uppercase">
@@ -305,8 +335,8 @@ export default function CloudMarkingPage() {
         </div>
 
         {/* MANDATE 2: INPUT (Right Col) */}
-        <div className="space-y-6">
-            <Card className="h-full border-primary/20 shadow-lg shadow-primary/5">
+        <div className="space-y-6 sticky top-6">
+            <Card className="border-primary/20 shadow-lg shadow-primary/5">
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                         <UploadCloud className="h-5 w-5 text-primary" /> Start Processing
