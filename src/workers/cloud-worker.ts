@@ -169,9 +169,9 @@ export async function handleCloudMarking(job: Job) {
                         await new Promise(resolve => setTimeout(resolve, 2000));
                     }
                 }
-            } catch (structureError) {
-                console.warn(`[CLOUD_WORKER] Smart Collation failed, falling back to default page-by-page slicing.`);
-                currentSplits = [];
+            } catch (structureError: any) {
+                console.error(`[CLOUD_WORKER FATAL ERROR] Smart Collation failed: ${structureError.message}. Aborting job.`, structureError);
+                throw structureError;
             }
 
             // Deep Audit Fix: Validate contiguous page boundaries mathematically.
@@ -391,7 +391,7 @@ export async function handleCloudMarking(job: Job) {
         return { continuation: false };
 
     } catch (e: any) {
-        console.error("[CLOUD_WORKER] Critical Failure", e);
+        console.error(`[CLOUD_WORKER FATAL ERROR] Bulk Session ${bulkSession.id} failed:`, e);
 
         if (createdSlicePaths.length > 0) {
             Promise.all(createdSlicePaths.map(path => deleteFile(path))).catch(err =>
@@ -399,17 +399,22 @@ export async function handleCloudMarking(job: Job) {
             );
         }
 
-        const currentStatus = await prisma.bulkSession.findUnique({
-            where: { id: bulkSession.id },
-            select: { status: true }
-        });
-
-        if (currentStatus?.status !== 'FAILED') {
-             await prisma.bulkSession.update({
+        try {
+            const currentStatus = await prisma.bulkSession.findUnique({
                 where: { id: bulkSession.id },
-                data: { status: 'FAILED', errorMessage: e.message || "Unknown error during processing" }
+                select: { status: true }
             });
+
+            if (currentStatus?.status !== 'FAILED') {
+                 await prisma.bulkSession.update({
+                    where: { id: bulkSession.id },
+                    data: { status: 'FAILED', errorMessage: e.message || "Unknown error during processing" }
+                });
+            }
+        } catch (dbError) {
+             console.error(`[CLOUD_WORKER FATAL ERROR] Failed to update BulkSession status to FAILED:`, dbError);
         }
+
         throw e;
     }
 }

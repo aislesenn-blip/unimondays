@@ -98,10 +98,10 @@ export async function POST(req: NextRequest) {
             }
 
         } catch (error: any) {
-            console.error(`[QUEUE] Job ${job.id} Failed:`, error);
+            console.error(`[QUEUE] Job ${job.id} Failed with Error:`, error.stack || error);
 
             // RATE LIMIT ARMOR (Handling 429s/503s)
-            const isRateLimit = error.message?.includes('RATE_LIMIT_HIT') || error.message?.includes('429');
+            const isRateLimit = error.message?.includes('RATE_LIMIT_HIT') || error.message?.includes('429') || error.message?.includes('503');
 
             if (isRateLimit) {
                 console.warn(`[QUEUE] Rate Limit Hit on Job ${job.id}. Pausing batch.`);
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
                     where: { id: job.id },
                     data: {
                         status: 'PENDING',
-                        error: error.message,
+                        error: `RATE LIMIT: ${error.message}`,
                         // Do NOT increment retry count for rate limits, or increment responsibly
                         // For now, we won't increment to prevent dead-lettering due to API congestion
                     }
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
                 where: { id: job.id },
                 data: {
                     status: 'FAILED',
-                    error: error.message,
+                    error: error.message || "Unknown error during job execution",
                     retryCount: { increment: 1 }
                 }
             });
