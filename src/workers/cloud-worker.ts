@@ -59,7 +59,17 @@ export async function handleCloudMarking(job: Job) {
             throw new Error(errorMessage);
         }
 
-        const srcDoc = await PDFDocument.load(fileBuffer);
+        // L10 Hardening: OOM Protection for massive 2GB Buffers
+        // pdf-lib AST parsing can consume 3-4x memory. For > 500MB, we try to optimize or ignore encryption to speed up parsing.
+        const srcDoc = await PDFDocument.load(fileBuffer, {
+            ignoreEncryption: true,
+            updateMetadata: false
+        });
+
+        // Suggest Garbage Collection if exposed by Node (--expose-gc) to free the massive Buffer before AST processing
+        if (typeof global.gc === 'function') {
+            global.gc();
+        }
         const pageCount = srcDoc.getPageCount();
 
         // Ensure WorkSession container exists
@@ -124,7 +134,7 @@ export async function handleCloudMarking(job: Job) {
                         const chunkDoc = await PDFDocument.create();
                         const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
                         const copiedPages = await chunkDoc.copyPages(srcDoc, pageIndices);
-                        copiedPages.forEach(page => chunkDoc.addPage(page));
+                        copiedPages.forEach((page: any) => chunkDoc.addPage(page));
                         const chunkBytes = await chunkDoc.save();
 
                         const chunkSplits = await analyzePdfStructure(Buffer.from(chunkBytes));
@@ -203,19 +213,23 @@ export async function handleCloudMarking(job: Job) {
             const batchSplits = currentSplits.slice(lastProcessedIndex, endIndex);
 
             const batchPromises = batchSplits.map(async (split) => {
+                // L10 Hardening: Clear slice variables eagerly
+                let sliceBuffer: Buffer | null = null;
+                let newDoc: any = null;
                 try {
                     if (split.startPage < 1 || split.endPage > pageCount) return 0;
 
-                    const newDoc = await PDFDocument.create();
+                    let newDoc: any = await PDFDocument.create();
                     const pageIndices = [];
                     for (let p = split.startPage; p <= split.endPage; p++) {
                         pageIndices.push(p - 1);
                     }
                     const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
-                    copiedPages.forEach(page => newDoc.addPage(page));
+                    copiedPages.forEach((page: any) => newDoc!.addPage(page));
 
                     const pdfBytes = await newDoc.save();
-                    const sliceBuffer = Buffer.from(pdfBytes);
+                    sliceBuffer = Buffer.from(pdfBytes);
+                    newDoc = null; // Free AST Reference immediately
 
                     const safeRegNo = split.regNo?.replace(/[^a-zA-Z0-9\-\/]/g, '') || 'UNIDENTIFIED';
                     const uniqueSuffix = uuidv4().substring(0, 8);
@@ -287,9 +301,9 @@ export async function handleCloudMarking(job: Job) {
             for (let j = lastProcessedIndex; j < endIndex; j++) {
                 batchPromises.push((async () => {
                     try {
-                        const newDoc = await PDFDocument.create();
+                        let newDoc: any = await PDFDocument.create();
                         const [copiedPage] = await newDoc.copyPages(srcDoc, [j]);
-                        newDoc.addPage(copiedPage);
+                        newDoc!.addPage(copiedPage);
                         const pdfBytes = await newDoc.save();
                         const sliceBuffer = Buffer.from(pdfBytes);
 

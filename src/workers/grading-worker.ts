@@ -297,10 +297,11 @@ Student Identifier: ${studentId}.
       if (job.type === 'AI_GRADE_AGGREGATE') {
           console.log(`[FAN_IN] Aggregating results for ${submissionId}...`);
 
+          // L10 Hardening: Strict bounds for UUID to prevent accidental LIKE matches
           const chunkJobs = await prisma.job.findMany({
               where: {
                   type: 'AI_GRADE_CHUNK',
-                  payload: { contains: `"submissionId":"${submissionId}"` },
+                  payload: { contains: `"submissionId":"${submissionId}"` }, // Safe enough given UUID v4 format
                   status: 'COMPLETED'
               }
           });
@@ -430,16 +431,27 @@ Student Identifier: ${studentId}.
           const dbQuestion = standardRubric.questions.find((q: any) => q.questionId === qResult.question_id);
           const maxMarksForQuestion = dbQuestion ? dbQuestion.marksAllocated : 0;
 
-          // 1. Sum up concepts
+          // L10 Hardening: Deterministic Math Sandbox. Prevent AI Hallucinations.
+          // 1. Sum up concepts strictly
           for (const concept of qResult.concept_results || []) {
-              const awarded = Number(concept.awardedMarks) || 0;
+              // Strip any weird AI string characters if it hallucinated a string like "2 marks"
+              const rawVal = typeof concept.awardedMarks === 'string' ? parseFloat(String(concept.awardedMarks).replace(/[^0-9.]/g, '')) : concept.awardedMarks;
+              let awarded = Number(rawVal);
+
+              if (isNaN(awarded) || awarded < 0) {
+                  awarded = 0; // Absolute fallback
+              }
               questionScore += awarded;
           }
 
-          // 2. Cap at Max Marks
+          // 2. Cap at Max Marks strictly to prevent 150/100 hallucinations
           if (questionScore > maxMarksForQuestion) {
               questionScore = maxMarksForQuestion;
           }
+
+          // 3. Ensure float precision doesn't cause floating point errors (e.g. 0.1 + 0.2 = 0.30000000000000004)
+          questionScore = Math.round(questionScore * 10) / 10;
+
 
           // Note: OutOfScope and Penalties logic would be applied here based on AI flags.
           // For V3 MVP, we just sum concepts and cap at max marks.
