@@ -7,7 +7,8 @@ import {
   LogOut,
   Menu,
   ChevronLeft,
-  CloudLightning
+  CloudLightning,
+  FileCheck2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
@@ -18,6 +19,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 const NAV_ITEMS = [
   { name: "My Classes", href: "/dashboard", icon: Home },
   { name: "Cloud Marking", href: "/dashboard/cloud-marking", icon: CloudLightning }, // Mandate 1: Navigation
+  { name: "Rubric Approval", href: "/dashboard/rubrics/standardize", icon: FileCheck2 },
 ];
 
 interface DashboardSidebarProps {
