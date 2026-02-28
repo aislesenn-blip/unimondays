@@ -27,6 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         rubricUrl,
         markingScheme,
         goldStandardUrl,
+        questionPaperUrl,
         instructions,
         calibration,
         strictness,
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         rubricUrl: rubricUrl || null,
         markingScheme: markingScheme || '',
         goldStandardUrl: goldStandardUrl || null,
+        questionPaperUrl: questionPaperUrl || null,
         instructions: instructions || '',
         calibration: calibration || null, // Stored as JSON string
         strictness: strictness || 'MODERATE',

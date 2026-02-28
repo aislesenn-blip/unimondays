@@ -69,6 +69,7 @@ model WorkSession {
   rubricUrl    String?   @map("rubric_url")
   markingScheme String?  @map("marking_scheme")
   goldStandardUrl String? @map("gold_standard_url")
+  questionPaperUrl String? @map("question_paper_url")
   instructions String?
   calibration  String?   // JSON string for 5-point calibration
   strictness   String?   // 'LENIENT', 'MODERATE', 'STRICT'
@@ -200,6 +201,7 @@ model BulkSession {
   // Configuration for the Bulk Job
   markingScheme   String?   @map("marking_scheme") // Text or URL
   goldStandardUrl String?   @map("gold_standard_url") // Uploaded PDF
+  questionPaperUrl String?  @map("question_paper_url") // Uploaded Blank Question Paper
   calibration     String?   // JSON string
   totalMarks      Int?      @default(100) @map("total_marks")
 
