@@ -122,6 +122,7 @@ export default function CloudMarkingPage() {
   const [totalMarks, setTotalMarks] = useState(100);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isStandardizing, setIsStandardizing] = useState(false);
 
   // Check for active session
   useEffect(() => {
@@ -144,6 +145,7 @@ export default function CloudMarkingPage() {
 
 
   // Calibration State
+  const [approvedRubricId, setApprovedRubricId] = useState<string | null>(null);
   const [strictness, setStrictness] = useState("MODERATE");
   const [calibration] = useState({
     methodology: "Standard",
@@ -162,9 +164,18 @@ export default function CloudMarkingPage() {
         if (draft.sessionTitle) setSessionTitle(draft.sessionTitle);
         if (draft.totalMarks) setTotalMarks(draft.totalMarks);
         if (draft.strictness) setStrictness(draft.strictness);
+        if (draft.cloudLink) setCloudLink(draft.cloudLink);
+        if (draft.markingSchemeUrl) setMarkingSchemeUrl(draft.markingSchemeUrl);
+        if (draft.questionPaperUrl) setQuestionPaperUrl(draft.questionPaperUrl);
       } catch (e) {
         console.error("Failed to parse draft", e);
       }
+    }
+
+    // Check if we just returned from standardizing a rubric
+    const rubricId = sessionStorage.getItem("approvedRubricId_cloud");
+    if (rubricId) {
+        setApprovedRubricId(rubricId);
     }
   }, []);
 
@@ -200,6 +211,39 @@ export default function CloudMarkingPage() {
       if (fieldName === "markingScheme") {
         setMarkingSchemeUrl(data.path);
         toast.success("Marking scheme uploaded");
+
+        // IMMEDIATE INTERCEPTION FUNNEL FOR CLOUD MARKING
+        setIsStandardizing(true);
+        try {
+          const stdRes = await fetch("/api/rubrics/standardize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: data.path })
+          });
+          const stdData = await stdRes.json();
+          if (!stdRes.ok) throw new Error(stdData.error || "Failed to standardize marking scheme");
+
+          sessionStorage.setItem("pendingStandardizedRubric", JSON.stringify(stdData));
+
+          // Instead of passing the payload and saving from the rubric page, we set the return URL
+          sessionStorage.setItem("rubricReturnUrl", "/dashboard/cloud-marking");
+          sessionStorage.setItem("rubricSessionKey", "approvedRubricId_cloud");
+
+          // Let the draft save handle the form state so we can resume
+          localStorage.setItem("cloudMarkingDraft", JSON.stringify({
+            sessionTitle,
+            totalMarks,
+            strictness,
+            cloudLink,
+            markingSchemeUrl: data.path,
+            questionPaperUrl
+          }));
+
+          router.push(`/dashboard/rubrics/standardize`);
+        } catch (error: any) {
+          toast.error("Standardization failed: " + error.message);
+          setIsStandardizing(false);
+        }
       } else if (fieldName === "questionPaperUrl") {
         setQuestionPaperUrl(data.path);
         toast.success("Question Paper uploaded");
@@ -220,39 +264,44 @@ export default function CloudMarkingPage() {
       return;
     }
 
+    if (!approvedRubricId) {
+      toast.error("Please upload and approve a Marking Scheme first.");
+      return;
+    }
+
     setLoading(true);
     try {
-      // Prioritize URL if uploaded, else text
-      const finalMarkingScheme = markingSchemeUrl || markingScheme;
-
-      // 1. Run Standardization First
-      const stdRes = await fetch("/api/rubrics/standardize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: finalMarkingScheme })
-      });
-      const stdData = await stdRes.json();
-      if (!stdRes.ok) throw new Error(stdData.error || "Failed to standardize marking scheme");
-
-      // Store the standardized rubric in session storage to pass to the next page
-      sessionStorage.setItem("pendingStandardizedRubric", JSON.stringify(stdData));
-
-      // Store session details so the final approval page can actually create the session
-      sessionStorage.setItem("pendingBulkSessionPayload", JSON.stringify({
+      const payload = {
           title: sessionTitle,
           cloudLink,
           totalMarks,
-          markingScheme: finalMarkingScheme, // Keep original
+          markingScheme: markingSchemeUrl || markingScheme,
           questionPaperUrl,
           strictness,
-          calibration
-      }));
+          calibration: {
+            methodology: "Standard",
+            grammar: "Ignore unless critical",
+            verbosity: "Concise",
+            incomplete: "Grade present work",
+            custom: "",
+            rubricId: approvedRubricId // Pass approved rubric ID directly
+          }
+      };
 
-      toast.success("Marking Scheme extracted!");
+      const startRes = await fetch("/api/cloud-marking/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+      });
+
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error(startData.error || "Failed to start Cloud Marking session");
+
+      toast.success("Cloud Marking session started!");
       localStorage.removeItem("cloudMarkingDraft");
+      sessionStorage.removeItem("approvedRubricId_cloud");
 
-      // 2. Redirect to Review & Approve Screen
-      router.push(`/dashboard/rubrics/standardize`);
+      router.push(`/dashboard/cloud-marking/${startData.id}`);
 
     } catch (error: unknown) {
       toast.error((error as Error).message);
@@ -268,7 +317,15 @@ export default function CloudMarkingPage() {
           <CloudLightning className="h-6 w-6" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Cloud Marking</h1>
+          {isStandardizing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center space-y-4 p-6 bg-card rounded-lg shadow-lg border">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-lg font-medium animate-pulse">AI is extracting and standardizing atomic concepts...</p>
+            </div>
+        </div>
+      )}
+        <h1 className="text-3xl font-bold tracking-tight">Cloud Marking</h1>
           <p className="text-muted-foreground">
             Bulk processing for large-scale exam grading.
           </p>
@@ -386,8 +443,15 @@ export default function CloudMarkingPage() {
                                     {uploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                                 </div>
                                 {markingSchemeUrl && (
-                                    <div className="text-xs text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-200">
-                                        <FileText className="w-3 h-3"/> Marking Scheme Uploaded
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-xs text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-200">
+                                            <FileText className="w-3 h-3"/> Marking Scheme Uploaded
+                                        </div>
+                                        {approvedRubricId && (
+                                            <div className="text-xs text-emerald-600 flex items-center gap-1 font-bold bg-emerald-50 p-2 rounded border border-emerald-200">
+                                                <CheckCircle2 className="w-4 h-4"/> Rubric Intercepted & Approved
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 <div className="text-xs text-muted-foreground text-center uppercase tracking-wider font-bold">OR</div>
@@ -452,7 +516,7 @@ export default function CloudMarkingPage() {
                                                                          <div className="space-y-2">
                             <Label>Bulk Exams PDF (Max 2GB)</Label>
                             <div
-                                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors flex flex-col items-center justify-center min-h-[160px] ${cloudLink ? 'bg-green-50/50 border-green-200' : 'hover:bg-slate-50 border-slate-300'}`}
+                                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors flex flex-col items-center justify-center min-h-[160px] ${cloudLink ? 'bg-green-50/50 border-green-200' : 'hover:bg-slate-50 border-slate-300'} ${!approvedRubricId ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDrop(e, "cloudLink")}
                             >
@@ -470,7 +534,9 @@ export default function CloudMarkingPage() {
                                             <UploadCloud className="h-6 w-6 text-slate-500" />
                                         </div>
                                         <p className="text-sm font-medium">Drag & drop your merged PDF here</p>
-                                        <p className="text-xs text-muted-foreground mt-1 mb-4">or click to browse files</p>
+                                        <p className="text-xs text-muted-foreground mt-1 mb-4">
+                                            {!approvedRubricId ? 'Please approve a Marking Scheme first' : 'or click to browse files'}
+                                        </p>
                                         <Input
                                             type="file"
                                             onChange={(e) => {
@@ -479,7 +545,7 @@ export default function CloudMarkingPage() {
                                                 }
                                             }}
                                             accept=".pdf"
-                                            disabled={uploading}
+                                            disabled={uploading || !approvedRubricId}
                                             className="hidden"
                                             id="tus-file-upload"
                                         />
@@ -512,7 +578,7 @@ export default function CloudMarkingPage() {
                          <Button
                             className="w-full h-12 text-lg font-semibold shadow-xl shadow-primary/20"
                             onClick={handleStartCloudMarking}
-                            disabled={loading || uploading}
+                            disabled={loading || uploading || !approvedRubricId || !cloudLink}
                          >
                             {loading ? (
                                 <>

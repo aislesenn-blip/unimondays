@@ -76,18 +76,35 @@ export default function StandardizeRubricPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Save failed");
 
-            // Store the approved rubric ID for the caller
-            const sessionKey = sessionStorage.getItem("rubricSessionKey") || "approvedRubricId";
-            sessionStorage.setItem(sessionKey, data.rubricId);
-            sessionStorage.removeItem("rubricSessionKey");
-            sessionStorage.removeItem("pendingStandardizedRubric");
+            // Retrieve pending session payload
+            const pendingBulkSession = sessionStorage.getItem("pendingBulkSessionPayload");
 
-            // Clean up legacy keys just in case
-            sessionStorage.removeItem("pendingBulkSessionPayload");
-            sessionStorage.removeItem("pendingNormalSessionPayload");
+            if (pendingBulkSession) {
+                // Finish Cloud Marking Workflow
+                const sessionPayload = JSON.parse(pendingBulkSession);
 
-            const returnUrl = sessionStorage.getItem("rubricReturnUrl") || "/dashboard";
-            router.push(returnUrl);
+                // Inject the newly created Standardized Rubric ID to link it to the session
+                sessionPayload.rubricId = data.rubricId;
+
+                // Now create the actual Bulk Session using the finalized rubric reference/data
+                const startRes = await fetch("/api/cloud-marking/start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(sessionPayload),
+                });
+
+                const startData = await startRes.json();
+                if (!startRes.ok) throw new Error(startData.error || "Failed to start Cloud Marking session");
+
+                sessionStorage.removeItem("pendingBulkSessionPayload");
+                sessionStorage.removeItem("pendingStandardizedRubric");
+
+                router.push(`/dashboard/cloud-marking/${startData.id}`);
+            } else {
+                // Fallback or Normal Marking Workflow
+                sessionStorage.removeItem("pendingStandardizedRubric");
+                router.push("/dashboard");
+            }
 
         } catch (err: any) {
              setError(err.message);
