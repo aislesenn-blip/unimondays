@@ -1,70 +1,11 @@
-import { Job } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
-import { saveBuffer, deleteFile } from '@/lib/storage';
-import { PDFDocument } from 'pdf-lib';
-import { analyzePdfStructure, PdfSplit } from '@/lib/ai/gemini';
-import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
 
-async function resolveGDriveLink(url: string): Promise<Buffer> {
-    const fileIdMatch = url.match(/[-\w]{25,}/);
-    if (!fileIdMatch) {
-        throw new Error("Could not extract Google Drive File ID. Please use a direct link.");
-    }
-    const fileId = fileIdMatch[0];
-    const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+const file = 'src/workers/cloud-worker.ts';
+let code = fs.readFileSync(file, 'utf8');
 
-    let res = await fetch(directUrl);
+// Replace handleCloudMarking with the new Resumable Architecture
 
-    // Check for "Virus Scan" warning (Google returns 200 OK with HTML)
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('text/html')) {
-        const html = await res.text();
-
-        // 1. Look for <a id="uc-download-link" href="...">
-        let confirmToken: string | null = null;
-
-        // Match the `confirm=` parameter precisely within an href, or look for input fields
-        const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
-
-        if (confirmMatch) {
-            confirmToken = confirmMatch[1];
-        } else {
-            // Alternative layout sometimes has a hidden input field
-            const inputMatch = html.match(/<input type="hidden" name="confirm" value="([^"]+)">/);
-            if (inputMatch) {
-                confirmToken = inputMatch[1];
-            }
-        }
-
-        if (confirmToken) {
-            const bypassUrl = `${directUrl}&confirm=${confirmToken}`;
-            res = await fetch(bypassUrl);
-
-            // If the bypass *also* returns HTML, Google completely blocked the file
-            if ((res.headers.get('content-type') || '').includes('text/html')) {
-                throw new Error("Google Drive blocked the download (Virus Scan Interstitial). Please use a direct Dropbox link or upload manually.");
-            }
-        } else {
-             // If we can't find a token but it's Drive HTML, fail gracefully
-             throw new Error("Google Drive blocked the download (Virus Scan). Please use a direct Dropbox link or upload manually.");
-        }
-    }
-
-    if (!res.ok) throw new Error(`Failed to fetch from Google Drive: ${res.statusText}`);
-    return Buffer.from(await res.arrayBuffer());
-}
-
-async function fetchFileFromLink(url: string): Promise<Buffer> {
-    if (url.includes('drive.google.com')) {
-        return resolveGDriveLink(url);
-    }
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch cloud file: ${res.statusText}`);
-    return Buffer.from(await res.arrayBuffer());
-}
-
-export async function handleCloudMarking(job: Job) {
+const newHandleCloudMarking = `export async function handleCloudMarking(job: Job) {
     let data: any;
     try {
        data = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
@@ -81,10 +22,10 @@ export async function handleCloudMarking(job: Job) {
     if (!bulkSession) throw new Error("Bulk Session not found");
 
     if (phase === "COLLATION") {
-        console.log(`[CLOUD_WORKER] Phase: COLLATION for Session: ${bulkSession.title}`);
+        console.log(\`[CLOUD_WORKER] Phase: COLLATION for Session: \${bulkSession.title}\`);
         await prisma.bulkSession.update({ where: { id: bulkSession.id }, data: { status: 'PROCESSING' } });
     } else {
-        console.log(`[CLOUD_WORKER] Phase: PROCESSING (Batch ${lastProcessedIndex}) for Session: ${bulkSession.title}`);
+        console.log(\`[CLOUD_WORKER] Phase: PROCESSING (Batch \${lastProcessedIndex}) for Session: \${bulkSession.title}\`);
     }
 
     const createdSlicePaths: string[] = [];
@@ -118,7 +59,7 @@ export async function handleCloudMarking(job: Job) {
             workSession = await prisma.workSession.create({
                 data: {
                     title: bulkSession.title,
-                    workCode: `BULK-${bulkSession.id.substring(0,6).toUpperCase()}`,
+                    workCode: \`BULK-\${bulkSession.id.substring(0,6).toUpperCase()}\`,
                     lecturerId: bulkSession.lecturerId,
                     type: "BULK",
                     status: "PUBLISHED",
@@ -170,7 +111,7 @@ export async function handleCloudMarking(job: Job) {
                     }
                 }
             } catch (structureError) {
-                console.warn(`[CLOUD_WORKER] Smart Collation failed, falling back to default page-by-page slicing.`);
+                console.warn(\`[CLOUD_WORKER] Smart Collation failed, falling back to default page-by-page slicing.\`);
                 currentSplits = [];
             }
 
@@ -248,9 +189,9 @@ export async function handleCloudMarking(job: Job) {
                     const pdfBytes = await newDoc.save();
                     const sliceBuffer = Buffer.from(pdfBytes);
 
-                    const safeRegNo = split.regNo?.replace(/[^a-zA-Z0-9\-\/]/g, '') || 'UNIDENTIFIED';
+                    const safeRegNo = split.regNo?.replace(/[^a-zA-Z0-9\\-\\/]/g, '') || 'UNIDENTIFIED';
                     const uniqueSuffix = uuidv4().substring(0, 8);
-                    const fileName = `bulk_${bulkSession.id}_${safeRegNo}_${uniqueSuffix}.pdf`;
+                    const fileName = \`bulk_\${bulkSession.id}_\${safeRegNo}_\${uniqueSuffix}.pdf\`;
 
                     const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
                     createdSlicePaths.push(slicePath);
@@ -277,7 +218,7 @@ export async function handleCloudMarking(job: Job) {
 
                     return pageIndices.length;
                 } catch (err) {
-                    console.error(`[CLOUD_WORKER] Failed to process split for ${split.regNo}`, err);
+                    console.error(\`[CLOUD_WORKER] Failed to process split for \${split.regNo}\`, err);
                     return 0;
                 }
             });
@@ -325,7 +266,7 @@ export async function handleCloudMarking(job: Job) {
                         const sliceBuffer = Buffer.from(pdfBytes);
 
                         const uniqueSuffix = uuidv4().substring(0, 8);
-                        const fileName = `bulk_${bulkSession.id}_p${j + 1}_${uniqueSuffix}.pdf`;
+                        const fileName = \`bulk_\${bulkSession.id}_p\${j + 1}_\${uniqueSuffix}.pdf\`;
 
                         const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
                         createdSlicePaths.push(slicePath);
@@ -351,7 +292,7 @@ export async function handleCloudMarking(job: Job) {
 
                         return true;
                     } catch (err) {
-                        console.error(`[CLOUD_WORKER] Failed to process page ${j + 1}`, err);
+                        console.error(\`[CLOUD_WORKER] Failed to process page \${j + 1}\`, err);
                         return false;
                     }
                 })());
@@ -387,7 +328,7 @@ export async function handleCloudMarking(job: Job) {
             data: { status: 'READY', processedFiles: currentProcessedCount }
         });
 
-        console.log(`[CLOUD_WORKER] Bulk Session Complete. ${currentProcessedCount}/${pageCount} pages processed.`);
+        console.log(\`[CLOUD_WORKER] Bulk Session Complete. \${currentProcessedCount}/\${pageCount} pages processed.\`);
         return { continuation: false };
 
     } catch (e: any) {
@@ -412,4 +353,14 @@ export async function handleCloudMarking(job: Job) {
         }
         throw e;
     }
+}
+`;
+
+const exportIndex = code.indexOf('export async function handleCloudMarking(job: Job) {');
+if (exportIndex !== -1) {
+    code = code.substring(0, exportIndex) + newHandleCloudMarking;
+    fs.writeFileSync(file, code);
+    console.log("Successfully replaced handleCloudMarking with the resumable version.");
+} else {
+    console.error("Could not find handleCloudMarking in the file.");
 }

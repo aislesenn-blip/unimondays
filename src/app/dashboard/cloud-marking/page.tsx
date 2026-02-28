@@ -40,6 +40,26 @@ export default function CloudMarkingPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // Check for active session
+  useEffect(() => {
+    const checkActiveSession = async () => {
+      try {
+        const res = await fetch("/api/cloud-marking/active");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.id) {
+            toast.info("Resuming active session...");
+            router.push(`/dashboard/cloud-marking/${data.id}`);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to check active session", e);
+      }
+    };
+    checkActiveSession();
+  }, [router]);
+
+
   // Calibration State
   const [strictness, setStrictness] = useState("MODERATE");
   const [calibration] = useState({
