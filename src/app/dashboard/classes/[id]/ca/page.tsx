@@ -46,7 +46,11 @@ export default async function CAPage({ params }: { params: Promise<{ id: string 
     // 3. AI Detected Identity
     // 4. Ghost Fallback (Submission ID) to prevent null-null merging
     const userId = sub.userId;
-    const regNo = sub.studentRegNo || sub.score?.detectedIdentity;
+    let regNo = sub.studentRegNo || sub.score?.detectedIdentity;
+
+    if (regNo === 'UNIDENTIFIED_IDENTITY' || regNo === 'UNIDENTIFIED') {
+      regNo = null;
+    }
 
     // Deep Audit Fix: Prevent 'null-null' collisions that wipe out the CA Matrix by using submission ID for fully anonymous rows
     const key = userId || regNo || `ghost-${sub.id}`;
