@@ -56,7 +56,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
 
           // Only stop main loader if session is technically "done" with the slicing/uploading phase.
           // Grading might still be happening in the background.
-          if (data.status === 'READY' || data.status === 'COMPLETED' || data.status === 'FAILED') {
+          if (data.status === 'READY' || data.status === 'COMPLETED' || data.status === 'FAILED' || data.status === 'FLAGGED') {
              setLoading(false);
           }
         }
@@ -142,9 +142,9 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{session.title}</h1>
           <div className="flex items-center gap-3 mt-2">
-             <Badge variant={session.status === 'READY' ? 'default' : session.status === 'FAILED' ? 'destructive' : 'secondary'}>
-                {session.status === 'PROCESSING' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                {session.status}
+             <Badge variant={(session.status === 'READY' || session.status === 'COMPLETED' || isGradingComplete) ? 'default' : session.status === 'FAILED' ? 'destructive' : 'secondary'}>
+                {(session.status === 'PROCESSING' || session.status === 'PENDING') && !isGradingComplete && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                {isGradingComplete && session.status !== 'FAILED' ? 'COMPLETED' : session.status}
              </Badge>
 
              {/* Slicing Progress */}
@@ -153,7 +153,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
              </span>
 
              {/* Grading Progress Indicator */}
-             {session.status === 'READY' && !isGradingComplete && (
+             {!isGradingComplete && session.status !== 'FAILED' && (
                  <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 flex items-center gap-1">
                      <Cpu className="h-3 w-3 animate-pulse" />
                      Grading: {Math.round(gradingProgress)}%
@@ -162,7 +162,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
           </div>
         </div>
         <div className="flex gap-2">
-           {session.status === 'READY' && (
+           {isGradingComplete && session.status !== 'FAILED' && (
                <>
                    <Button variant="outline" onClick={() => router.push('/dashboard/cloud-marking')}>
                         Cancel
@@ -198,7 +198,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
       )}
 
       {/* MANDATE 4: RECONCILIATION UI */}
-      {(session.status === 'PROCESSING' || session.status === 'PENDING') ? (
+      {(session.status === 'PROCESSING' || session.status === 'PENDING') && !isGradingComplete ? (
           <Card className="border-dashed border-2">
               <CardContent className="flex flex-col items-center justify-center py-20 text-center space-y-4">
                   <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center animate-pulse">
@@ -302,8 +302,12 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
                                           </div>
                                       </TableCell>
                                       <TableCell>
-                                          <Badge variant={sub.status === 'GRADED' ? 'default' : sub.status === 'FLAGGED' ? 'destructive' : 'secondary'}>
-                                              {sub.status}
+                                          <Badge
+                                            variant={sub.status === 'GRADED' ? 'default' : 'secondary'}
+                                            className={sub.status === 'FLAGGED' ? "bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-300 flex items-center gap-1" : ""}
+                                          >
+                                              {sub.status === 'FLAGGED' && <AlertTriangle className="w-3 h-3" />}
+                                              {sub.status === 'FLAGGED' ? 'Needs Review' : sub.status}
                                           </Badge>
                                       </TableCell>
                                       <TableCell className="text-right font-mono">

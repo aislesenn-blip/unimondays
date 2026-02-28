@@ -44,9 +44,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Flatten submissions from all related work sessions
     const submissions = bulkSession.workSessions.flatMap(ws => ws.submissions);
 
+    // Calculate if grading is fully complete across all work sessions and update status if needed
+    let finalStatus = bulkSession.status;
+    if (finalStatus === 'READY' || finalStatus === 'PROCESSING') {
+        const isGradingComplete = submissions.length > 0 && submissions.every(s => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status));
+        if (isGradingComplete) {
+            finalStatus = 'COMPLETED';
+            // Optionally persist this terminal state update to the database to prevent infinite status checks on refresh
+            await prisma.bulkSession.update({
+                where: { id: bulkSession.id },
+                data: { status: 'COMPLETED' }
+            }).catch(e => console.error("Failed to update bulk session terminal status:", e));
+        }
+    }
+
     // Return the bulk session data with flattened submissions to match UI expectations
     const responseData = {
         ...bulkSession,
+        status: finalStatus,
         submissions,
         workSessions: undefined // Optionally remove the nested structure if not needed by UI
     };
