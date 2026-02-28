@@ -51,6 +51,23 @@ describe('AI System Prompt Generation', () => {
     expect(prompt).toContain('TIER 2 (EQUIVALENT CONCEPT VALIDATION)');
   });
 
+  it('should include the Domain-Specific Evaluation Protocols and 4-Layer Deterministic Engine', () => {
+    const config: GradeConfig = { strictness: 1.0 };
+    const prompt = buildSystemPrompt(config, 100);
+
+    expect(prompt).toContain('>>> DOMAIN-SPECIFIC EVALUATION PROTOCOLS <<<');
+    expect(prompt).toContain('1. ESSAYS & THEORETICAL QUESTIONS');
+    expect(prompt).toContain('2. MATHEMATICS & LOGICAL PROGRESSION');
+    expect(prompt).toContain('3. DIAGRAMS & VISUAL RECOGNITION');
+    expect(prompt).toContain('4. APPLIED / CASE STUDIES');
+
+    expect(prompt).toContain('>>> THE UNIVERSAL 4-LAYER DETERMINISTIC ENGINE <<<');
+    expect(prompt).toContain('1. Concept Layer');
+    expect(prompt).toContain('2. Relevance Layer');
+    expect(prompt).toContain('3. Logical/Procedural Layer');
+    expect(prompt).toContain('4. Deterministic Base');
+  });
+
   it('should preserve critical system protocols', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
