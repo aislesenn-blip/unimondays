@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, FileText, Download, CheckCircle, AlertTriangle, ArrowUpCircle } from "lucide-react";
 import { AppealModal } from "./AppealModal";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import PlaybookAI from "@/components/icons/PlaybookAI";
 
 export function StudentResultDrawer({ submission }: { submission: any }) {
   // Parse logic
@@ -205,9 +206,22 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                         </div>
                     )}
 
-                    {/* Remarks */}
-                    {submission.remarks && (
-                        <div className="p-4 bg-muted/10 rounded-lg italic text-sm text-muted-foreground border-l-4 border-primary/20">
+                    {/* Student Actionable Feedback */}
+                    {submission.studentRemarks && (
+                        <div className="p-4 bg-primary/10 rounded-lg text-sm text-primary border-l-4 border-primary mt-6 shadow-sm">
+                            <h3 className="font-semibold flex items-center gap-2 mb-2">
+                                <PlaybookAI className="h-5 w-5" />
+                                Actionable Feedback
+                            </h3>
+                            <p className="leading-relaxed">
+                                {submission.studentRemarks}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Legacy Remarks (Fallback) */}
+                    {!submission.studentRemarks && submission.remarks && (
+                        <div className="p-4 bg-muted/10 rounded-lg italic text-sm text-muted-foreground border-l-4 border-primary/20 mt-6">
                             " {submission.remarks} "
                         </div>
                     )}

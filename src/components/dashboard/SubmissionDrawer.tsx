@@ -295,12 +295,38 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
             )}
 
             {/* Remarks - Only show if NOT editing (since we show textarea when editing) */}
-            {!isEditing && submission.score?.remarks && (
-                <div>
-                    <h3 className="text-sm font-medium mb-2">Overall Remarks</h3>
-                    <p className="text-sm text-muted-foreground italic">
-                        "{submission.score.remarks}"
-                    </p>
+            {!isEditing && (
+                <div className="space-y-6">
+                    {submission.score?.teacherRemarks && (
+                        <div>
+                            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                                Lecturer Diagnostic Feedback
+                            </h3>
+                            <p className="text-sm bg-muted/20 p-4 rounded-lg border-l-4 border-amber-500/50 leading-relaxed text-muted-foreground">
+                                {submission.score.teacherRemarks}
+                            </p>
+                        </div>
+                    )}
+
+                    {submission.score?.studentRemarks && (
+                        <div>
+                            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                                Student Actionable Feedback
+                            </h3>
+                            <p className="text-sm bg-primary/10 p-4 rounded-lg border-l-4 border-primary leading-relaxed text-primary/90">
+                                {submission.score.studentRemarks}
+                            </p>
+                        </div>
+                    )}
+
+                    {!submission.score?.teacherRemarks && !submission.score?.studentRemarks && submission.score?.remarks && (
+                        <div>
+                            <h3 className="text-sm font-medium mb-2">Overall Remarks (Legacy)</h3>
+                            <p className="text-sm text-muted-foreground italic">
+                                "{submission.score.remarks}"
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

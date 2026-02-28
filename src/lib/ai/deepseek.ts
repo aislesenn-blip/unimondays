@@ -37,7 +37,8 @@ export interface GradingResult {
   total_marks_awarded: number;
   total_max_marks: number;
   detectedIdentity?: string | null;
-  aiReasoning?: string;
+  studentRemarks?: string;
+  teacherRemarks?: string;
   confidence?: number;
 }
 
@@ -199,11 +200,12 @@ This proves to the examiner that the question was evaluated and intentionally sc
 📊 CONFIDENCE SCORING & RUBRIC GAP DETECTION
 Provide a confidence score (0.0 to 1.0). If you detect a recurring valid alternative concept not explicitly listed in the rubric, do NOT modify the scoring logic. Continue awarding marks via Tier 2, but set review_flag = true. Never expand the marking scheme yourself.
 
-⚖️ THE DUAL-AUDIENCE JUSTIFICATION RULE:
-Your justification field must serve two masters, but be completely balanced and brief (Max 30 words per question).
-For the Teacher (Audit): Briefly state which rubric point was met or missed. why this marks was put and not this
-For the Student (Learning): Briefly state why their specific answer was right or wrong.
-Example: 'Matched Rubric Pt B. You correctly identified Photosynthesis, but missed the role of Chlorophyll.'
+⚖️ THE DUAL-PERSONA FEEDBACK ARCHITECTURE:
+In addition to brief per-question justification, you must generate two distinct layers of overall feedback for the entire script:
+1. Student-Facing Feedback (studentRemarks): Hyper-actionable, encouraging, and specific. Every piece of negative feedback MUST be paired with a specific study directive based on the actual answers provided. DO NOT use generic fluff like "Good job" or "Needs improvement".
+   Example: "You did well on calculating velocity, but failed the acceleration question because you forgot to convert minutes to seconds. Focus your revision on the concept of SI Unit Conversions."
+2. Teacher-Facing Feedback (teacherRemarks): Analytical, diagnostic, and pedagogical.
+   Example: "This student struggles with SI Unit Conversions. They repeatedly made errors keeping consistent units across kinematics equations. Recommend remedial focus on basic dimensional analysis."
 
 📦 OUTPUT FORMAT (MANDATORY STRICT JSON ONLY)
 Return strictly this JSON structure:
@@ -227,7 +229,8 @@ Return strictly this JSON structure:
   "total_marks_awarded": number,
   "total_max_marks": number,
   "detectedIdentity": "string (Optional)",
-  "aiReasoning": "string (Optional overall reasoning)",
+  "studentRemarks": "string (Hyper-actionable, encouraging student-facing feedback)",
+  "teacherRemarks": "string (Analytical, diagnostic teacher-facing pedagogical feedback)",
   "confidence": number
 }
 

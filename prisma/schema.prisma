@@ -139,6 +139,8 @@ model Score {
   totalMarks   Float     @map("total_marks")
   breakdown    String    @map("breakdown") // Stored as string
   remarks      String?
+  studentRemarks String? @map("student_remarks")
+  teacherRemarks String? @map("teacher_remarks")
   detectedIdentity String? @map("detected_identity") // AI extracted name/ID
   isOverridden Boolean?  @default(false) @map("is_overridden")
   gradedAt     DateTime? @default(now()) @map("graded_at")

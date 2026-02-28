@@ -292,7 +292,9 @@ Student Identifier: ${studentId}.
             update: {
               totalMarks: finalMarks,
               breakdown: breakdownStr,
-              remarks: result.aiReasoning || "No remarks.",
+              remarks: result.studentRemarks || "No remarks.",
+              studentRemarks: result.studentRemarks || "No student feedback provided.",
+              teacherRemarks: result.teacherRemarks || "No teacher feedback provided.",
               detectedIdentity: result.detectedIdentity || null,
               gradedAt: new Date()
             },
@@ -300,7 +302,9 @@ Student Identifier: ${studentId}.
               submissionId: submission.id,
               totalMarks: finalMarks,
               breakdown: breakdownStr,
-              remarks: result.aiReasoning || "No remarks.",
+              remarks: result.studentRemarks || "No remarks.",
+              studentRemarks: result.studentRemarks || "No student feedback provided.",
+              teacherRemarks: result.teacherRemarks || "No teacher feedback provided.",
               detectedIdentity: result.detectedIdentity || null
             }
           });
