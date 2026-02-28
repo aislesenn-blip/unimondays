@@ -68,6 +68,21 @@ export async function handleCloudMarking(job: Job) {
         });
 
         if (!workSession) {
+            // Extract rubricId from calibration JSON if present
+            let parsedCalibration: any = {};
+            let rubricId: string | null = null;
+            try {
+                if (bulkSession.calibration) {
+                    parsedCalibration = JSON.parse(bulkSession.calibration);
+                    if (parsedCalibration.rubricId) {
+                        rubricId = parsedCalibration.rubricId;
+                        delete parsedCalibration.rubricId; // remove it from generic calibration settings
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to parse calibration string in bulk session");
+            }
+
             workSession = await prisma.workSession.create({
                 data: {
                     title: bulkSession.title,
@@ -80,7 +95,8 @@ export async function handleCloudMarking(job: Job) {
                     markingScheme: bulkSession.markingScheme,
                     goldStandardUrl: bulkSession.goldStandardUrl,
                     questionPaperUrl: bulkSession.questionPaperUrl,
-                    calibration: bulkSession.calibration,
+                    calibration: JSON.stringify(parsedCalibration),
+                    standardizedRubricId: rubricId,
                     releaseMode: "MANUAL"
                 }
             });
