@@ -13,12 +13,7 @@ export async function POST(req: NextRequest) {
     const { title, cloudLink, totalMarks, markingScheme, questionPaperUrl, strictness, calibration } = body;
 
     if (!title || !cloudLink) {
-        return NextResponse.json({ error: "Title and Cloud Link are required" }, { status: 400 });
-    }
-
-    // DIRECTIVE 2: FOLDER LINK REJECTION & UX
-    if (cloudLink.includes('drive.google.com') && cloudLink.includes('/folders/')) {
-        return NextResponse.json({ error: "Google Drive Folders are not supported via URL. Please provide a direct link to a single merged PDF, or download the folder and upload the files directly." }, { status: 400 });
+        return NextResponse.json({ error: "Title and Bulk PDF upload are required" }, { status: 400 });
     }
 
     // 1. Create Bulk Session

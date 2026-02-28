@@ -1,67 +1,20 @@
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { saveBuffer, deleteFile } from '@/lib/storage';
+import { saveBuffer, deleteFile, readFile } from '@/lib/storage';
 import { PDFDocument } from 'pdf-lib';
 import { analyzePdfStructure, PdfSplit } from '@/lib/ai/gemini';
 import { v4 as uuidv4 } from 'uuid';
 
-async function resolveGDriveLink(url: string): Promise<Buffer> {
-    const fileIdMatch = url.match(/[-\w]{25,}/);
-    if (!fileIdMatch) {
-        throw new Error("Could not extract Google Drive File ID. Please use a direct link.");
-    }
-    const fileId = fileIdMatch[0];
-    const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-
-    let res = await fetch(directUrl);
-
-    // Check for "Virus Scan" warning (Google returns 200 OK with HTML)
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('text/html')) {
-        const html = await res.text();
-
-        // 1. Look for <a id="uc-download-link" href="...">
-        let confirmToken: string | null = null;
-
-        // Match the `confirm=` parameter precisely within an href, or look for input fields
-        const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
-
-        if (confirmMatch) {
-            confirmToken = confirmMatch[1];
-        } else {
-            // Alternative layout sometimes has a hidden input field
-            const inputMatch = html.match(/<input type="hidden" name="confirm" value="([^"]+)">/);
-            if (inputMatch) {
-                confirmToken = inputMatch[1];
-            }
-        }
-
-        if (confirmToken) {
-            const bypassUrl = `${directUrl}&confirm=${confirmToken}`;
-            res = await fetch(bypassUrl);
-
-            // If the bypass *also* returns HTML, Google completely blocked the file
-            if ((res.headers.get('content-type') || '').includes('text/html')) {
-                throw new Error("Google Drive blocked the download (Virus Scan Interstitial). Please use a direct Dropbox link or upload manually.");
-            }
-        } else {
-             // If we can't find a token but it's Drive HTML, fail gracefully
-             throw new Error("Google Drive blocked the download (Virus Scan). Please use a direct Dropbox link or upload manually.");
-        }
-    }
-
-    if (!res.ok) throw new Error(`Failed to fetch from Google Drive: ${res.statusText}`);
-    return Buffer.from(await res.arrayBuffer());
-}
-
 async function fetchFileFromLink(url: string): Promise<Buffer> {
-    if (url.includes('drive.google.com')) {
-        return resolveGDriveLink(url);
+    // Determine if it is a Supabase path or a full URL
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Failed to fetch cloud file: ${res.statusText}`);
+        return Buffer.from(await res.arrayBuffer());
     }
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch cloud file: ${res.statusText}`);
-    return Buffer.from(await res.arrayBuffer());
+    // Treat as Supabase storage path from the 'exam_pdfs' bucket
+    return await readFile(url, 'exam_pdfs');
 }
 
 export async function handleCloudMarking(job: Job) {

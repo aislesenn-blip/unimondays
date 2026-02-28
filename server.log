@@ -1,11 +1,82 @@
 
-> frontend@0.1.0 start
-> next start
+> frontend@0.1.0 dev
+> next dev
 
-▲ Next.js 16.1.6
+▲ Next.js 16.1.6 (Turbopack)
 - Local:         http://localhost:3000
 - Network:       http://192.168.0.2:3000
+- Experiments (use with caution):
+  · serverActions
 
 ✓ Starting...
-✓ Ready in 739ms
-Missing Supabase environment variables!
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 1471ms
+○ Compiling /login ...
+ GET /login 200 in 3.5s (compile: 3.3s, proxy.ts: 6ms, render: 282ms)
+ GET /login 200 in 104ms (compile: 7ms, proxy.ts: 5ms, render: 91ms)
+Missing Supabase environment variables for client!
+ GET /dashboard/cloud-marking 307 in 2.1s (compile: 1701ms, proxy.ts: 6ms, render: 390ms)
+ GET /login?error=orphaned 200 in 103ms (compile: 6ms, proxy.ts: 8ms, render: 89ms)
+✓ Compiled in 65ms
+Error: Route "/dashboard/cloud-marking" used `cookies().get`. `cookies()` returns a Promise and must be unwrapped with `await` or `React.use()` before accessing its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at getAuthenticatedUser (src/lib/auth-mock.ts:6:31)
+    at DashboardLayout (src/app/dashboard/layout.tsx:13:42)
+  4 | export async function getAuthenticatedUser() {
+  5 |   const cookieStore = cookies();
+> 6 |   const session = cookieStore.get("auth-session");
+    |                               ^
+  7 |
+  8 |   if (!session) return null;
+  9 |
+⨯ TypeError: cookieStore.get is not a function
+    at getAuthenticatedUser (src/lib/auth-mock.ts:6:31)
+    at DashboardLayout (src/app/dashboard/layout.tsx:13:42)
+  4 | export async function getAuthenticatedUser() {
+  5 |   const cookieStore = cookies();
+> 6 |   const session = cookieStore.get("auth-session");
+    |                               ^
+  7 |
+  8 |   if (!session) return null;
+  9 | {
+  digest: '698875657'
+}
+Missing Supabase environment variables for client!
+ GET /dashboard/cloud-marking 500 in 409ms (compile: 132ms, proxy.ts: 7ms, render: 270ms)
+✓ Compiled in 58ms
+Missing Supabase environment variables for client!
+ GET /dashboard/cloud-marking 200 in 734ms (compile: 173ms, proxy.ts: 6ms, render: 556ms)
+Notifications API Error: Error [PrismaClientInitializationError]:
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].submission.findMany()` invocation in
+/app/.next/dev/server/chunks/[root-of-the-server]__f825240f._.js:100:187
+
+   97 let notifications = [];
+   98 if (userRole === 'LECTURER' || userRole === 'ADMIN') {
+   99     // 1. Fetch PENDING APPEALS for this lecturer's sessions
+→ 100     const appealedSubmissions = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].submission.findMany(
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:10
+   |
+ 9 |   provider = "postgresql"
+10 |   url      = env("DATABASE_URL")
+   |
+
+Validation Error Count: 1
+    at <unknown> (src/app/api/notifications/route.ts:30:61)
+    at <unknown> (-->  schema.prisma:10)
+    at async GET (src/app/api/notifications/route.ts:30:37)
+  28 |     if (userRole === 'LECTURER' || userRole === 'ADMIN') {
+  29 |         // 1. Fetch PENDING APPEALS for this lecturer's sessions
+> 30 |         const appealedSubmissions = await prisma.submission.findMany({
+     |                                                             ^
+  31 |             where: {
+  32 |                 status: 'APPEALED',
+  33 |                 workSession: { {
+  clientVersion: '6.0.0',
+  errorCode: undefined
+}
+ GET /api/notifications 500 in 1067ms (compile: 675ms, render: 392ms)
+ GET /api/auth/me 401 in 1073ms (compile: 743ms, render: 330ms)
+ GET /api/cloud-marking/active 401 in 1072ms (compile: 790ms, render: 282ms)
+ GET /api/user/me 401 in 182ms (compile: 174ms, render: 8ms)
+ GET /api/user/me 401 in 11ms (compile: 3ms, render: 8ms)
+✓ Compiled in 56ms
