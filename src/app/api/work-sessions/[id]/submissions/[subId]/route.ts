@@ -52,6 +52,16 @@ export async function PATCH(
             }
         });
 
+        // 3. Immutable Audit Trail for Manual Override
+        await prisma.auditLog.create({
+            data: {
+                userId: user.id,
+                action: 'MANUAL_SCORE_OVERRIDE',
+                details: `Lecturer overridden score for submission ${submissionId} to ${totalScore}. Remarks: ${remarks || 'None'}`,
+                severity: 'WARNING', // Warning implies an override of the base AI evaluation
+            }
+        });
+
         return NextResponse.json({ success: true, data: submission });
 
     } catch (error) {
