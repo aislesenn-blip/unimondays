@@ -19,11 +19,7 @@ if (!globalThis.DOMRect) {
 }
 
 import { pdf } from 'pdf-to-img';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { v4 as uuidv4 } from 'uuid';
-
-// Serverless Worker Bypass for pdfjs-dist
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 export async function handleAiGrade(job: Job) {
   let data: any;
