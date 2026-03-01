@@ -112,6 +112,9 @@ For each ConceptUnit provided to you:
 >>> PROTOCOL 1: THE ANTI-SKIP LOCK <<<
 You must evaluate EVERY concept unit provided for every question. If a question is entirely unattempted, still output all its concepts with status "FAILED" and reasoning "Question not attempted."
 
+>>> PROTOCOL 2: THE ANTI-TRUNCATION LOCK <<<
+You MUST evaluate every single student answer visible in this chunk against the rubric. Do not stop early. If a student attempted 4 questions in these images, you must return 4 evaluated results.
+
 >>> DOMAIN-SPECIFIC EVALUATION PROTOCOLS <<<
 - MATHEMATICS: Check symbolic equivalence. If a specific formula (Concept) is required, check if it's there.
 - ESSAYS: Look for semantic matches. "Arms races" = "Militarism".

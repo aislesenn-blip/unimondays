@@ -69,7 +69,7 @@ export interface StandardizedRubric {
     Questions: RubricQuestion[];
 }
 
-export async function standardizeRubric(rubricText: string): Promise<StandardizedRubric> {
+export async function standardizeRubric(rubricText: string, buffer?: Buffer, mimeType?: string): Promise<StandardizedRubric> {
     if (!process.env.DEEPSEEK_API_KEY && !process.env.OPENROUTER_API_KEY) {
         throw new Error("No AI API Key is set. Standardization service unavailable.");
     }
@@ -77,11 +77,12 @@ export async function standardizeRubric(rubricText: string): Promise<Standardize
     const systemPrompt = `
 You are an L10 Enterprise Architect & Principal EdTech Engineer.
 Your task is to ingest an unstructured marking scheme or rubric and convert it into a strictly formatted Standardized Rubric mapping exactly to our Deterministic State Machine architecture.
+You are an exhaustive data extraction machine. You MUST extract EVERY SINGLE QUESTION and EVERY SINGLE MARKING POINT from the provided document. DO NOT summarize. DO NOT skip questions. Output the exact mark allocation as written. If the document has 100 questions, your JSON output MUST contain 100 questions. Failure to extract all pages will result in a fatal system error.
 
 RULES:
 1. You must output ONLY a strictly formatted JSON object.
-2. DO NOT change the total MarksAllocated for any question or the overall Exam.
-3. Break the rubric down into atomic ConceptUnits with explicit PartialRules.
+2. DO NOT change the total MarksAllocated for any question or the overall Exam. You must strictly bind the allocatedMarks exactly as written on the paper. No guessing, no averaging.
+3. Break the rubric down into Granular Marking Criteria with explicit PartialRules.
 4. Provide standard EvaluationTiers if missing, tailored to the QuestionType.
 5. All IDs (QuestionID, ConceptID) should be short alphanumeric strings (e.g., "Q1a", "C1").
 6. The exact required JSON schema structure is:
@@ -144,7 +145,34 @@ ${rubricText}
     try {
         let completion;
 
-        if (process.env.DEEPSEEK_API_KEY) {
+        if (buffer && mimeType && process.env.OPENROUTER_API_KEY) {
+            console.log(`[STANDARDIZER] Using Multimodal Vision Model with image buffer of size ${buffer.length} bytes`);
+            const base64Data = buffer.toString("base64");
+            const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+            completion = await openai.chat.completions.create({
+                model: "google/gemini-2.5-flash",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: userPrompt },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: dataUrl,
+                                    detail: "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.0,
+                top_p: 0.1,
+            });
+        } else if (process.env.DEEPSEEK_API_KEY) {
             completion = await deepseek.chat.completions.create({
                 model: "deepseek-chat",
                 messages: [
@@ -152,7 +180,7 @@ ${rubricText}
                     { role: "user", content: userPrompt }
                 ],
                 response_format: { type: "json_object" },
-                temperature: 0.1,
+                temperature: 0.0,
                 top_p: 0.1,
             });
         } else {
@@ -163,7 +191,7 @@ ${rubricText}
                     { role: "user", content: userPrompt }
                 ],
                 response_format: { type: "json_object" },
-                temperature: 0.1,
+                temperature: 0.0,
                 top_p: 0.1,
             });
         }
