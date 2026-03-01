@@ -23,7 +23,51 @@ export default function StandardizeRubricPage() {
         const storedRubric = sessionStorage.getItem("pendingStandardizedRubric");
         if (storedRubric) {
             try {
-                setStandardizedRubric(JSON.parse(storedRubric));
+                const parsed = JSON.parse(storedRubric);
+
+                // Safely normalize AI JSON casing mismatches (e.g., questions vs Questions)
+                const normalizeRubric = (data: any): StandardizedRubric => {
+                    return {
+                        ExamTitle: data.ExamTitle || data.examTitle || data.exam_title || "Untitled Exam",
+                        CourseCode: data.CourseCode || data.courseCode || data.course_code || "N/A",
+                        ExamDate: data.ExamDate || data.examDate || data.exam_date || new Date().toISOString(),
+                        TotalMarks: Number(data.TotalMarks ?? data.totalMarks ?? data.total_marks ?? 0),
+                        NumberOfQuestions: Number(data.NumberOfQuestions ?? data.numberOfQuestions ?? data.number_of_questions ?? 0),
+                        Questions: Array.isArray(data.Questions || data.questions) ? (data.Questions || data.questions).map((q: any) => ({
+                            QuestionID: q.QuestionID || q.questionId || q.question_id || "",
+                            QuestionText: q.QuestionText || q.questionText || q.question_text || "",
+                            MarksAllocated: Number(q.MarksAllocated ?? q.marksAllocated ?? q.marks_allocated ?? 0),
+                            QuestionType: q.QuestionType || q.questionType || q.question_type || "Essay",
+                            LearningObjective: q.LearningObjective || q.learningObjective || q.learning_objective || "",
+                            ConceptUnits: Array.isArray(q.ConceptUnits || q.conceptUnits || q.concept_units) ? (q.ConceptUnits || q.conceptUnits || q.concept_units).map((cu: any) => ({
+                                ConceptID: cu.ConceptID || cu.conceptId || cu.concept_id || "",
+                                ConceptText: cu.ConceptText || cu.conceptText || cu.concept_text || "",
+                                Marks: Number(cu.Marks ?? cu.marks ?? 0),
+                                PartialRule: cu.PartialRule || cu.partialRule || cu.partial_rule || null,
+                            })) : [],
+                            EvaluationTiers: {
+                                Tier1: q.EvaluationTiers?.Tier1 || q.evaluationTiers?.tier1 || q.evaluation_tiers?.tier1 || q.EvaluationTiers?.tier1 || "",
+                                Tier2: q.EvaluationTiers?.Tier2 || q.evaluationTiers?.tier2 || q.evaluation_tiers?.tier2 || q.EvaluationTiers?.tier2 || "",
+                                Tier3: q.EvaluationTiers?.Tier3 || q.evaluationTiers?.tier3 || q.evaluation_tiers?.tier3 || q.EvaluationTiers?.tier3 || "",
+                            },
+                            OutOfScope: Array.isArray(q.OutOfScope || q.outOfScope || q.out_of_scope) ? (q.OutOfScope || q.outOfScope || q.out_of_scope).map((os: any) => ({
+                                Description: os.Description || os.description || "",
+                                MaxMarks: Number(os.MaxMarks ?? os.maxMarks ?? os.max_marks ?? 0),
+                            })) : [],
+                            Penalties: Array.isArray(q.Penalties || q.penalties) ? (q.Penalties || q.penalties).map((p: any) => ({
+                                Description: p.Description || p.description || "",
+                                Deduct: Number(p.Deduct ?? p.deduct ?? 0),
+                            })) : [],
+                            MCQOptions: Array.isArray(q.MCQOptions || q.mcqOptions || q.mcq_options) ? (q.MCQOptions || q.mcqOptions || q.mcq_options).map((o: any) => ({
+                                Option: o.Option || o.option || "",
+                                Correct: Boolean(o.Correct ?? o.correct ?? false),
+                                Marks: Number(o.Marks ?? o.marks ?? 0),
+                            })) : []
+                        })) : []
+                    };
+                };
+
+                setStandardizedRubric(normalizeRubric(parsed));
             } catch (e) {
                 console.error("Failed to parse stored rubric", e);
                 setError("Failed to load rubric data. Please try the upload step again.");
@@ -38,28 +82,44 @@ export default function StandardizeRubricPage() {
     const updateConceptUnit = (qIdx: number, cIdx: number, field: string, value: any) => {
         if (!standardizedRubric) return;
         const newQuestions = [...standardizedRubric.Questions];
-        (newQuestions[qIdx].ConceptUnits[cIdx] as any)[field] = value;
+        const updatedQuestion = { ...newQuestions[qIdx] };
+        const updatedConceptUnits = [...updatedQuestion.ConceptUnits];
+        updatedConceptUnits[cIdx] = { ...updatedConceptUnits[cIdx], [field]: value };
+        updatedQuestion.ConceptUnits = updatedConceptUnits;
+        newQuestions[qIdx] = updatedQuestion;
         setStandardizedRubric({ ...standardizedRubric, Questions: newQuestions });
     };
 
     const updateEvaluationTier = (qIdx: number, tier: string, value: string) => {
         if (!standardizedRubric) return;
         const newQuestions = [...standardizedRubric.Questions];
-        (newQuestions[qIdx].EvaluationTiers as any)[tier] = value;
+        const updatedQuestion = { ...newQuestions[qIdx] };
+        const updatedEvaluationTiers = { ...updatedQuestion.EvaluationTiers };
+        (updatedEvaluationTiers as any)[tier] = value;
+        updatedQuestion.EvaluationTiers = updatedEvaluationTiers;
+        newQuestions[qIdx] = updatedQuestion;
         setStandardizedRubric({ ...standardizedRubric, Questions: newQuestions });
     };
 
     const updateOutOfScope = (qIdx: number, oIdx: number, field: string, value: any) => {
          if (!standardizedRubric) return;
          const newQuestions = [...standardizedRubric.Questions];
-         (newQuestions[qIdx].OutOfScope[oIdx] as any)[field] = value;
+         const updatedQuestion = { ...newQuestions[qIdx] };
+         const updatedOutOfScope = [...updatedQuestion.OutOfScope];
+         updatedOutOfScope[oIdx] = { ...updatedOutOfScope[oIdx], [field]: value };
+         updatedQuestion.OutOfScope = updatedOutOfScope;
+         newQuestions[qIdx] = updatedQuestion;
          setStandardizedRubric({ ...standardizedRubric, Questions: newQuestions });
     };
 
     const updatePenalty = (qIdx: number, pIdx: number, field: string, value: any) => {
          if (!standardizedRubric) return;
          const newQuestions = [...standardizedRubric.Questions];
-         (newQuestions[qIdx].Penalties[pIdx] as any)[field] = value;
+         const updatedQuestion = { ...newQuestions[qIdx] };
+         const updatedPenalties = [...updatedQuestion.Penalties];
+         updatedPenalties[pIdx] = { ...updatedPenalties[pIdx], [field]: value };
+         updatedQuestion.Penalties = updatedPenalties;
+         newQuestions[qIdx] = updatedQuestion;
          setStandardizedRubric({ ...standardizedRubric, Questions: newQuestions });
     };
 
@@ -151,202 +211,213 @@ export default function StandardizeRubricPage() {
 
             {/* Read-Only Document View */}
             <div className="space-y-6">
-                {standardizedRubric.Questions.map((q, qIdx) => (
-                    <Card key={qIdx} className="overflow-hidden border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md bg-white dark:bg-slate-950">
-                        <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                             <div className="flex items-baseline gap-3">
-                                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                                     Question {q.QuestionID}
-                                 </h2>
-                                 <span className="text-sm font-medium text-slate-500">
-                                     [{q.MarksAllocated} marks]
-                                 </span>
-                             </div>
-                        </div>
+                {(() => {
+                    try {
+                        return standardizedRubric.Questions.map((q, qIdx) => (
+                            <Card key={qIdx} className="overflow-hidden border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md bg-white dark:bg-slate-950">
+                                <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                     <div className="flex items-baseline gap-3">
+                                         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">
+                                             Question {q.QuestionID}
+                                         </h2>
+                                         <span className="text-sm font-medium text-slate-500">
+                                             [{q.MarksAllocated} marks]
+                                         </span>
+                                     </div>
+                                </div>
 
-                        <CardContent className="p-6 space-y-8">
+                                <CardContent className="p-6 space-y-8">
 
-                            {/* Concept Units */}
-                            {q.ConceptUnits && q.ConceptUnits.length > 0 && (
-                                <div className="space-y-4">
-                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Required Concepts</h3>
-                                    <div className="space-y-3">
-                                        {q.ConceptUnits.map((cu, cIdx) => (
-                                            <div key={cIdx} className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4 pl-4 border-l-2 border-primary/20">
-                                                <div className="flex-1">
-                                                    <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <span className="text-base text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-1 -ml-1 rounded transition-colors group">
-                                                                <span className="font-semibold text-slate-900 dark:text-slate-100">{cu.ConceptID}:</span> {cu.ConceptText}
-                                                                <Edit2 className="w-3 h-3 inline ml-2 opacity-0 group-hover:opacity-50" />
-                                                            </span>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80">
-                                                            <div className="space-y-2">
-                                                                <label className="text-xs font-medium">Edit Concept Text</label>
-                                                                <Textarea
-                                                                    value={cu.ConceptText}
-                                                                    onChange={(e) => updateConceptUnit(qIdx, cIdx, 'ConceptText', e.target.value)}
-                                                                />
-                                                            </div>
-                                                        </PopoverContent>
-                                                    </Popover>
-
-                                                    {cu.PartialRule && (
-                                                        <div className="mt-1">
+                                    {/* Concept Units */}
+                                    {q.ConceptUnits && q.ConceptUnits.length > 0 && (
+                                        <div className="space-y-4">
+                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Required Concepts</h3>
+                                            <div className="space-y-3">
+                                                {q.ConceptUnits.map((cu, cIdx) => (
+                                                    <div key={cIdx} className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4 pl-4 border-l-2 border-primary/20">
+                                                        <div className="flex-1">
                                                             <Popover>
                                                                 <PopoverTrigger asChild>
-                                                                    <span className="text-sm italic text-slate-500 cursor-pointer hover:bg-slate-50 px-1 -ml-1 rounded">
-                                                                        Partial Rule: {cu.PartialRule}
+                                                                    <span className="text-base text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-1 -ml-1 rounded transition-colors group">
+                                                                        <span className="font-semibold text-slate-900 dark:text-slate-100">{cu.ConceptID}:</span> {cu.ConceptText}
+                                                                        <Edit2 className="w-3 h-3 inline ml-2 opacity-0 group-hover:opacity-50" />
                                                                     </span>
                                                                 </PopoverTrigger>
                                                                 <PopoverContent className="w-80">
                                                                     <div className="space-y-2">
-                                                                        <label className="text-xs font-medium">Edit Partial Rule</label>
-                                                                        <Input
-                                                                            value={cu.PartialRule}
-                                                                            onChange={(e) => updateConceptUnit(qIdx, cIdx, 'PartialRule', e.target.value)}
+                                                                        <label className="text-xs font-medium">Edit Concept Text</label>
+                                                                        <Textarea
+                                                                            value={cu.ConceptText}
+                                                                            onChange={(e) => updateConceptUnit(qIdx, cIdx, 'ConceptText', e.target.value)}
                                                                         />
                                                                     </div>
                                                                 </PopoverContent>
                                                             </Popover>
+
+                                                            {cu.PartialRule && (
+                                                                <div className="mt-1">
+                                                                    <Popover>
+                                                                        <PopoverTrigger asChild>
+                                                                            <span className="text-sm italic text-slate-500 cursor-pointer hover:bg-slate-50 px-1 -ml-1 rounded">
+                                                                                Partial Rule: {cu.PartialRule}
+                                                                            </span>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-80">
+                                                                            <div className="space-y-2">
+                                                                                <label className="text-xs font-medium">Edit Partial Rule</label>
+                                                                                <Input
+                                                                                    value={cu.PartialRule}
+                                                                                    onChange={(e) => updateConceptUnit(qIdx, cIdx, 'PartialRule', e.target.value)}
+                                                                                />
+                                                                            </div>
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                                <div className="shrink-0 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded">
-                                                    +{cu.Marks} marks
-                                                </div>
+                                                        <div className="shrink-0 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded">
+                                                            +{cu.Marks} marks
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Evaluation Tiers */}
-                            {q.EvaluationTiers && (
-                                <div className="space-y-4">
-                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Semantic Fallbacks (Tiers)</h3>
-                                    <div className="grid sm:grid-cols-3 gap-4">
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <div className="p-3 bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900 rounded-md cursor-pointer hover:border-green-300 transition-colors">
-                                                    <div className="text-xs font-bold text-green-700 dark:text-green-500 mb-1">Tier 1 (Direct Match)</div>
-                                                    <div className="text-sm text-slate-600 dark:text-slate-400">{q.EvaluationTiers.Tier1}</div>
-                                                </div>
-                                            </PopoverTrigger>
-                                            <PopoverContent>
-                                                <div className="space-y-2">
-                                                    <label className="text-xs font-medium">Edit Tier 1</label>
-                                                    <Textarea value={q.EvaluationTiers.Tier1} onChange={(e) => updateEvaluationTier(qIdx, 'Tier1', e.target.value)} />
-                                                </div>
-                                            </PopoverContent>
-                                        </Popover>
-
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <div className="p-3 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900 rounded-md cursor-pointer hover:border-amber-300 transition-colors">
-                                                    <div className="text-xs font-bold text-amber-700 dark:text-amber-500 mb-1">Tier 2 (Equivalent Concept)</div>
-                                                    <div className="text-sm text-slate-600 dark:text-slate-400">{q.EvaluationTiers.Tier2}</div>
-                                                </div>
-                                            </PopoverTrigger>
-                                            <PopoverContent>
-                                                <div className="space-y-2">
-                                                    <label className="text-xs font-medium">Edit Tier 2</label>
-                                                    <Textarea value={q.EvaluationTiers.Tier2} onChange={(e) => updateEvaluationTier(qIdx, 'Tier2', e.target.value)} />
-                                                </div>
-                                            </PopoverContent>
-                                        </Popover>
-
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <div className="p-3 bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900 rounded-md cursor-pointer hover:border-red-300 transition-colors">
-                                                    <div className="text-xs font-bold text-red-700 dark:text-red-500 mb-1">Tier 3 (Out of Scope)</div>
-                                                    <div className="text-sm text-slate-600 dark:text-slate-400">{q.EvaluationTiers.Tier3}</div>
-                                                </div>
-                                            </PopoverTrigger>
-                                            <PopoverContent>
-                                                <div className="space-y-2">
-                                                    <label className="text-xs font-medium">Edit Tier 3</label>
-                                                    <Textarea value={q.EvaluationTiers.Tier3} onChange={(e) => updateEvaluationTier(qIdx, 'Tier3', e.target.value)} />
-                                                </div>
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Out of Scope & Penalties */}
-                            {(q.OutOfScope?.length > 0 || q.Penalties?.length > 0) && (
-                                <div className="grid sm:grid-cols-2 gap-8">
-                                    {q.OutOfScope?.length > 0 && (
-                                        <div className="space-y-4">
-                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Out of Scope Rules</h3>
-                                            <ul className="space-y-2">
-                                                {q.OutOfScope.map((os, oIdx) => (
-                                                    <li key={oIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                                        <span className="text-rose-500 mt-0.5">•</span>
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <span className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-1 -ml-1 rounded inline-block">
-                                                                    {os.Description} <span className="font-semibold ml-1">(Max {os.MaxMarks}m)</span>
-                                                                </span>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent>
-                                                                <div className="space-y-4">
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-xs font-medium">Edit Rule</label>
-                                                                        <Textarea value={os.Description} onChange={(e) => updateOutOfScope(qIdx, oIdx, 'Description', e.target.value)} />
-                                                                    </div>
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-xs font-medium">Max Marks</label>
-                                                                        <Input type="number" value={os.MaxMarks} onChange={(e) => updateOutOfScope(qIdx, oIdx, 'MaxMarks', parseFloat(e.target.value))} />
-                                                                    </div>
-                                                                </div>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    </li>
-                                                ))}
-                                            </ul>
                                         </div>
                                     )}
 
-                                    {q.Penalties?.length > 0 && (
+                                    {/* Evaluation Tiers */}
+                                    {q.EvaluationTiers && (
                                         <div className="space-y-4">
-                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Penalties</h3>
-                                            <ul className="space-y-2">
-                                                {q.Penalties.map((pen, pIdx) => (
-                                                    <li key={pIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                                        <span className="text-rose-500 mt-0.5">-</span>
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <span className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-1 -ml-1 rounded inline-block">
-                                                                    {pen.Description} <span className="font-semibold text-rose-600 dark:text-rose-400 ml-1">(-{pen.Deduct}m)</span>
-                                                                </span>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent>
-                                                                <div className="space-y-4">
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-xs font-medium">Edit Penalty</label>
-                                                                        <Textarea value={pen.Description} onChange={(e) => updatePenalty(qIdx, pIdx, 'Description', e.target.value)} />
-                                                                    </div>
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-xs font-medium">Deduction</label>
-                                                                        <Input type="number" value={pen.Deduct} onChange={(e) => updatePenalty(qIdx, pIdx, 'Deduct', parseFloat(e.target.value))} />
-                                                                    </div>
-                                                                </div>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Semantic Fallbacks (Tiers)</h3>
+                                            <div className="grid sm:grid-cols-3 gap-4">
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <div className="p-3 bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900 rounded-md cursor-pointer hover:border-green-300 transition-colors">
+                                                            <div className="text-xs font-bold text-green-700 dark:text-green-500 mb-1">Tier 1 (Direct Match)</div>
+                                                            <div className="text-sm text-slate-600 dark:text-slate-400">{q.EvaluationTiers.Tier1}</div>
+                                                        </div>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent>
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-medium">Edit Tier 1</label>
+                                                            <Textarea value={q.EvaluationTiers.Tier1} onChange={(e) => updateEvaluationTier(qIdx, 'Tier1', e.target.value)} />
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <div className="p-3 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900 rounded-md cursor-pointer hover:border-amber-300 transition-colors">
+                                                            <div className="text-xs font-bold text-amber-700 dark:text-amber-500 mb-1">Tier 2 (Equivalent Concept)</div>
+                                                            <div className="text-sm text-slate-600 dark:text-slate-400">{q.EvaluationTiers.Tier2}</div>
+                                                        </div>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent>
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-medium">Edit Tier 2</label>
+                                                            <Textarea value={q.EvaluationTiers.Tier2} onChange={(e) => updateEvaluationTier(qIdx, 'Tier2', e.target.value)} />
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <div className="p-3 bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900 rounded-md cursor-pointer hover:border-red-300 transition-colors">
+                                                            <div className="text-xs font-bold text-red-700 dark:text-red-500 mb-1">Tier 3 (Out of Scope)</div>
+                                                            <div className="text-sm text-slate-600 dark:text-slate-400">{q.EvaluationTiers.Tier3}</div>
+                                                        </div>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent>
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-medium">Edit Tier 3</label>
+                                                            <Textarea value={q.EvaluationTiers.Tier3} onChange={(e) => updateEvaluationTier(qIdx, 'Tier3', e.target.value)} />
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
                                         </div>
                                     )}
-                                </div>
-                            )}
 
-                        </CardContent>
-                    </Card>
-                ))}
+                                    {/* Out of Scope & Penalties */}
+                                    {(q.OutOfScope?.length > 0 || q.Penalties?.length > 0) && (
+                                        <div className="grid sm:grid-cols-2 gap-8">
+                                            {q.OutOfScope?.length > 0 && (
+                                                <div className="space-y-4">
+                                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Out of Scope Rules</h3>
+                                                    <ul className="space-y-2">
+                                                        {q.OutOfScope.map((os, oIdx) => (
+                                                            <li key={oIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                                                <span className="text-rose-500 mt-0.5">•</span>
+                                                                <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                        <span className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-1 -ml-1 rounded inline-block">
+                                                                            {os.Description} <span className="font-semibold ml-1">(Max {os.MaxMarks}m)</span>
+                                                                        </span>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent>
+                                                                        <div className="space-y-4">
+                                                                            <div className="space-y-2">
+                                                                                <label className="text-xs font-medium">Edit Rule</label>
+                                                                                <Textarea value={os.Description} onChange={(e) => updateOutOfScope(qIdx, oIdx, 'Description', e.target.value)} />
+                                                                            </div>
+                                                                            <div className="space-y-2">
+                                                                                <label className="text-xs font-medium">Max Marks</label>
+                                                                                <Input type="number" value={os.MaxMarks} onChange={(e) => updateOutOfScope(qIdx, oIdx, 'MaxMarks', parseFloat(e.target.value))} />
+                                                                            </div>
+                                                                        </div>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            {q.Penalties?.length > 0 && (
+                                                <div className="space-y-4">
+                                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Penalties</h3>
+                                                    <ul className="space-y-2">
+                                                        {q.Penalties.map((pen, pIdx) => (
+                                                            <li key={pIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                                                <span className="text-rose-500 mt-0.5">-</span>
+                                                                <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                        <span className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-1 -ml-1 rounded inline-block">
+                                                                            {pen.Description} <span className="font-semibold text-rose-600 dark:text-rose-400 ml-1">(-{pen.Deduct}m)</span>
+                                                                        </span>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent>
+                                                                        <div className="space-y-4">
+                                                                            <div className="space-y-2">
+                                                                                <label className="text-xs font-medium">Edit Penalty</label>
+                                                                                <Textarea value={pen.Description} onChange={(e) => updatePenalty(qIdx, pIdx, 'Description', e.target.value)} />
+                                                                            </div>
+                                                                            <div className="space-y-2">
+                                                                                <label className="text-xs font-medium">Deduction</label>
+                                                                                <Input type="number" value={pen.Deduct} onChange={(e) => updatePenalty(qIdx, pIdx, 'Deduct', parseFloat(e.target.value))} />
+                                                                            </div>
+                                                                        </div>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                </CardContent>
+                            </Card>
+                        ));
+                    } catch (renderError: any) {
+                        return (
+                            <div className="p-4 bg-red-50 text-red-600 rounded-md border border-red-200">
+                                <h3 className="font-bold mb-2">Error Displaying Rubric</h3>
+                                <p>Failed to render questions due to a data format issue: {renderError.message}</p>
+                            </div>
+                        );
+                    }
+                })()}
             </div>
 
             {/* Sticky Action Bar */}
