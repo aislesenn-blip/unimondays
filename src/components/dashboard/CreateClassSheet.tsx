@@ -33,7 +33,10 @@ export function CreateClassSheet() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        if (res.status === 409) {
+          throw new Error('A class with this name or code already exists.');
+        }
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to create class');
       }
 

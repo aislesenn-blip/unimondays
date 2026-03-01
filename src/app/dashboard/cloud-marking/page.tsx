@@ -43,9 +43,18 @@ export default function CloudMarkingPage() {
   const handleDrop = (e: React.DragEvent, field: string) => {
       e.preventDefault();
       e.stopPropagation();
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files?.[0];
+      if (file) {
           if (field === "cloudLink") {
-             handleTusUpload(e.dataTransfer.files[0]);
+             if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
+                 toast.error("Invalid file format. Please upload a PDF file.");
+                 return;
+             }
+             if (!approvedRubricId) {
+                 toast.error("Please upload and approve a Marking Scheme first.");
+                 return;
+             }
+             handleTusUpload(file);
           } else {
              handleFileUpload({ target: { files: e.dataTransfer.files } } as unknown as React.ChangeEvent<HTMLInputElement>, field as "markingScheme" | "questionPaperUrl" | "cloudLink");
           }
@@ -85,7 +94,15 @@ export default function CloudMarkingPage() {
                 chunkSize: 6 * 1024 * 1024,
                 onError: (error) => {
                     console.error("TUS Upload failed:", error);
-                    toast.error("Upload failed: " + (error as Error).message);
+                    let errMsg = "Upload failed: " + (error as Error).message;
+                    if (error.message.includes("network")) {
+                        errMsg = "Upload paused: Network connection lost. Please check your internet.";
+                    } else if (error.message.includes("timeout")) {
+                        errMsg = "Upload paused: Server timeout. The file might be too large or the connection is too slow.";
+                    } else if (error.message.includes("chunk")) {
+                        errMsg = "Upload failed: Chunking limit exceeded or rejected by server.";
+                    }
+                    toast.error(errMsg);
                     setUploading(false);
                 },
                 onProgress: (bytesUploaded, bytesTotal) => {
@@ -540,18 +557,24 @@ export default function CloudMarkingPage() {
                                         <Input
                                             type="file"
                                             onChange={(e) => {
-                                                if (e.target.files && e.target.files[0]) {
-                                                    handleTusUpload(e.target.files[0]);
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
+                                                        toast.error("Invalid file format. Please upload a PDF file.");
+                                                        e.target.value = ''; // Reset input
+                                                        return;
+                                                    }
+                                                    handleTusUpload(file);
                                                 }
                                             }}
-                                            accept=".pdf"
+                                            accept=".pdf,application/pdf"
                                             disabled={uploading || !approvedRubricId}
                                             className="hidden"
                                             id="tus-file-upload"
                                         />
                                         <Label
                                             htmlFor="tus-file-upload"
-                                            className={`cursor-pointer inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`cursor-pointer inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ${uploading || !approvedRubricId ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                                         >
                                             {uploading ? 'Uploading...' : 'Select File'}
                                         </Label>
