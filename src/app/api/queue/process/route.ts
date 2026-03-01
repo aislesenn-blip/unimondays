@@ -186,10 +186,11 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Recursive Trigger (The "Hydraulic Press")
-        // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
+        // If we processed any jobs AND didn't hit a rate limit, trigger self to see if more jobs exist.
+        // Even if we didn't fill the batch, a single job (like AI_GRADE_SUBMISSION) might have spawned new chunks!
         // If rate limit hit, we STOP to let the API cool down.
-        if (!rateLimitHit && claimedJobs.length === BATCH_SIZE) {
-            console.log(`[QUEUE] Batch full & healthy. Triggering recursion: ${baseUrl}/api/queue/process`);
+        if (!rateLimitHit && claimedJobs.length > 0) {
+            console.log(`[QUEUE] Processed ${claimedJobs.length} jobs & healthy. Triggering recursion: ${baseUrl}/api/queue/process`);
 
             // Fire and forget next batch
             fetch(`${baseUrl}/api/queue/process`, {
