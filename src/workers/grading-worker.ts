@@ -43,7 +43,8 @@ export async function handleAiGrade(job: Job) {
       workSession: {
         include: {
           lecturer: true,
-          class: true
+          class: true,
+          standardizedRubric: true
         }
       },
       user: true
