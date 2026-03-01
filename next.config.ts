@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '20mb',
     },
   },
+  serverExternalPackages: ['pdf-to-img'],
 };
 
 export default nextConfig;
