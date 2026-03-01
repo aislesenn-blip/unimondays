@@ -36,26 +36,54 @@ export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = 
       };
     });
 
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-1.5-flash", // Explicit OpenRouter model ID
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown." },
-            ...imageContents
-          ],
-        },
-      ],
-      temperature: 0.0,
-      top_p: 0.1,
-      max_tokens: 4096, // Ensure we get the full text
-    });
+    const modelsToTry = [
+      "google/gemini-2.5-flash",
+      "anthropic/claude-3.5-sonnet"
+    ];
 
-    const text = response.choices[0]?.message?.content;
-    if (!text) throw new Error("No text returned from OpenRouter Vision API");
+    let attempt = 0;
+    const MAX_RETRIES = 3;
 
-    return text;
+    while (attempt < MAX_RETRIES) {
+      for (const currentModel of modelsToTry) {
+        try {
+          const response = await openai.chat.completions.create({
+            model: currentModel,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown." },
+                  ...imageContents
+                ],
+              },
+            ],
+            temperature: 0.0,
+            top_p: 0.1,
+            max_tokens: 4096,
+          });
+
+          const text = response.choices[0]?.message?.content;
+          if (!text) throw new Error(`No text returned from OpenRouter Vision API using ${currentModel}`);
+
+          return text;
+        } catch (modelErr: any) {
+            console.error(`Attempt ${attempt + 1}: Model ${currentModel} failed in ocrDocument:`, modelErr?.message || modelErr);
+            if (currentModel === modelsToTry[modelsToTry.length - 1]) {
+                if (attempt === MAX_RETRIES - 1) {
+                  throw modelErr; // Last model on last attempt failed, throw to the outer catch
+                }
+                break; // Break the inner loop to retry the while loop
+            }
+        }
+      }
+      attempt++;
+      if (attempt < MAX_RETRIES) {
+          await new Promise(res => setTimeout(res, 1000 * attempt));
+      }
+    }
+
+    throw new Error("Failed to process OCR after max retries");
 
   } catch (error: any) {
     console.error("OpenRouter OCR Error:", error);
@@ -107,29 +135,59 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
       Do not include any markdown formatting. Just the JSON.
     `;
 
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-1.5-flash",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: {
-                url: dataUrl,
-              }
-            }
-          ],
-        },
-      ],
-      response_format: { type: "json_object" }, // Gemini supports JSON mode via OpenRouter usually
-      temperature: 0.0,
-      top_p: 0.1,
-    });
+    const modelsToTry = [
+      "google/gemini-2.5-flash",
+      "anthropic/claude-3.5-sonnet"
+    ];
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) throw new Error("No content returned");
+    let attempt = 0;
+    const MAX_RETRIES = 3;
+    let content: string | null | undefined;
+
+    while (attempt < MAX_RETRIES) {
+        for (const currentModel of modelsToTry) {
+            try {
+                const response = await openai.chat.completions.create({
+                  model: currentModel,
+                  messages: [
+                    {
+                      role: "user",
+                      content: [
+                        { type: "text", text: prompt },
+                        {
+                          type: "image_url",
+                          image_url: {
+                            url: dataUrl,
+                          }
+                        }
+                      ],
+                    },
+                  ],
+                  response_format: { type: "json_object" },
+                  temperature: 0.0,
+                  top_p: 0.1,
+                });
+
+                content = response.choices[0]?.message?.content;
+                if (!content) throw new Error(`No content returned from OpenRouter using ${currentModel}`);
+                break; // Success, break out of model loop
+            } catch (modelErr: any) {
+                console.error(`Attempt ${attempt + 1}: Model ${currentModel} failed in analyzePdfStructure:`, modelErr?.message || modelErr);
+                if (currentModel === modelsToTry[modelsToTry.length - 1]) {
+                    if (attempt === MAX_RETRIES - 1) {
+                      throw modelErr;
+                    }
+                }
+            }
+        }
+        if (content) break;
+        attempt++;
+        if (attempt < MAX_RETRIES) {
+             await new Promise(res => setTimeout(res, 1000 * attempt));
+        }
+    }
+
+    if (!content) throw new Error("No content returned after max retries");
 
     // Robust JSON Extraction: Find the first [ or { and the last ] or }
     let cleanContent = content;
