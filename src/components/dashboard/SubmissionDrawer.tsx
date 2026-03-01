@@ -269,7 +269,7 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                         {breakdown.map((item: any, i: number) => (
                             <div key={i} className="flex justify-between p-3 text-sm border-b last:border-0">
                                 <div className="flex-1 pr-4">
-                                    <span className="font-medium text-foreground">{item.question}</span>
+                                    <span className="font-medium text-foreground">{item.label || item.question_number || item.question}</span>
                                     {item.alternative_valid_concept && (
                                         <Badge variant="outline" className="ml-2 bg-yellow-50 text-yellow-700 border-yellow-200">
                                             Alternative Valid Concept

@@ -140,7 +140,7 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                                 {breakdown.map((item: any, i: number) => (
                                     <div key={i} className="border rounded-lg p-4 bg-card shadow-sm transition-all hover:shadow-md">
                                         <div className="flex justify-between items-start mb-3 border-b pb-2">
-                                            <span className="font-semibold text-sm">{item.question || `Question ${i+1}`}</span>
+                                            <span className="font-semibold text-sm">{item.label || item.question_number || item.question || `Question ${i+1}`}</span>
                                             <span className={`font-bold text-sm px-2 py-0.5 rounded ${item.score === item.max ? 'bg-green-100 text-green-700' : 'bg-muted text-foreground'}`}>
                                                 {item.score} / {item.max}
                                             </span>

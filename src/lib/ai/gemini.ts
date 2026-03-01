@@ -54,7 +54,7 @@ export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = 
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown." },
+                  { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown. You must actively look for, analyze, and grade all visual elements, diagrams, charts, and hand-drawn graphs provided by the student. Evaluate these visual answers against the rubric just as rigorously as text." },
                   ...imageContents
                 ],
               },

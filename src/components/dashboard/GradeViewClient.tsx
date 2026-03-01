@@ -178,7 +178,7 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
                 submission.breakdown.map((q, idx) => (
                 <div key={idx} className="border rounded-lg p-4 space-y-3 bg-card hover:border-primary/50 transition-colors">
                   <div className="flex justify-between items-start">
-                    <span className="font-medium text-sm">{q.question || `Question ${idx + 1}`}</span>
+                    <span className="font-medium text-sm">{q.label || q.question_number || q.question || `Question ${idx + 1}`}</span>
                     <div className="flex items-center gap-2">
                       <Input
                         type="number"
