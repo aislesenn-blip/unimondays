@@ -103,7 +103,8 @@ export async function POST(req: NextRequest) {
                         where: { id: job.id },
                         data: {
                             payload: JSON.stringify(jobResult.nextPayload),
-                            status: 'PENDING' // Keep it pending so the next queue iteration picks it up
+                            status: 'PENDING', // Keep it pending so the next queue iteration picks it up
+                            createdAt: new Date() // Send to back of the queue to prevent starvation of newer chunks
                         }
                     });
                     processedCount++;
