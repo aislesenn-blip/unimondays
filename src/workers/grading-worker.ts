@@ -1,3 +1,5 @@
+import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readFile, saveBuffer } from '@/lib/storage';

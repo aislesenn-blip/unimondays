@@ -1,3 +1,5 @@
+import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+
 import OpenAI from 'openai';
 import { PDFDocument } from 'pdf-lib';
 import * as canvas from '@napi-rs/canvas';
