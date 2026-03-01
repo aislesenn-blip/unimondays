@@ -21,11 +21,11 @@ export async function POST(req: NextRequest) {
                 const newRubric = await tx.standardizedRubric.create({
                     data: {
                         lecturerId: user.id,
-                        examTitle: rubric.ExamTitle,
-                        courseCode: rubric.CourseCode,
+                        examTitle: rubric.ExamTitle || "Untitled Exam",
+                        courseCode: rubric.CourseCode || "N/A",
                         examDate: new Date(rubric.ExamDate || new Date().toISOString()),
-                        totalMarks: rubric.TotalMarks,
-                        numberOfQuestions: rubric.NumberOfQuestions,
+                        totalMarks: Number(rubric.TotalMarks) || 0,
+                        numberOfQuestions: Number(rubric.NumberOfQuestions) || 0,
                     }
                 });
 
@@ -35,11 +35,11 @@ export async function POST(req: NextRequest) {
                         question = await tx.rubricQuestion.create({
                             data: {
                                 standardizedRubricId: newRubric.id,
-                                questionId: q.QuestionID,
-                                questionText: q.QuestionText,
-                                marksAllocated: q.MarksAllocated,
-                                questionType: q.QuestionType,
-                                learningObjective: q.LearningObjective,
+                                questionId: q.QuestionID || `Q-${Math.random().toString(36).substr(2, 5)}`,
+                                questionText: q.QuestionText || "",
+                                marksAllocated: Number(q.MarksAllocated) || 0,
+                                questionType: q.QuestionType || "Essay",
+                                learningObjective: q.LearningObjective || "",
                                 mcqOptions: q.MCQOptions ? JSON.stringify(q.MCQOptions) : null,
                             }
                         });
@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
                             await tx.conceptUnit.createMany({
                                 data: q.ConceptUnits.map(cu => ({
                                     rubricQuestionId: question.id,
-                                    conceptId: cu.ConceptID,
-                                    conceptText: cu.ConceptText,
-                                    marks: cu.Marks,
-                                    partialRule: cu.PartialRule
+                                    conceptId: cu.ConceptID || `C-${Math.random().toString(36).substr(2, 5)}`,
+                                    conceptText: cu.ConceptText || "",
+                                    marks: Number(cu.Marks) || 0,
+                                    partialRule: cu.PartialRule || null
                                 }))
                             });
                         } catch (err: any) {
@@ -69,9 +69,9 @@ export async function POST(req: NextRequest) {
                         try {
                             await tx.evaluationTier.createMany({
                                 data: [
-                                    { rubricQuestionId: question.id, tierName: "Tier1", description: q.EvaluationTiers.Tier1 },
-                                    { rubricQuestionId: question.id, tierName: "Tier2", description: q.EvaluationTiers.Tier2 },
-                                    { rubricQuestionId: question.id, tierName: "Tier3", description: q.EvaluationTiers.Tier3 }
+                                    { rubricQuestionId: question.id, tierName: "Tier1", description: q.EvaluationTiers.Tier1 || "" },
+                                    { rubricQuestionId: question.id, tierName: "Tier2", description: q.EvaluationTiers.Tier2 || "" },
+                                    { rubricQuestionId: question.id, tierName: "Tier3", description: q.EvaluationTiers.Tier3 || "" }
                                 ]
                             });
                         } catch (err: any) {
@@ -85,8 +85,8 @@ export async function POST(req: NextRequest) {
                             await tx.outOfScopeRule.createMany({
                                 data: q.OutOfScope.map(os => ({
                                     rubricQuestionId: question.id,
-                                    description: os.Description,
-                                    maxMarks: os.MaxMarks
+                                    description: os.Description || "",
+                                    maxMarks: Number(os.MaxMarks) || 0
                                 }))
                             });
                         } catch (err: any) {
@@ -100,8 +100,8 @@ export async function POST(req: NextRequest) {
                             await tx.penaltyRule.createMany({
                                 data: q.Penalties.map(p => ({
                                     rubricQuestionId: question.id,
-                                    description: p.Description,
-                                    deduct: p.Deduct
+                                    description: p.Description || "",
+                                    deduct: Number(p.Deduct) || 0
                                 }))
                             });
                         } catch (err: any) {
