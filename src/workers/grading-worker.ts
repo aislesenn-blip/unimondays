@@ -6,6 +6,7 @@ import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
+import { pdf } from 'pdf-to-img';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function handleAiGrade(job: Job) {
@@ -114,8 +115,8 @@ export async function handleAiGrade(job: Job) {
   }
 
   try {
-      // PARALLEL TASK 1: Submission OCR (Return buffer for visual analysis)
-      const submissionOcrTask = async (): Promise<{ text: string, buffer: Buffer, mimeType: string }> => {
+      // PARALLEL TASK 1: Submission OCR (Return buffer array for visual analysis)
+      const submissionOcrTask = async (): Promise<{ text: string, buffers: Buffer[], mimeType: string }> => {
           let targetPath = submission.filePath;
           let ocrText = submission.ocrText;
 
@@ -135,33 +136,54 @@ export async function handleAiGrade(job: Job) {
                            targetPath.toLowerCase().endsWith('.jpg') || targetPath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
                            'application/pdf';
 
+          let imageBuffers: Buffer[] = [];
+
+          if (mimeType === 'application/pdf') {
+              console.log(`[PDF_TO_IMG] Converting PDF to image array...`);
+              try {
+                  const document = await pdf(buffer, { scale: 2.0 }); // Render at higher resolution
+                  for await (const page of document) {
+                      imageBuffers.push(page);
+                  }
+                  console.log(`[PDF_TO_IMG] Generated ${imageBuffers.length} images from PDF.`);
+              } catch (pdfError) {
+                  console.error("[PDF_TO_IMG ERROR] Failed to convert PDF to images:", pdfError);
+                  throw new Error(`PDF to Image conversion failed: ${pdfError}`);
+              }
+          } else {
+              imageBuffers = [buffer];
+          }
+
           if (ocrText) {
               console.log(`[OCR_SKIP] Submission already OCR'd. Length: ${ocrText.length}`);
-              return { text: ocrText, buffer, mimeType };
+              return { text: ocrText, buffers: imageBuffers, mimeType: mimeType === 'application/pdf' ? 'image/png' : mimeType };
           }
 
           // Deep Audit Fix: Vision Pre-processing (Payload Integrity)
-          // Ensure images/PDFs are not absurdly large before sending to vision models to prevent "Math Blindspots"
-          // If a buffer is > 15MB, we aggressively compress images using sharp.
-          let processedBuffer = buffer;
-          if (processedBuffer.length > 15 * 1024 * 1024) {
-              console.warn(`[VISION_WARN] Submission buffer is extremely large (${(processedBuffer.length / 1024 / 1024).toFixed(2)} MB). Applying compression...`);
-              if (mimeType.startsWith('image/')) {
+          // Ensure images are not absurdly large before sending to vision models to prevent "Math Blindspots"
+          const processedBuffers: Buffer[] = [];
+          for (let i = 0; i < imageBuffers.length; i++) {
+              let imgBuf = imageBuffers[i];
+              if (imgBuf.length > 5 * 1024 * 1024) { // Compress if individual image > 5MB
+                  console.warn(`[VISION_WARN] Image ${i+1} is large (${(imgBuf.length / 1024 / 1024).toFixed(2)} MB). Applying compression...`);
                   try {
-                      processedBuffer = await sharp(processedBuffer)
+                      imgBuf = await sharp(imgBuf)
                           .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
                           .jpeg({ quality: 80 })
                           .toBuffer();
-                      console.log(`[VISION_OPT] Image compressed to ${(processedBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+                      console.log(`[VISION_OPT] Image ${i+1} compressed to ${(imgBuf.length / 1024 / 1024).toFixed(2)} MB`);
                   } catch (sharpError) {
-                      console.error("[VISION_ERROR] Failed to compress image with sharp:", sharpError);
+                      console.error(`[VISION_ERROR] Failed to compress image ${i+1} with sharp:`, sharpError);
                   }
               }
+              processedBuffers.push(imgBuf);
           }
 
           try {
-              console.log(`[OCR_START] Sending ${processedBuffer.length} bytes to Gemini (${mimeType})...`);
-              const text = await ocrDocument(processedBuffer, mimeType);
+              console.log(`[OCR_START] Sending ${processedBuffers.length} images to Gemini...`);
+              // Provide as image/png if converted from PDF, otherwise use original mimetype
+              const actualMimeType = mimeType === 'application/pdf' ? 'image/png' : mimeType;
+              const text = await ocrDocument(processedBuffers, actualMimeType);
               console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
 
               // Save immediately
@@ -171,7 +193,7 @@ export async function handleAiGrade(job: Job) {
                       data: { ocrText: text, status: 'PROCESSING' }
                   });
               }
-              return { text, buffer: processedBuffer, mimeType };
+              return { text, buffers: processedBuffers, mimeType: actualMimeType };
           } catch (ocrError: any) {
               console.error("[GRADING FATAL ERROR]: OCR Processing Failed", ocrError);
               throw new Error(`OCR Processing Failed: ${ocrError.message}`);
@@ -224,7 +246,7 @@ export async function handleAiGrade(job: Job) {
       };
 
       // EXECUTE PARALLEL TASKS
-      let submissionData: { text: string, buffer: Buffer, mimeType: string };
+      let submissionData: { text: string, buffers: Buffer[], mimeType: string };
       let rubricContent: string;
       let questionPaperText: string | undefined;
 
@@ -234,7 +256,7 @@ export async function handleAiGrade(job: Job) {
                   fetchStandardizedRubricTask(),
                   questionPaperOcrTask()
               ]);
-              submissionData = { text: "AGGREGATED_JOB", buffer: Buffer.from([]), mimeType: "application/pdf" };
+              submissionData = { text: "AGGREGATED_JOB", buffers: [], mimeType: "application/pdf" };
           } else {
               [submissionData, rubricContent, questionPaperText] = await Promise.all([
                   submissionOcrTask(),
@@ -247,7 +269,7 @@ export async function handleAiGrade(job: Job) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
-      const { text: ocrText, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
+      const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
 
       // Prepare Config
       const strictnessMap: Record<string, number> = {
@@ -290,7 +312,9 @@ Student Identifier: ${studentId}.
       console.log(`- Config: Strictness=${config.strictness}`);
       console.log(`- Context: ${contextString.trim()}`);
       console.log(`- Payload: Submission=${ocrText.length} chars, Rubric=${rubricContent.length} chars`);
-      if (submissionBuffer) console.log(`- Visual: Buffer loaded (${submissionBuffer.length} bytes, ${submissionMime})`);
+      if (submissionBuffers && submissionBuffers.length > 0) {
+          console.log(`- Visual: ${submissionBuffers.length} Buffers loaded (${submissionMime})`);
+      }
 
       let result: GradingResult;
 
@@ -383,8 +407,8 @@ Student Identifier: ${studentId}.
               // We won't maintain the simulator in Phase 2 for brevity, just throw or bypass
               throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
           } else {
-              // Pass image buffer for multimodal grading
-              result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
+              // Pass image buffers for multimodal grading
+              result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
               console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
           }
       }

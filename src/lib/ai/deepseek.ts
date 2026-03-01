@@ -176,7 +176,7 @@ export async function gradeSubmission(
   rubric: string,
   totalMarks: number,
   config: GradeConfig = { strictness: 1.0 },
-  imageBuffer?: Buffer, // NEW: Multimodal Payload
+  imageBuffer?: Buffer | Buffer[], // NEW: Multimodal Payload (Supports multiple pages)
   mimeType?: string     // NEW: Multimodal Payload
 ): Promise<GradingResult> {
   if (!deepseek) {
@@ -210,8 +210,19 @@ ${ocrText}`;
       // BRANCH A: MULTIMODAL (Visual Analysis)
       if (imageBuffer && openRouter && mimeType) {
           console.log(`[AI_ROUTER] Routing request to Gemini 2.5 Flash (Multimodal) via OpenRouter. Attempt ${attempt + 1}/${MAX_RETRIES}`);
-          const base64Data = imageBuffer.toString("base64");
-          const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+          const buffers = Array.isArray(imageBuffer) ? imageBuffer : [imageBuffer];
+          const imageContents = buffers.map(buf => {
+              const base64Data = buf.toString("base64");
+              const dataUrl = `data:${mimeType};base64,${base64Data}`;
+              return {
+                  type: "image_url" as const,
+                  image_url: {
+                      url: dataUrl,
+                      detail: "high" as const
+                  }
+              };
+          });
 
           completion = await openRouter.chat.completions.create({
               model: "google/gemini-2.5-flash",
@@ -221,13 +232,7 @@ ${ocrText}`;
                       role: "user",
                       content: [
                           { type: "text", text: userContentText },
-                          {
-                              type: "image_url",
-                              image_url: {
-                                  url: dataUrl,
-                                  detail: "high"
-                              }
-                          }
+                          ...imageContents
                       ]
                   }
               ],
