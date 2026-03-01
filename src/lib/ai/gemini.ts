@@ -16,16 +16,25 @@ const openai = new OpenAI({
   }
 });
 
-export async function ocrDocument(buffer: Buffer, mimeType: string = "application/pdf"): Promise<string> {
+export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = "application/pdf"): Promise<string> {
   // Runtime check for real key
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is not set. OCR service unavailable.");
   }
 
   try {
-    // OpenAI Vision API requires specific data URL format
-    const base64Data = buffer.toString("base64");
-    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+    const buffers = Array.isArray(buffer) ? buffer : [buffer];
+    const imageContents = buffers.map(buf => {
+      const base64Data = buf.toString("base64");
+      const dataUrl = `data:${mimeType};base64,${base64Data}`;
+      return {
+        type: "image_url" as const,
+        image_url: {
+          url: dataUrl,
+          detail: "high" as const // Force high resolution for OCR accuracy
+        }
+      };
+    });
 
     const response = await openai.chat.completions.create({
       model: "google/gemini-2.5-flash", // Explicit OpenRouter model ID
@@ -34,13 +43,7 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
           role: "user",
           content: [
             { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown." },
-            {
-              type: "image_url",
-              image_url: {
-                url: dataUrl,
-                detail: "high" // Force high resolution for OCR accuracy
-              }
-            }
+            ...imageContents
           ],
         },
       ],
