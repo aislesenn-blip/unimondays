@@ -211,27 +211,43 @@ ${rubricText}
 
                 let attempt = 0;
                 const MAX_RETRIES = 3;
+                const modelsToTry = [
+                    "google/gemini-2.5-flash",
+                    "anthropic/claude-3.5-sonnet"
+                ];
+
                 while (attempt < MAX_RETRIES) {
                     try {
-                        const completion = await openai.chat.completions.create({
-                            model: "google/gemini-1.5-flash",
-                            messages: [
-                                { role: "system", content: systemPrompt },
-                                {
-                                    role: "user",
-                                    content: [
-                                        { type: "text", text: chunkUserPrompt },
-                                        ...imageContents
-                                    ]
+                        let completion;
+                        for (const currentModel of modelsToTry) {
+                            try {
+                                completion = await openai.chat.completions.create({
+                                    model: currentModel,
+                                    messages: [
+                                        { role: "system", content: systemPrompt },
+                                        {
+                                            role: "user",
+                                            content: [
+                                                { type: "text", text: chunkUserPrompt },
+                                                ...imageContents
+                                            ]
+                                        }
+                                    ],
+                                    response_format: { type: "json_object" },
+                                    temperature: 0.0,
+                                    top_p: 0.1,
+                                });
+                                break; // Break out of the fallback model loop if success
+                            } catch (modelErr: any) {
+                                console.error(`Attempt ${attempt + 1}: Model ${currentModel} failed in standardizeRubric:`, modelErr?.message || modelErr);
+                                if (currentModel === modelsToTry[modelsToTry.length - 1]) {
+                                    throw modelErr; // Last model failed, throw to the outer try/catch
                                 }
-                            ],
-                            response_format: { type: "json_object" },
-                            temperature: 0.0,
-                            top_p: 0.1,
-                        });
+                            }
+                        }
 
-                        const content = completion.choices[0]?.message?.content;
-                        if (!content) throw new Error("No content returned from AI Service");
+                        const content = completion?.choices[0]?.message?.content;
+                        if (!content) throw new Error(`No content returned from AI Service`);
 
                         let cleanContent = content;
                         const objectMatch = content.match(/\{[\s\S]*\}/);
@@ -242,7 +258,7 @@ ${rubricText}
                         }
 
                         return JSON.parse(cleanContent) as StandardizedRubric;
-                    } catch (err) {
+                    } catch (err: any) {
                         attempt++;
                         if (attempt >= MAX_RETRIES) throw err;
                         await new Promise(res => setTimeout(res, 1000 * attempt));
@@ -286,19 +302,34 @@ ${rubricText}
                     top_p: 0.1,
                 });
             } else {
-                completion = await openai.chat.completions.create({
-                    model: "google/gemini-1.5-flash",
-                    messages: [
-                        { role: "system", content: systemPrompt },
-                        { role: "user", content: userPrompt }
-                    ],
-                    response_format: { type: "json_object" },
-                    temperature: 0.0,
-                    top_p: 0.1,
-                });
+                const modelsToTry = [
+                    "google/gemini-2.5-flash",
+                    "anthropic/claude-3.5-sonnet"
+                ];
+
+                for (const currentModel of modelsToTry) {
+                    try {
+                        completion = await openai.chat.completions.create({
+                            model: currentModel,
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                { role: "user", content: userPrompt }
+                            ],
+                            response_format: { type: "json_object" },
+                            temperature: 0.0,
+                            top_p: 0.1,
+                        });
+                        break; // Success, exit loop
+                    } catch (err: any) {
+                        console.error(`Fallback Model ${currentModel} failed in text standardizeRubric:`, err?.message || err);
+                        if (currentModel === modelsToTry[modelsToTry.length - 1]) {
+                            throw err; // Last model failed
+                        }
+                    }
+                }
             }
 
-            const content = completion.choices[0]?.message?.content;
+            const content = completion?.choices[0]?.message?.content;
             if (!content) {
                 throw new Error("No content returned from AI Service");
             }
