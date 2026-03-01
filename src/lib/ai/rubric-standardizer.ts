@@ -1,5 +1,17 @@
 import OpenAI from 'openai';
 import { PDFDocument } from 'pdf-lib';
+import * as canvas from '@napi-rs/canvas';
+
+if (!globalThis.DOMMatrix) {
+  globalThis.DOMMatrix = canvas.DOMMatrix as any;
+}
+if (!globalThis.DOMPoint) {
+  globalThis.DOMPoint = canvas.DOMPoint as any;
+}
+if (!globalThis.DOMRect) {
+  globalThis.DOMRect = canvas.DOMRect as any;
+}
+
 import { pdf } from 'pdf-to-img';
 
 const apiKey = process.env.OPENROUTER_API_KEY || "dummy-key-for-build";
