@@ -61,59 +61,6 @@ export async function handleAiGrade(job: Job) {
 
   console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}, Job Type: ${job.type}`);
 
-  if (job.type === 'AI_GRADE_SUBMISSION') {
-      // --- FAN-OUT: PDF Chunking ---
-      if (!submission.filePath) throw new Error("No file path for submission.");
-
-      const buffer = await readFile(submission.filePath, 'exam_pdfs');
-      const isPdf = submission.filePath.toLowerCase().endsWith('.pdf') ||
-                    (buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46);
-
-      let needsChunking = false;
-      let pageCount = 1;
-      let srcDoc: PDFDocument | null = null;
-
-      if (isPdf) {
-          srcDoc = await PDFDocument.load(buffer);
-          pageCount = srcDoc.getPageCount();
-          if (pageCount > 3) {
-              needsChunking = true;
-          }
-      }
-
-      if (needsChunking && srcDoc) {
-          console.log(`[FAN_OUT] Submission ${submissionId} has ${pageCount} pages. Chunking...`);
-          const CHUNK_SIZE = 3;
-          const chunks: { path: string, pageCount: number }[] = [];
-
-          for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
-              const end = Math.min(start + CHUNK_SIZE, pageCount);
-              const newDoc = await PDFDocument.create();
-              const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
-              const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
-              copiedPages.forEach(page => newDoc.addPage(page));
-              const chunkBytes = await newDoc.save();
-              const sliceBuffer = Buffer.from(chunkBytes);
-
-              const uniqueSuffix = uuidv4().substring(0, 8);
-              const fileName = `chunk_${submission.id}_${start}_${end}_${uniqueSuffix}.pdf`;
-
-              const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
-              chunks.push({ path: slicePath, pageCount: end - start });
-          }
-
-          console.log(`[FAN_OUT] Created ${chunks.length} chunks. Processing sequentially/parallel in-memory to guarantee execution speed...`);
-
-          // Execute processing directly instead of enqueuing
-          // Do not return here, let it fall through to the new in-memory aggregation logic
-          // Note: The rest of the pipeline handles the chunking in-memory further down.
-          // Wait, actually I should process them here, OR change the rest of the function to handle the chunked logic.
-          // Let's modify the whole block.
-      }
-
-      // If <= 3 pages, fall through to normal grading logic (atomic)
-  }
-
   try {
       // PARALLEL TASK 1: Submission OCR (Return buffer array for visual analysis)
       const submissionOcrTask = async (chunkPath?: string): Promise<{ text: string, buffers: Buffer[], mimeType: string }> => {
@@ -245,10 +192,16 @@ export async function handleAiGrade(job: Job) {
       let questionPaperText: string | undefined;
 
       try {
-          [rubricContent, questionPaperText] = await Promise.all([
-              fetchStandardizedRubricTask(),
-              questionPaperOcrTask()
-          ]);
+          if (job.type === 'AI_GRADE_SUBMISSION' || job.type === 'AI_GRADE_CHUNK') {
+              [rubricContent, questionPaperText] = await Promise.all([
+                  fetchStandardizedRubricTask(),
+                  questionPaperOcrTask()
+              ]);
+          } else {
+              rubricContent = await fetchStandardizedRubricTask();
+              // Don't OCR question paper for AGGREGATE
+              questionPaperText = undefined;
+          }
       } catch (e: any) {
           console.error("[GRADING FATAL ERROR]: Prerequisite Check Failed", e);
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
@@ -260,7 +213,7 @@ export async function handleAiGrade(job: Job) {
       let chunks: { path: string, pageCount: number }[] = [];
       let srcDoc: PDFDocument | null = null;
 
-      if (submission.filePath) {
+      if (job.type === 'AI_GRADE_SUBMISSION' && submission.filePath) {
           const buffer = await readFile(submission.filePath, 'exam_pdfs');
           isPdf = submission.filePath.toLowerCase().endsWith('.pdf') ||
                         (buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46);
@@ -413,6 +366,12 @@ Student Identifier: ${studentId}.
                   }
               });
               return { success: false, message: 'Parent failed due to child chunk failure.' };
+          }
+
+          const failedChunks = allChunks.filter(c => c.status === 'FAILED');
+          if (failedChunks.length > 0) {
+              console.error(`[AI_GRADE_AGGREGATE] Found ${failedChunks.length} FAILED chunks. Aborting aggregation.`);
+              throw new Error("One or more chunks failed during processing. Grading aborted.");
           }
 
           const pendingChunks = allChunks.filter(c => c.status !== 'COMPLETED');
