@@ -205,11 +205,11 @@ ${ocrText}`;
 
   while (attempt < MAX_RETRIES) {
     try {
-      let completion: OpenAI.Chat.Completions.ChatCompletion;
+      let completion: OpenAI.Chat.Completions.ChatCompletion | undefined;
 
       // BRANCH A: MULTIMODAL (Visual Analysis)
       if (imageBuffer && openRouter && mimeType) {
-          console.log(`[AI_ROUTER] Routing request to Gemini 2.5 Flash (Multimodal) via OpenRouter. Attempt ${attempt + 1}/${MAX_RETRIES}`);
+          console.log(`[AI_ROUTER] Routing request to Vision Models (Multimodal) via OpenRouter. Attempt ${attempt + 1}/${MAX_RETRIES}`);
 
           const buffers = Array.isArray(imageBuffer) ? imageBuffer : [imageBuffer];
           const imageContents = buffers.map(buf => {
@@ -224,23 +224,38 @@ ${ocrText}`;
               };
           });
 
-          completion = await openRouter.chat.completions.create({
-              model: "google/gemini-1.5-flash",
-              messages: [
-                  { role: "system", content: systemPrompt },
-                  {
-                      role: "user",
-                      content: [
-                          { type: "text", text: userContentText },
-                          ...imageContents
-                      ]
+          const modelsToTry = [
+              "google/gemini-2.5-flash",
+              "anthropic/claude-3.5-sonnet"
+          ];
+
+          for (const currentModel of modelsToTry) {
+              try {
+                  completion = await openRouter.chat.completions.create({
+                      model: currentModel,
+                      messages: [
+                          { role: "system", content: systemPrompt },
+                          {
+                              role: "user",
+                              content: [
+                                  { type: "text", text: userContentText },
+                                  ...imageContents
+                              ]
+                          }
+                      ],
+                      response_format: { type: "json_object" },
+                      temperature: 0.0,
+                      top_p: 0.1,
+                      max_tokens: 16384,
+                  });
+                  break; // Success, break out of model loop
+              } catch (modelErr: any) {
+                  console.error(`Attempt ${attempt + 1}: Model ${currentModel} failed in gradeSubmission (Multimodal):`, modelErr?.message || modelErr);
+                  if (currentModel === modelsToTry[modelsToTry.length - 1]) {
+                      throw modelErr; // Last model failed, throw to outer catch
                   }
-              ],
-              response_format: { type: "json_object" },
-              temperature: 0.0,
-              top_p: 0.1,
-              max_tokens: 16384,
-          });
+              }
+          }
 
       } else {
           // BRANCH B: TEXT-ONLY (Primary vs. Fallback Switch)
@@ -259,12 +274,12 @@ ${ocrText}`;
                   max_tokens: 16384,
               });
           } else {
-              // AUTONOMOUS FALLBACK PATH: Gemini 1.5 Pro via OpenRouter
-              console.log(`[AI_FALLBACK] ⚠️ Primary Engine Failure. Executing Model Switch to Gemini 1.5 Pro (Fallback)...`);
+              // AUTONOMOUS FALLBACK PATH: Gemini 2.5 Pro via OpenRouter
+              console.log(`[AI_FALLBACK] ⚠️ Primary Engine Failure. Executing Model Switch to Gemini 2.5 Pro (Fallback)...`);
               if (!openRouter) throw new Error("OpenRouter API missing for fallback logic.");
 
               completion = await openRouter.chat.completions.create({
-                  model: "google/gemini-1.5-pro",
+                  model: "google/gemini-2.5-pro",
                   messages: [
                       { role: "system", content: systemPrompt },
                       { role: "user", content: userContentText }
@@ -277,6 +292,7 @@ ${ocrText}`;
           }
       }
 
+      if (!completion) throw new Error("AI Service failed to return a completion object.");
       const content = completion.choices[0].message.content;
       if (!content) throw new Error("No content returned from AI Service");
 
