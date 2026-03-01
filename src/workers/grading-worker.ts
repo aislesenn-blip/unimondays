@@ -326,43 +326,93 @@ Student Identifier: ${studentId}.
       const totalMarks = submission.workSession.totalMarks || 100;
       let result: GradingResult;
 
-      if (chunks.length > 0) {
-          console.log(`[IN_MEMORY_FAN_OUT] Processing ${chunks.length} chunks via Promise.all...`);
+      if (chunks.length > 0 && job.type === 'AI_GRADE_SUBMISSION') {
+          console.log(`[FAN_OUT] Dispatching ${chunks.length} AI_GRADE_CHUNK jobs...`);
 
-          const chunkPromises = chunks.map(async (chunk) => {
-              // 1. OCR the chunk
-              const submissionData = await submissionOcrTask(chunk.path);
-              const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
-
-              // 2. Prepare isolated config
-              const chunkConfig: GradeConfig = {
-                  ...config,
-                  context: `Extract all questions/answers from THESE 3 PAGES ONLY. Maintain the sequence.\n\n${baseContextString}`
-              };
-
-              // 3. Grade chunk with retry mechanism
-              let attempt = 0;
-              const MAX_RETRIES = 3;
-              while (attempt < MAX_RETRIES) {
-                  try {
-                      return await gradeSubmission(ocrText, rubricContent, totalMarks, chunkConfig, submissionBuffers, submissionMime);
-                  } catch (err) {
-                      attempt++;
-                      if (attempt >= MAX_RETRIES) throw err;
-                      await new Promise(res => setTimeout(res, 1000 * attempt));
+          // Create chunk jobs
+          for (const chunk of chunks) {
+              await prisma.job.create({
+                  data: {
+                      type: 'AI_GRADE_CHUNK',
+                      payload: JSON.stringify({
+                          submissionId: submission.id,
+                          chunkPath: chunk.path,
+                          originalJobId: job.id
+                      }),
+                      status: 'PENDING'
                   }
+              });
+          }
+
+          // Create the aggregate job
+          await prisma.job.create({
+              data: {
+                  type: 'AI_GRADE_AGGREGATE',
+                  payload: JSON.stringify({
+                      submissionId: submission.id,
+                      expectedChunks: chunks.length,
+                      originalJobId: job.id
+                  }),
+                  status: 'PENDING'
               }
-              throw new Error("Failed to process chunk after max retries.");
           });
 
-          const chunkResults = await Promise.all(chunkPromises);
+          console.log(`[FAN_OUT] Successfully enqueued chunk jobs for Submission ${submission.id}. Exiting parent job.`);
+          return { success: true, message: 'Fanned out chunk jobs' };
 
-          // ---------------------------------------------------------
-          // IN-MEMORY FAN-IN AGGREGATION
-          // ---------------------------------------------------------
-          console.log(`[IN_MEMORY_FAN_IN] Aggregating results from ${chunkResults.length} chunks...`);
+      } else if (job.type === 'AI_GRADE_CHUNK') {
+          console.log(`[AI_GRADE_CHUNK] Processing chunk ${data.chunkPath}`);
 
-          const mergedResults: Record<string, any> = {};
+          const submissionData = await submissionOcrTask(data.chunkPath);
+          const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
+
+          const chunkConfig: GradeConfig = {
+              ...config,
+              context: `Extract all questions/answers from THESE 3 PAGES ONLY. Maintain the sequence.\n\n${baseContextString}`
+          };
+
+          const chunkResult = await gradeSubmission(ocrText, rubricContent, totalMarks, chunkConfig, submissionBuffers, submissionMime);
+
+          // Save result so the aggregate job can find it
+          await prisma.job.update({
+              where: { id: job.id },
+              data: {
+                  result: JSON.stringify(chunkResult),
+                  status: 'COMPLETED'
+              }
+          });
+
+          console.log(`[AI_GRADE_CHUNK] Completed chunk ${data.chunkPath}`);
+          return { success: true, message: 'Chunk graded successfully' };
+
+      } else if (job.type === 'AI_GRADE_AGGREGATE') {
+          console.log(`[AI_GRADE_AGGREGATE] Checking completion status of chunks...`);
+
+          // Check if all chunks are complete
+          const allChunks = await prisma.job.findMany({
+              where: {
+                  type: 'AI_GRADE_CHUNK',
+                  payload: { contains: `"originalJobId":"${data.originalJobId}"` }
+              }
+          });
+
+          if (allChunks.length < data.expectedChunks) {
+              console.warn(`[AI_GRADE_AGGREGATE] Waiting for all chunks to be enqueued. Retrying...`);
+              throw new Error("RATE_LIMIT_HIT: Chunks not yet fully populated in DB.");
+          }
+
+          const pendingChunks = allChunks.filter(c => c.status !== 'COMPLETED');
+          if (pendingChunks.length > 0) {
+              console.log(`[AI_GRADE_AGGREGATE] Waiting on ${pendingChunks.length} chunks to complete. Delaying...`);
+              throw new Error("RATE_LIMIT_HIT: Waiting for chunks to complete.");
+              // Throws rate limit to pause the job cleanly without failing the submission
+          }
+
+          console.log(`[AI_GRADE_AGGREGATE] All chunks completed. Starting FAN_IN aggregation...`);
+
+          const chunkResults = allChunks.map(c => JSON.parse(c.result || '{}'));
+
+          const mergedResults = new Map<string, any>();
           let aggregatedStudentRemarks = "";
           let aggregatedTeacherRemarks = "";
           let detectedIdentity: string | null = null;
@@ -380,44 +430,86 @@ Student Identifier: ${studentId}.
               }
 
               for (const qRes of chunkResult.results || []) {
-                  const qId = qRes.question_id;
-                  if (!mergedResults[qId]) {
-                      mergedResults[qId] = {
-                          question_id: qId,
+                  // Must use the mapped question text/label for accurate tracking and merging
+                  // The prompt returns `question_id` but in practice it represents the question label
+                  const standardRubricObj = JSON.parse(rubricContent);
+                  const dbQuestion = standardRubricObj.questions.find((q: any) => q.id === qRes.question_id || q.questionId === qRes.question_id || q.QuestionID === qRes.question_id);
+                  const mergeKey = dbQuestion?.questionId || dbQuestion?.QuestionID || qRes.question_id;
+
+                  if (!mergedResults.has(mergeKey)) {
+                      mergedResults.set(mergeKey, {
+                          question_id: qRes.question_id,
+                          mergeKey: mergeKey, // Internal key for sorting later
                           status: qRes.status,
                           concept_results: [...(qRes.concept_results || [])],
                           justification: qRes.justification || "",
                           review_flag: !!qRes.review_flag,
                           confidence: qRes.confidence || 1.0
-                      };
+                      });
                   } else {
-                      // Discard 'Not Attempted' if another chunk says it was attempted
-                      if (mergedResults[qId].status === "Not Attempted" && qRes.status !== "Not Attempted") {
-                          mergedResults[qId].status = qRes.status;
-                          mergedResults[qId].justification = qRes.justification; // overwrite placeholder reasoning
+                      const existing = mergedResults.get(mergeKey);
+
+                      // Status overwrite precedence
+                      if (existing.status === "Not Attempted" && qRes.status !== "Not Attempted") {
+                          existing.status = qRes.status;
+                          existing.justification = qRes.justification || existing.justification;
                       } else if (qRes.status !== "Not Attempted" && qRes.justification) {
-                          // Only append valid justification if this isn't a blank chunk
-                          if (!mergedResults[qId].justification.includes(qRes.justification)) {
-                              mergedResults[qId].justification += " " + qRes.justification;
+                          if (!existing.justification.includes(qRes.justification)) {
+                              existing.justification += " " + qRes.justification;
                           }
                       }
 
-                      mergedResults[qId].concept_results.push(...(qRes.concept_results || []));
-                      mergedResults[qId].review_flag = mergedResults[qId].review_flag || !!qRes.review_flag;
-                      mergedResults[qId].confidence = (mergedResults[qId].confidence + (qRes.confidence || 1.0)) / 2;
+                      // Deduplicate Concept Units
+                      const mergedConcepts = new Map<string, any>();
+                      // Add existing ones
+                      for (const c of existing.concept_results) {
+                          mergedConcepts.set(c.conceptId, c);
+                      }
+                      // Merge new ones
+                      for (const newC of qRes.concept_results || []) {
+                          if (mergedConcepts.has(newC.conceptId)) {
+                              const existingC = mergedConcepts.get(newC.conceptId);
+                              // Keep the one with higher marks if duplicate
+                              const newMarks = Number(newC.awardedMarks) || 0;
+                              const oldMarks = Number(existingC.awardedMarks) || 0;
+                              if (newMarks > oldMarks) {
+                                  mergedConcepts.set(newC.conceptId, newC);
+                              }
+                          } else {
+                              mergedConcepts.set(newC.conceptId, newC);
+                          }
+                      }
+
+                      existing.concept_results = Array.from(mergedConcepts.values());
+                      existing.review_flag = existing.review_flag || !!qRes.review_flag;
+                      existing.confidence = (existing.confidence + (qRes.confidence || 1.0)) / 2;
                   }
               }
           }
 
+          // SORTING LOGIC: Convert map values and sort alphanumerically by mergeKey (e.g., Q1, Q2, Q10)
+          const sortedMergedArray = Array.from(mergedResults.values()).sort((a, b) => {
+              const parseNum = (str: string) => {
+                  const match = str.match(/\d+/);
+                  return match ? parseInt(match[0], 10) : 0;
+              };
+              const numA = parseNum(a.mergeKey);
+              const numB = parseNum(b.mergeKey);
+              if (numA !== numB) {
+                  return numA - numB;
+              }
+              return a.mergeKey.localeCompare(b.mergeKey);
+          });
+
           result = {
               exam_id: submission.workSessionId,
-              results: Object.values(mergedResults),
+              results: sortedMergedArray,
               detectedIdentity: detectedIdentity,
               studentRemarks: aggregatedStudentRemarks.trim(),
               teacherRemarks: aggregatedTeacherRemarks.trim()
           };
 
-          console.log(`[IN_MEMORY_FAN_IN] Aggregation complete.`);
+          console.log(`[AI_GRADE_AGGREGATE] Aggregation and Sorting complete.`);
 
       } else {
           // Normal atomic execution
@@ -459,6 +551,7 @@ Student Identifier: ${studentId}.
                   maxMarksForQuestion = dbQuestion.marksAllocated || 0;
               }
           }
+          maxMarksForQuestion = Number(maxMarksForQuestion.toFixed(1));
 
           // L10 Hardening: Deterministic Math Sandbox. Prevent AI Hallucinations.
           // 1. Sum up concepts strictly
@@ -479,8 +572,7 @@ Student Identifier: ${studentId}.
           }
 
           // 3. Ensure float precision doesn't cause floating point errors (e.g. 0.1 + 0.2 = 0.30000000000000004)
-          questionScore = Math.round(questionScore * 10) / 10;
-
+          questionScore = Number(questionScore.toFixed(1));
 
           // Note: OutOfScope and Penalties logic would be applied here based on AI flags.
           // For V3 MVP, we just sum concepts and cap at max marks.
@@ -508,7 +600,7 @@ Student Identifier: ${studentId}.
       // Penalty for excessive review flags: -10% per flag
       let computedConfidence = Math.max(0, Math.min(100, Math.round((baseConfidence - (reviewFlagsCount * 0.1)) * 100)));
 
-      let finalMarks = computedTotalMarks;
+      let finalMarks = Number(computedTotalMarks.toFixed(1));
       if (isNaN(finalMarks)) {
           finalMarks = 0;
       }
