@@ -84,7 +84,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         strictness: strictness || 'MODERATE',
         totalMarks: totalMarks ? parseInt(totalMarks) : 100,
         releaseMode: releaseMode || 'MANUAL',
-        status: 'PUBLISHED'
+        status: 'PUBLISHED',
+        standardizedRubricId: calibration ? JSON.parse(calibration).rubricId : null,
       }
     });
 
