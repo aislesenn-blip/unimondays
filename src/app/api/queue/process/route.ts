@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
     });
 
     // 1. Fetch & Claim Pending Jobs (Atomic Claim Mechanism to prevent race conditions)
-    // We process up to 5 at a time to avoid Vercel timeouts
-    const BATCH_SIZE = 5;
+    // We process up to 2 at a time to avoid Vercel timeouts for slow chunks
+    const BATCH_SIZE = 2;
     const claimedJobs: any[] = [];
 
     for (let i = 0; i < BATCH_SIZE; i++) {
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
         // 3. Recursive Trigger (The "Hydraulic Press")
         // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
         // If rate limit hit, we STOP to let the API cool down.
-        if (!rateLimitHit && claimedJobs.length === 5) {
+        if (!rateLimitHit && claimedJobs.length === BATCH_SIZE) {
             console.log(`[QUEUE] Batch full & healthy. Triggering recursion: ${baseUrl}/api/queue/process`);
 
             // Fire and forget next batch

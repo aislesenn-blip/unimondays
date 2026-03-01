@@ -398,14 +398,27 @@ Student Identifier: ${studentId}.
 
           if (allChunks.length < data.expectedChunks) {
               console.warn(`[AI_GRADE_AGGREGATE] Waiting for all chunks to be enqueued. Retrying...`);
-              throw new Error("RATE_LIMIT_HIT: Chunks not yet fully populated in DB.");
+              return { continuation: true, nextPayload: data };
+          }
+
+          // Check for any FAILED chunks to prevent infinite waits
+          const failedChunks = allChunks.filter(c => c.status === 'FAILED');
+          if (failedChunks.length > 0) {
+              console.error(`[AI_GRADE_AGGREGATE] Critical Failure: ${failedChunks.length} chunks FAILED. Aborting submission ${submission.id}.`);
+              await prisma.submission.update({
+                  where: { id: submission.id },
+                  data: {
+                      status: 'FAILED',
+                      feedback: JSON.stringify({ error: `Grading failed because ${failedChunks.length} section(s) of the document could not be processed.` })
+                  }
+              });
+              return { success: false, message: 'Parent failed due to child chunk failure.' };
           }
 
           const pendingChunks = allChunks.filter(c => c.status !== 'COMPLETED');
           if (pendingChunks.length > 0) {
-              console.log(`[AI_GRADE_AGGREGATE] Waiting on ${pendingChunks.length} chunks to complete. Delaying...`);
-              throw new Error("RATE_LIMIT_HIT: Waiting for chunks to complete.");
-              // Throws rate limit to pause the job cleanly without failing the submission
+              console.log(`[AI_GRADE_AGGREGATE] Waiting on ${pendingChunks.length} chunks to complete. Delaying via continuation...`);
+              return { continuation: true, nextPayload: data };
           }
 
           console.log(`[AI_GRADE_AGGREGATE] All chunks completed. Starting FAN_IN aggregation...`);
