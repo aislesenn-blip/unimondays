@@ -474,7 +474,9 @@ Student Identifier: ${studentId}.
           validQuestionsCount++;
 
           return {
-              question: qResult.question_id || "Unknown",
+              label: dbQuestion?.questionId || qResult.question_id,
+              question_number: dbQuestion?.questionId || qResult.question_id,
+              question: dbQuestion?.questionText || qResult.question_id || "Unknown",
               score: questionScore,
               max: maxMarksForQuestion,
               feedback: qResult.justification || "No justification provided.",
