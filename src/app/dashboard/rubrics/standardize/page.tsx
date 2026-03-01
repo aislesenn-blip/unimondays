@@ -125,6 +125,16 @@ export default function StandardizeRubricPage() {
 
     const handleApproveAndLock = async () => {
         if (!standardizedRubric) return;
+
+        // Frontend Guardrail (UI): Check that every question has a valid mark > 0
+        for (const [index, q] of standardizedRubric.Questions.entries()) {
+            const marks = Number(q.MarksAllocated);
+            if (q.MarksAllocated === undefined || isNaN(marks) || marks <= 0) {
+                toast.error(`Validation Error: Question ${q.QuestionID || index + 1} is missing allocated marks.`);
+                return;
+            }
+        }
+
         setIsSaving(true);
         setError(null);
         try {

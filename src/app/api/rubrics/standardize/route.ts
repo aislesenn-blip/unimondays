@@ -38,6 +38,11 @@ export async function POST(req: NextRequest) {
 
     } catch (error: any) {
         console.error("Standardize API Error:", error);
+
+        if (error.message && (error.message.includes('DOMMatrix') || error.message.includes('canvas'))) {
+            return NextResponse.json({ error: "PDF Processing Failed", details: error.message }, { status: 500 });
+        }
+
         return NextResponse.json({ error: error.message || "Failed to standardize rubric" }, { status: 500 });
     }
 }
