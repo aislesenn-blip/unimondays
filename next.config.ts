@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '20mb',
     },
+    // @ts-ignore
+    outputFileTracingIncludes: {
+      '/**/*': ['./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
+    },
   },
   serverExternalPackages: ['@napi-rs/canvas', 'pdf-to-img', 'pdfjs-dist'],
 };
