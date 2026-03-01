@@ -16,6 +16,21 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ error: "Invalid Rubric payload" }, { status: 400 });
         }
 
+        // Validate TotalMarks and NumberOfQuestions
+        if (rubric.TotalMarks === undefined || Number.isNaN(Number(rubric.TotalMarks)) || Number(rubric.TotalMarks) <= 0) {
+            return NextResponse.json({ error: "Validation Error: TotalMarks is missing or invalid." }, { status: 400 });
+        }
+        if (rubric.NumberOfQuestions === undefined || Number.isNaN(Number(rubric.NumberOfQuestions)) || Number(rubric.NumberOfQuestions) <= 0) {
+            return NextResponse.json({ error: "Validation Error: NumberOfQuestions is missing or invalid." }, { status: 400 });
+        }
+
+        // Validate individual questions for marksAllocated
+        for (const [index, q] of rubric.Questions.entries()) {
+            if (q.MarksAllocated === undefined || Number.isNaN(Number(q.MarksAllocated)) || Number(q.MarksAllocated) < 0) {
+                return NextResponse.json({ error: `Validation Error: Question ${q.QuestionID || index + 1} is missing allocated marks.` }, { status: 400 });
+            }
+        }
+
         const savedRubric = await prisma.$transaction(async (tx) => {
             try {
                 const newRubric = await tx.standardizedRubric.create({
@@ -24,8 +39,8 @@ export async function POST(req: NextRequest) {
                         examTitle: rubric.ExamTitle || "Untitled Exam",
                         courseCode: rubric.CourseCode || "N/A",
                         examDate: new Date(rubric.ExamDate || new Date().toISOString()),
-                        totalMarks: Number(rubric.TotalMarks) || 0,
-                        numberOfQuestions: Number(rubric.NumberOfQuestions) || 0,
+                        totalMarks: Number(rubric.TotalMarks),
+                        numberOfQuestions: Number(rubric.NumberOfQuestions),
                     }
                 });
 
@@ -37,7 +52,7 @@ export async function POST(req: NextRequest) {
                                 standardizedRubricId: newRubric.id,
                                 questionId: q.QuestionID || `Q-${Math.random().toString(36).substr(2, 5)}`,
                                 questionText: q.QuestionText || "",
-                                marksAllocated: Number(q.MarksAllocated) || 0,
+                                marksAllocated: Number(q.MarksAllocated),
                                 questionType: q.QuestionType || "Essay",
                                 learningObjective: q.LearningObjective || "",
                                 mcqOptions: q.MCQOptions ? JSON.stringify(q.MCQOptions) : null,
