@@ -391,10 +391,18 @@ Student Identifier: ${studentId}.
                           confidence: qRes.confidence || 1.0
                       };
                   } else {
-                      mergedResults[qId].concept_results.push(...(qRes.concept_results || []));
-                      if (qRes.justification) {
-                          mergedResults[qId].justification += "\n" + qRes.justification;
+                      // Discard 'Not Attempted' if another chunk says it was attempted
+                      if (mergedResults[qId].status === "Not Attempted" && qRes.status !== "Not Attempted") {
+                          mergedResults[qId].status = qRes.status;
+                          mergedResults[qId].justification = qRes.justification; // overwrite placeholder reasoning
+                      } else if (qRes.status !== "Not Attempted" && qRes.justification) {
+                          // Only append valid justification if this isn't a blank chunk
+                          if (!mergedResults[qId].justification.includes(qRes.justification)) {
+                              mergedResults[qId].justification += " " + qRes.justification;
+                          }
                       }
+
+                      mergedResults[qId].concept_results.push(...(qRes.concept_results || []));
                       mergedResults[qId].review_flag = mergedResults[qId].review_flag || !!qRes.review_flag;
                       mergedResults[qId].confidence = (mergedResults[qId].confidence + (qRes.confidence || 1.0)) / 2;
                   }
@@ -440,8 +448,17 @@ Student Identifier: ${studentId}.
           let questionScore = 0;
 
           // Match the question in the DB rubric to find limits
-          const dbQuestion = standardRubric.questions.find((q: any) => q.questionId === qResult.question_id);
-          const maxMarksForQuestion = dbQuestion ? dbQuestion.marksAllocated : 0;
+          const dbQuestion = standardRubric.questions.find((q: any) => q.id === qResult.question_id || q.questionId === qResult.question_id || q.QuestionID === qResult.question_id);
+
+          let maxMarksForQuestion = 0;
+          if (dbQuestion) {
+              if (dbQuestion.conceptUnits && Array.isArray(dbQuestion.conceptUnits)) {
+                  maxMarksForQuestion = dbQuestion.conceptUnits.reduce((sum: number, c: any) => sum + (Number(c.marks) || Number(c.Marks) || 0), 0);
+              }
+              if (maxMarksForQuestion === 0) {
+                  maxMarksForQuestion = dbQuestion.marksAllocated || 0;
+              }
+          }
 
           // L10 Hardening: Deterministic Math Sandbox. Prevent AI Hallucinations.
           // 1. Sum up concepts strictly
@@ -474,9 +491,9 @@ Student Identifier: ${studentId}.
           validQuestionsCount++;
 
           return {
-              label: dbQuestion?.questionId || qResult.question_id,
-              question_number: dbQuestion?.questionId || qResult.question_id,
-              question: dbQuestion?.questionText || qResult.question_id || "Unknown",
+              label: dbQuestion?.questionId || dbQuestion?.QuestionID || qResult.question_id,
+              question_number: dbQuestion?.questionId || dbQuestion?.QuestionID || qResult.question_id,
+              question: dbQuestion?.questionText || dbQuestion?.QuestionText || qResult.question_id || "Unknown",
               score: questionScore,
               max: maxMarksForQuestion,
               feedback: qResult.justification || "No justification provided.",
