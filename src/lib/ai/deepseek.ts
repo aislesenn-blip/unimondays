@@ -225,7 +225,7 @@ ${ocrText}`;
           });
 
           completion = await openRouter.chat.completions.create({
-              model: "google/gemini-1.5-flash",
+              model: "google/gemini-2.5-flash",
               messages: [
                   { role: "system", content: systemPrompt },
                   {
@@ -259,12 +259,12 @@ ${ocrText}`;
                   max_tokens: 16384,
               });
           } else {
-              // AUTONOMOUS FALLBACK PATH: Gemini 1.5 Pro via OpenRouter
-              console.log(`[AI_FALLBACK] ⚠️ Primary Engine Failure. Executing Model Switch to Gemini 1.5 Pro (Fallback)...`);
+              // AUTONOMOUS FALLBACK PATH: Gemini 2.5 Pro via OpenRouter
+              console.log(`[AI_FALLBACK] ⚠️ Primary Engine Failure. Executing Model Switch to Gemini 2.5 Pro (Fallback)...`);
               if (!openRouter) throw new Error("OpenRouter API missing for fallback logic.");
 
               completion = await openRouter.chat.completions.create({
-                  model: "google/gemini-1.5-pro",
+                  model: "google/gemini-2.5-pro",
                   messages: [
                       { role: "system", content: systemPrompt },
                       { role: "user", content: userContentText }
