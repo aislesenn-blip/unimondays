@@ -280,6 +280,21 @@ Student Identifier: ${studentId}.
       let result: GradingResult;
 
       if (chunks.length > 0 && job.type === 'AI_GRADE_SUBMISSION') {
+          // Idempotency check: Do not dispatch chunks if they already exist for this submission
+          const existingChunks = await prisma.job.findFirst({
+              where: {
+                  type: 'AI_GRADE_CHUNK',
+                  payload: {
+                      contains: `"submissionId":"${submission.id}"`
+                  }
+              }
+          });
+
+          if (existingChunks) {
+              console.warn(`[FAN_OUT] Chunks already exist for Submission ${submission.id}, skipping dispatch to prevent duplicates.`);
+              return { success: true, message: 'Chunks already fanned out' };
+          }
+
           console.log(`[FAN_OUT] Dispatching ${chunks.length} AI_GRADE_CHUNK jobs...`);
 
           // Create chunk jobs
