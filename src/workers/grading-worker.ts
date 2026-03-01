@@ -61,14 +61,14 @@ export async function handleAiGrade(job: Job) {
       if (isPdf) {
           srcDoc = await PDFDocument.load(buffer);
           pageCount = srcDoc.getPageCount();
-          if (pageCount > 5) {
+          if (pageCount > 3) {
               needsChunking = true;
           }
       }
 
       if (needsChunking && srcDoc) {
           console.log(`[FAN_OUT] Submission ${submissionId} has ${pageCount} pages. Chunking...`);
-          const CHUNK_SIZE = 5;
+          const CHUNK_SIZE = 3;
           const chunks: { path: string, pageCount: number }[] = [];
 
           for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
@@ -316,7 +316,7 @@ Student Identifier: ${studentId}.
           console.log(`- Visual: ${submissionBuffers.length} Buffers loaded (${submissionMime})`);
       }
 
-      let result: GradingResult;
+      let result: GradingResult | undefined;
 
       if (job.type === 'AI_GRADE_AGGREGATE') {
           console.log(`[FAN_IN] Aggregating results for ${submissionId}...`);
@@ -339,14 +339,25 @@ Student Identifier: ${studentId}.
           let aggregatedTeacherRemarks = "";
           let detectedIdentity: string | null = null;
 
-          for (const chunkJob of chunkJobs) {
+          // Verify sequence sorting by chunkIndex if available (payload has chunkIndex)
+          const sortedChunks = chunkJobs.sort((a, b) => {
+              try {
+                  const aPayload = JSON.parse(a.payload);
+                  const bPayload = JSON.parse(b.payload);
+                  return (aPayload.chunkIndex || 0) - (bPayload.chunkIndex || 0);
+              } catch (e) {
+                  return 0;
+              }
+          });
+
+          for (const chunkJob of sortedChunks) {
               if (!chunkJob.result) continue;
               let chunkOutput;
               try {
                   chunkOutput = JSON.parse(chunkJob.result);
               } catch (e) {
                   console.warn("Failed to parse chunk job result", e);
-                  continue;
+                  throw new Error("Strict Rule Failure: A chunk failed to parse as valid JSON. Requires retry.");
               }
 
               if (!chunkOutput.result) continue;
@@ -408,7 +419,25 @@ Student Identifier: ${studentId}.
               throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
           } else {
               // Pass image buffers for multimodal grading
-              result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
+
+              if (job.type === 'AI_GRADE_CHUNK') {
+                  config.context = (config.context || "") + "\n\nCRITICAL INSTRUCTION: Extract all questions/answers from THESE 3 PAGES ONLY. Maintain the sequence.";
+                  let attempt = 0;
+                  const maxAttempts = 3;
+                  while (attempt < maxAttempts) {
+                      attempt++;
+                      try {
+                          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
+                          break; // Success
+                      } catch (e: any) {
+                          console.warn(`[AI_CHUNK_RETRY] Chunk evaluation failed on attempt ${attempt}: ${e.message}`);
+                          if (attempt >= maxAttempts) throw new Error(`Chunk evaluation failed after ${maxAttempts} attempts: ${e.message}`);
+                      }
+                  }
+              } else {
+                  result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
+              }
+
               console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
           }
       }
@@ -448,7 +477,7 @@ Student Identifier: ${studentId}.
       // Ensure we have a valid parsed rubric to match against for limits
       const standardRubric = JSON.parse(rubricContent);
 
-      const formattedBreakdown = result.results?.map((qResult) => {
+      const formattedBreakdown = result?.results?.map((qResult) => {
           let questionScore = 0;
 
           // Match the question in the DB rubric to find limits
@@ -514,25 +543,25 @@ Student Identifier: ${studentId}.
             update: {
               totalMarks: finalMarks,
               breakdown: breakdownStr,
-              remarks: result.studentRemarks || "No remarks.",
-              studentRemarks: result.studentRemarks || "No student feedback provided.",
-              teacherRemarks: result.teacherRemarks || "No teacher feedback provided.",
-              detectedIdentity: result.detectedIdentity || null,
+              remarks: result?.studentRemarks || "No remarks.",
+              studentRemarks: result?.studentRemarks || "No student feedback provided.",
+              teacherRemarks: result?.teacherRemarks || "No teacher feedback provided.",
+              detectedIdentity: result?.detectedIdentity || null,
               gradedAt: new Date()
             },
             create: {
               submissionId: submission.id,
               totalMarks: finalMarks,
               breakdown: breakdownStr,
-              remarks: result.studentRemarks || "No remarks.",
-              studentRemarks: result.studentRemarks || "No student feedback provided.",
-              teacherRemarks: result.teacherRemarks || "No teacher feedback provided.",
-              detectedIdentity: result.detectedIdentity || null
+              remarks: result?.studentRemarks || "No remarks.",
+              studentRemarks: result?.studentRemarks || "No student feedback provided.",
+              teacherRemarks: result?.teacherRemarks || "No teacher feedback provided.",
+              detectedIdentity: result?.detectedIdentity || null
             }
           });
 
           // Insert Concept Results
-          if (result.results && Array.isArray(result.results)) {
+          if (result?.results && Array.isArray(result.results)) {
               for (const q of result.results) {
                   if (q.concept_results && Array.isArray(q.concept_results)) {
                       for (const c of q.concept_results) {
@@ -561,7 +590,7 @@ Student Identifier: ${studentId}.
       let status: string;
       const threshold = submission.workSession.confidenceThreshold ?? 85;
 
-      const isIdentityMissing = !result.detectedIdentity || result.detectedIdentity === 'UNIDENTIFIED_IDENTITY';
+      const isIdentityMissing = !result?.detectedIdentity || result?.detectedIdentity === 'UNIDENTIFIED_IDENTITY';
       const isContextMissing = !submission.userId && !submission.studentRegNo;
 
       if (isIdentityMissing) {
@@ -569,7 +598,7 @@ Student Identifier: ${studentId}.
               // GHOST SUBMISSION: No AI ID, No DB ID.
               status = 'FLAGGED';
               computedConfidence = 0;
-              result.teacherRemarks = `IDENTITY CRISIS: ${result.teacherRemarks || "System could not identify student."} Please manually assign ownership.`;
+              if (result) result.teacherRemarks = `IDENTITY CRISIS: ${result?.teacherRemarks || "System could not identify student."} Please manually assign ownership.`;
               console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
           } else {
               // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
