@@ -9,6 +9,7 @@ import { Loader2, CheckCircle2, Lock, ChevronRight, Edit2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 export default function StandardizeRubricPage() {
     const router = useRouter();
@@ -74,7 +75,10 @@ export default function StandardizeRubricPage() {
                 body: JSON.stringify(standardizedRubric)
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Save failed");
+            if (!res.ok) {
+                // Throwing immediately aborts the success flow
+                throw new Error(data.error || "Save failed");
+            }
 
             // Store the approved rubric ID for the caller
             const sessionKey = sessionStorage.getItem("rubricSessionKey") || "approvedRubricId";
@@ -90,7 +94,9 @@ export default function StandardizeRubricPage() {
             router.push(returnUrl);
 
         } catch (err: any) {
+             console.error("[STANDARDIZE] Failed to approve and lock rubric:", err);
              setError(err.message);
+             toast.error(`Error saving rubric: ${err.message}`);
         } finally {
              setIsSaving(false);
         }

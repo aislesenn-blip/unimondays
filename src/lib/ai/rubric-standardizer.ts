@@ -151,7 +151,7 @@ ${rubricText}
             const dataUrl = `data:${mimeType};base64,${base64Data}`;
 
             completion = await openai.chat.completions.create({
-                model: "google/gemini-2.5-flash",
+                model: "google/gemini-2.5-flash-001", // Make sure to use fast model to improve Time-To-First-Token (TTFT)
                 messages: [
                     { role: "system", content: systemPrompt },
                     {
@@ -162,7 +162,7 @@ ${rubricText}
                                 type: "image_url",
                                 image_url: {
                                     url: dataUrl,
-                                    detail: "high"
+                                    detail: "low" // Explicitly use 'low' resolution to drastically reduce latency and increase TTFT
                                 }
                             }
                         ]
@@ -185,7 +185,7 @@ ${rubricText}
             });
         } else {
             completion = await openai.chat.completions.create({
-                model: "google/gemini-2.5-flash",
+                model: "google/gemini-2.5-flash-001",
                 messages: [
                     { role: "system", content: systemPrompt },
                     { role: "user", content: userPrompt }
