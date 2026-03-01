@@ -13,6 +13,10 @@ if (!globalThis.DOMRect) {
 }
 
 import { pdf } from 'pdf-to-img';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+
+// Serverless Worker Bypass for pdfjs-dist
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 const apiKey = process.env.OPENROUTER_API_KEY || "dummy-key-for-build";
 
