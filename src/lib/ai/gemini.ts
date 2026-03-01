@@ -43,6 +43,7 @@ export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = 
 
     let attempt = 0;
     const MAX_RETRIES = 3;
+    let lastError: any = null;
 
     while (attempt < MAX_RETRIES) {
       for (const currentModel of modelsToTry) {
@@ -68,6 +69,7 @@ export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = 
 
           return text;
         } catch (modelErr: any) {
+            lastError = modelErr;
             console.error(`Attempt ${attempt + 1}: Model ${currentModel} failed in ocrDocument:`, modelErr?.message || modelErr);
             if (currentModel === modelsToTry[modelsToTry.length - 1]) {
                 if (attempt === MAX_RETRIES - 1) {
@@ -83,7 +85,8 @@ export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = 
       }
     }
 
-    throw new Error("Failed to process OCR after max retries");
+    console.error("[OCR FATAL] Exhausted all retries. Last error: ", lastError?.message || lastError);
+    throw new Error(`Failed to process OCR after max retries. Last error: ${lastError?.message || lastError || 'Unknown'}`);
 
   } catch (error: any) {
     console.error("OpenRouter OCR Error:", error);
