@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import { PDFDocument } from 'pdf-lib';
+import { pdf } from 'pdf-to-img';
 
 const apiKey = process.env.OPENROUTER_API_KEY || "dummy-key-for-build";
 
@@ -143,75 +145,206 @@ ${rubricText}
 `;
 
     try {
-        let completion;
+        let allResults: StandardizedRubric[] = [];
+        let isPdf = mimeType === 'application/pdf' && buffer !== undefined;
+        let pdfPageCount = 0;
+        let chunks: Buffer[][] = [];
 
-        if (buffer && mimeType && process.env.OPENROUTER_API_KEY) {
-            console.log(`[STANDARDIZER] Using Multimodal Vision Model with image buffer of size ${buffer.length} bytes`);
-            const base64Data = buffer.toString("base64");
-            const dataUrl = `data:${mimeType};base64,${base64Data}`;
+        if (isPdf && buffer) {
+            const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true, updateMetadata: false });
+            pdfPageCount = pdfDoc.getPageCount();
 
-            completion = await openai.chat.completions.create({
-                model: "google/gemini-2.0-flash-001", // Make sure to use fast model to improve Time-To-First-Token (TTFT)
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    {
-                        role: "user",
-                        content: [
-                            { type: "text", text: userPrompt },
-                            {
+            if (pdfPageCount > 3) {
+                console.log(`[STANDARDIZER] PDF has ${pdfPageCount} pages. Applying Atomic Chunking Protocol...`);
+                const document = await pdf(buffer, { scale: 2.0 });
+                let imageBuffers: Buffer[] = [];
+                for await (const page of document) {
+                    imageBuffers.push(page);
+                }
+
+                // Slice into chunks of 3 pages each
+                for (let i = 0; i < imageBuffers.length; i += 3) {
+                    chunks.push(imageBuffers.slice(i, i + 3));
+                }
+            }
+        }
+
+        if (chunks.length > 0 && process.env.OPENROUTER_API_KEY) {
+            console.log(`[STANDARDIZER] Processing ${chunks.length} chunks independently in parallel via google/gemini-2.0-flash-001`);
+
+            const chunkPromises = chunks.map(async (chunkImages, index) => {
+                const chunkSystemPrompt = systemPrompt + "\n\nCRITICAL INSTRUCTION: Extract all questions/answers from THESE 3 PAGES ONLY. Maintain the sequence.";
+                const chunkUserPrompt = userPrompt;
+
+                let attempt = 0;
+                let maxAttempts = 3;
+                while (attempt < maxAttempts) {
+                    attempt++;
+                    try {
+                        const contentParts: any[] = [{ type: "text", text: chunkUserPrompt }];
+                        for (const imgBuffer of chunkImages) {
+                            const base64Data = imgBuffer.toString("base64");
+                            const dataUrl = `data:image/png;base64,${base64Data}`;
+                            contentParts.push({
                                 type: "image_url",
-                                image_url: {
-                                    url: dataUrl,
-                                    detail: "low" // Explicitly use 'low' resolution to drastically reduce latency and increase TTFT
-                                }
-                            }
-                        ]
+                                image_url: { url: dataUrl, detail: "low" }
+                            });
+                        }
+
+                        const completion = await openai.chat.completions.create({
+                            model: "google/gemini-2.0-flash-001",
+                            messages: [
+                                { role: "system", content: chunkSystemPrompt },
+                                { role: "user", content: contentParts }
+                            ],
+                            response_format: { type: "json_object" },
+                            temperature: 0.0,
+                            top_p: 0.1,
+                        });
+
+                        const contentStr = completion.choices[0]?.message?.content;
+                        if (!contentStr) throw new Error("No content returned from AI Service for chunk " + index);
+
+                        let cleanContent = contentStr;
+                        const objectMatch = contentStr.match(/\{[\s\S]*\}/);
+                        if (objectMatch) cleanContent = objectMatch[0];
+                        else cleanContent = contentStr.replace(/```json/g, '').replace(/```/g, '').trim();
+
+                        const parsed = JSON.parse(cleanContent) as StandardizedRubric;
+                        return parsed;
+                    } catch (e: any) {
+                        console.error(`[STANDARDIZER] Chunk ${index} failed on attempt ${attempt}: ${e.message}`);
+                        if (attempt >= maxAttempts) throw e;
                     }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0,
-                top_p: 0.1,
+                }
+                throw new Error("Chunk parsing failed after " + maxAttempts + " attempts");
             });
-        } else if (process.env.DEEPSEEK_API_KEY) {
-            completion = await deepseek.chat.completions.create({
-                model: "deepseek-chat",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0,
-                top_p: 0.1,
-            });
+
+            allResults = await Promise.all(chunkPromises);
         } else {
-            completion = await openai.chat.completions.create({
-                model: "google/gemini-2.0-flash-001",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0,
-                top_p: 0.1,
-            });
+            // Original atomic logic for short PDFs / text
+            let completion;
+
+            if (buffer && mimeType && process.env.OPENROUTER_API_KEY) {
+                console.log(`[STANDARDIZER] Using Multimodal Vision Model with image buffer of size ${buffer.length} bytes`);
+
+                // If PDF but <=3 pages, convert to images anyway for better processing
+                let contentParts: any[] = [{ type: "text", text: userPrompt }];
+
+                if (mimeType === 'application/pdf') {
+                    const document = await pdf(buffer, { scale: 2.0 });
+                    for await (const page of document) {
+                        const base64Data = page.toString("base64");
+                        const dataUrl = `data:image/png;base64,${base64Data}`;
+                        contentParts.push({
+                            type: "image_url",
+                            image_url: { url: dataUrl, detail: "low" }
+                        });
+                    }
+                } else {
+                    const base64Data = buffer.toString("base64");
+                    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+                    contentParts.push({
+                        type: "image_url",
+                        image_url: { url: dataUrl, detail: "low" }
+                    });
+                }
+
+                completion = await openai.chat.completions.create({
+                    model: "google/gemini-2.0-flash-001", // Make sure to use fast model to improve Time-To-First-Token (TTFT)
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        {
+                            role: "user",
+                            content: contentParts
+                        }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.0,
+                    top_p: 0.1,
+                });
+            } else if (process.env.DEEPSEEK_API_KEY) {
+                completion = await deepseek.chat.completions.create({
+                    model: "deepseek-chat",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.0,
+                    top_p: 0.1,
+                });
+            } else {
+                completion = await openai.chat.completions.create({
+                    model: "google/gemini-2.0-flash-001",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.0,
+                    top_p: 0.1,
+                });
+            }
+
+            const content = completion.choices[0]?.message?.content;
+            if (!content) {
+                throw new Error("No content returned from AI Service");
+            }
+
+            let cleanContent = content;
+            const objectMatch = content.match(/\{[\s\S]*\}/);
+
+            if (objectMatch) {
+                cleanContent = objectMatch[0];
+            } else {
+                cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            }
+
+            const result = JSON.parse(cleanContent) as StandardizedRubric;
+            allResults = [result];
         }
 
-        const content = completion.choices[0]?.message?.content;
-        if (!content) {
-            throw new Error("No content returned from AI Service");
+        // Assembler: Merging Logic
+        if (allResults.length === 1) {
+            return allResults[0];
         }
 
-        let cleanContent = content;
-        const objectMatch = content.match(/\{[\s\S]*\}/);
+        console.log(`[STANDARDIZER] Assembling ${allResults.length} chunks...`);
+        let finalRubric: StandardizedRubric = {
+            ExamTitle: allResults[0].ExamTitle || "Standardized Exam",
+            CourseCode: allResults[0].CourseCode || "COURSE101",
+            ExamDate: allResults[0].ExamDate || new Date().toISOString(),
+            TotalMarks: 0,
+            NumberOfQuestions: 0,
+            Questions: []
+        };
 
-        if (objectMatch) {
-            cleanContent = objectMatch[0];
-        } else {
-            cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+        let totalMarks = 0;
+        let seenQuestionIds = new Set<string>();
+
+        for (const chunkResult of allResults) {
+            if (!chunkResult.Questions || !Array.isArray(chunkResult.Questions)) continue;
+
+            for (const q of chunkResult.Questions) {
+                // Ensure no data lost and keep sequence
+                // Minor ID collision handling
+                let qId = q.QuestionID;
+                if (seenQuestionIds.has(qId)) {
+                    qId = qId + "_" + Math.random().toString(36).substring(7);
+                    q.QuestionID = qId;
+                }
+                seenQuestionIds.add(qId);
+
+                finalRubric.Questions.push(q);
+                totalMarks += (q.MarksAllocated || 0);
+            }
         }
 
-        const result = JSON.parse(cleanContent) as StandardizedRubric;
-        return result;
+        finalRubric.TotalMarks = totalMarks;
+        finalRubric.NumberOfQuestions = finalRubric.Questions.length;
+
+        return finalRubric;
 
     } catch (error: any) {
         console.error("Rubric Standardization Error:", error);
