@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import { PDFDocument } from 'pdf-lib';
+import { pdf } from 'pdf-to-img';
 
 const apiKey = process.env.OPENROUTER_API_KEY || "dummy-key-for-build";
 
@@ -74,6 +76,30 @@ export async function standardizeRubric(rubricText: string, buffer?: Buffer, mim
         throw new Error("No AI API Key is set. Standardization service unavailable.");
     }
 
+    let chunkBuffers: Buffer[] = [];
+
+    if (buffer && mimeType === 'application/pdf') {
+        const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+        const pageCount = srcDoc.getPageCount();
+
+        if (pageCount > 3) {
+            const CHUNK_SIZE = 3;
+            for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
+                const end = Math.min(start + CHUNK_SIZE, pageCount);
+                const chunkDoc = await PDFDocument.create();
+                const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
+                const copiedPages = await chunkDoc.copyPages(srcDoc, pageIndices);
+                copiedPages.forEach(page => chunkDoc.addPage(page));
+                const chunkBytes = await chunkDoc.save();
+                chunkBuffers.push(Buffer.from(chunkBytes));
+            }
+        } else {
+            chunkBuffers.push(buffer);
+        }
+    } else if (buffer) {
+        chunkBuffers.push(buffer);
+    }
+
     const systemPrompt = `
 You are an L10 Enterprise Architect & Principal EdTech Engineer.
 Your task is to ingest an unstructured marking scheme or rubric and convert it into a strictly formatted Standardized Rubric mapping exactly to our Deterministic State Machine architecture.
@@ -143,76 +169,139 @@ ${rubricText}
 `;
 
     try {
-        let completion;
-
-        if (buffer && mimeType && process.env.OPENROUTER_API_KEY) {
-            console.log(`[STANDARDIZER] Using Multimodal Vision Model with image buffer of size ${buffer.length} bytes`);
-            const base64Data = buffer.toString("base64");
-            const dataUrl = `data:${mimeType};base64,${base64Data}`;
-
-            completion = await openai.chat.completions.create({
-                model: "google/gemini-2.0-flash-001", // Make sure to use fast model to improve Time-To-First-Token (TTFT)
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    {
-                        role: "user",
-                        content: [
-                            { type: "text", text: userPrompt },
-                            {
-                                type: "image_url",
-                                image_url: {
-                                    url: dataUrl,
-                                    detail: "low" // Explicitly use 'low' resolution to drastically reduce latency and increase TTFT
-                                }
-                            }
-                        ]
+        if (chunkBuffers.length > 0 && process.env.OPENROUTER_API_KEY) {
+            const chunkPromises = chunkBuffers.map(async (chunkBuf, index) => {
+                let imageBuffers: Buffer[] = [];
+                if (mimeType === 'application/pdf') {
+                    const document = await pdf(chunkBuf, { scale: 2.0 });
+                    for await (const page of document) {
+                        imageBuffers.push(page);
                     }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0,
-                top_p: 0.1,
+                } else {
+                    imageBuffers = [chunkBuf];
+                }
+
+                const imageContents = imageBuffers.map(imgBuf => {
+                    const base64Data = imgBuf.toString("base64");
+                    const dataUrl = `data:image/png;base64,${base64Data}`;
+                    return {
+                        type: "image_url" as const,
+                        image_url: {
+                            url: dataUrl,
+                            detail: "low" as const
+                        }
+                    };
+                });
+
+                const chunkUserPrompt = chunkBuffers.length > 1
+                    ? `Extract all questions/answers from THESE 3 PAGES ONLY. Maintain the sequence.\n\n${userPrompt}`
+                    : userPrompt;
+
+                let attempt = 0;
+                const MAX_RETRIES = 3;
+                while (attempt < MAX_RETRIES) {
+                    try {
+                        const completion = await openai.chat.completions.create({
+                            model: "google/gemini-1.5-flash",
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                {
+                                    role: "user",
+                                    content: [
+                                        { type: "text", text: chunkUserPrompt },
+                                        ...imageContents
+                                    ]
+                                }
+                            ],
+                            response_format: { type: "json_object" },
+                            temperature: 0.0,
+                            top_p: 0.1,
+                        });
+
+                        const content = completion.choices[0]?.message?.content;
+                        if (!content) throw new Error("No content returned from AI Service");
+
+                        let cleanContent = content;
+                        const objectMatch = content.match(/\{[\s\S]*\}/);
+                        if (objectMatch) {
+                            cleanContent = objectMatch[0];
+                        } else {
+                            cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+                        }
+
+                        return JSON.parse(cleanContent) as StandardizedRubric;
+                    } catch (err) {
+                        attempt++;
+                        if (attempt >= MAX_RETRIES) throw err;
+                        await new Promise(res => setTimeout(res, 1000 * attempt));
+                    }
+                }
+                throw new Error("Failed to process chunk after max retries");
             });
-        } else if (process.env.DEEPSEEK_API_KEY) {
-            completion = await deepseek.chat.completions.create({
-                model: "deepseek-chat",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0,
-                top_p: 0.1,
-            });
+
+            const results = await Promise.all(chunkPromises);
+
+            if (results.length === 1) {
+                return results[0];
+            }
+
+            const mergedResult: StandardizedRubric = {
+                ExamTitle: results[0].ExamTitle,
+                CourseCode: results[0].CourseCode,
+                ExamDate: results[0].ExamDate,
+                TotalMarks: results[0].TotalMarks,
+                NumberOfQuestions: results[0].NumberOfQuestions,
+                Questions: []
+            };
+
+            for (const res of results) {
+                mergedResult.Questions.push(...res.Questions);
+            }
+
+            return mergedResult;
+
         } else {
-            completion = await openai.chat.completions.create({
-                model: "google/gemini-2.0-flash-001",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0,
-                top_p: 0.1,
-            });
+            let completion;
+            if (process.env.DEEPSEEK_API_KEY) {
+                completion = await deepseek.chat.completions.create({
+                    model: "deepseek-chat",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.0,
+                    top_p: 0.1,
+                });
+            } else {
+                completion = await openai.chat.completions.create({
+                    model: "google/gemini-1.5-flash",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.0,
+                    top_p: 0.1,
+                });
+            }
+
+            const content = completion.choices[0]?.message?.content;
+            if (!content) {
+                throw new Error("No content returned from AI Service");
+            }
+
+            let cleanContent = content;
+            const objectMatch = content.match(/\{[\s\S]*\}/);
+
+            if (objectMatch) {
+                cleanContent = objectMatch[0];
+            } else {
+                cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            }
+
+            return JSON.parse(cleanContent) as StandardizedRubric;
         }
-
-        const content = completion.choices[0]?.message?.content;
-        if (!content) {
-            throw new Error("No content returned from AI Service");
-        }
-
-        let cleanContent = content;
-        const objectMatch = content.match(/\{[\s\S]*\}/);
-
-        if (objectMatch) {
-            cleanContent = objectMatch[0];
-        } else {
-            cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-        }
-
-        const result = JSON.parse(cleanContent) as StandardizedRubric;
-        return result;
-
     } catch (error: any) {
         console.error("Rubric Standardization Error:", error);
         throw new Error(`Failed to standardize rubric: ${error.message}`);
