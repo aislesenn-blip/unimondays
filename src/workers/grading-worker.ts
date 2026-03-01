@@ -61,14 +61,14 @@ export async function handleAiGrade(job: Job) {
       if (isPdf) {
           srcDoc = await PDFDocument.load(buffer);
           pageCount = srcDoc.getPageCount();
-          if (pageCount > 5) {
+          if (pageCount > 3) {
               needsChunking = true;
           }
       }
 
       if (needsChunking && srcDoc) {
           console.log(`[FAN_OUT] Submission ${submissionId} has ${pageCount} pages. Chunking...`);
-          const CHUNK_SIZE = 5;
+          const CHUNK_SIZE = 3;
           const chunks: { path: string, pageCount: number }[] = [];
 
           for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
@@ -87,45 +87,23 @@ export async function handleAiGrade(job: Job) {
               chunks.push({ path: slicePath, pageCount: end - start });
           }
 
-          console.log(`[FAN_OUT] Created ${chunks.length} chunks. Enqueueing AI_GRADE_CHUNK jobs...`);
+          console.log(`[FAN_OUT] Created ${chunks.length} chunks. Processing sequentially/parallel in-memory to guarantee execution speed...`);
 
-          await Promise.all(chunks.map(async (chunk, index) => {
-              await prisma.job.create({
-                  data: {
-                      type: 'AI_GRADE_CHUNK',
-                      payload: JSON.stringify({
-                          submissionId: submission.id,
-                          chunkPath: chunk.path,
-                          chunkIndex: index,
-                          totalChunks: chunks.length
-                      }),
-                      status: 'PENDING'
-                  }
-              });
-          }));
-
-          await prisma.submission.update({
-              where: { id: submissionId },
-              data: { status: 'PROCESSING' }
-          });
-
-          return { success: true, message: `Fan-out complete. Enqueued ${chunks.length} chunks.` };
+          // Execute processing directly instead of enqueuing
+          // Do not return here, let it fall through to the new in-memory aggregation logic
+          // Note: The rest of the pipeline handles the chunking in-memory further down.
+          // Wait, actually I should process them here, OR change the rest of the function to handle the chunked logic.
+          // Let's modify the whole block.
       }
-      // If <= 5 pages, fall through to normal grading logic (atomic)
+
+      // If <= 3 pages, fall through to normal grading logic (atomic)
   }
 
   try {
       // PARALLEL TASK 1: Submission OCR (Return buffer array for visual analysis)
-      const submissionOcrTask = async (): Promise<{ text: string, buffers: Buffer[], mimeType: string }> => {
-          let targetPath = submission.filePath;
-          let ocrText = submission.ocrText;
-
-          if (job.type === 'AI_GRADE_CHUNK') {
-              const { chunkPath } = data;
-              if (!chunkPath) throw new Error("No chunkPath provided for AI_GRADE_CHUNK.");
-              targetPath = chunkPath;
-              ocrText = null; // Do not use the full submission's cached OCR for a chunk
-          }
+      const submissionOcrTask = async (chunkPath?: string): Promise<{ text: string, buffers: Buffer[], mimeType: string }> => {
+          let targetPath = chunkPath || submission.filePath;
+          let ocrText = chunkPath ? null : submission.ocrText;
 
           if (!targetPath) throw new Error("No file path and no OCR text for submission.");
 
@@ -187,7 +165,7 @@ export async function handleAiGrade(job: Job) {
               console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
 
               // Save immediately
-              if (job.type !== 'AI_GRADE_CHUNK') {
+              if (!chunkPath) {
                   await prisma.submission.update({
                       where: { id: submissionId },
                       data: { ocrText: text, status: 'PROCESSING' }
@@ -245,31 +223,57 @@ export async function handleAiGrade(job: Job) {
           }
       };
 
-      // EXECUTE PARALLEL TASKS
-      let submissionData: { text: string, buffers: Buffer[], mimeType: string };
+      // ---------------------------------------------------------
+      // CHUNK EXTRACTION LOGIC (In-Memory Fan-out & Fan-in)
+      // ---------------------------------------------------------
       let rubricContent: string;
       let questionPaperText: string | undefined;
 
       try {
-          if (job.type === 'AI_GRADE_AGGREGATE') {
-              [rubricContent, questionPaperText] = await Promise.all([
-                  fetchStandardizedRubricTask(),
-                  questionPaperOcrTask()
-              ]);
-              submissionData = { text: "AGGREGATED_JOB", buffers: [], mimeType: "application/pdf" };
-          } else {
-              [submissionData, rubricContent, questionPaperText] = await Promise.all([
-                  submissionOcrTask(),
-                  fetchStandardizedRubricTask(),
-                  questionPaperOcrTask()
-              ]);
-          }
+          [rubricContent, questionPaperText] = await Promise.all([
+              fetchStandardizedRubricTask(),
+              questionPaperOcrTask()
+          ]);
       } catch (e: any) {
           console.error("[GRADING FATAL ERROR]: Prerequisite Check Failed", e);
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
-      const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
+      // Reconstruct file checking block from the fan_out to get chunks
+      let isPdf = false;
+      let pageCount = 1;
+      let chunks: { path: string, pageCount: number }[] = [];
+      let srcDoc: PDFDocument | null = null;
+
+      if (submission.filePath) {
+          const buffer = await readFile(submission.filePath, 'exam_pdfs');
+          isPdf = submission.filePath.toLowerCase().endsWith('.pdf') ||
+                        (buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46);
+
+          if (isPdf) {
+              srcDoc = await PDFDocument.load(buffer);
+              pageCount = srcDoc.getPageCount();
+          }
+
+          if (isPdf && srcDoc && pageCount > 3) {
+              const CHUNK_SIZE = 3;
+              for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
+                  const end = Math.min(start + CHUNK_SIZE, pageCount);
+                  const newDoc = await PDFDocument.create();
+                  const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
+                  const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
+                  copiedPages.forEach(page => newDoc.addPage(page));
+                  const chunkBytes = await newDoc.save();
+                  const sliceBuffer = Buffer.from(chunkBytes);
+
+                  const uniqueSuffix = uuidv4().substring(0, 8);
+                  const fileName = `chunk_${submission.id}_${start}_${end}_${uniqueSuffix}.pdf`;
+
+                  const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
+                  chunks.push({ path: slicePath, pageCount: end - start });
+              }
+          }
+      }
 
       // Prepare Config
       const strictnessMap: Record<string, number> = {
@@ -284,13 +288,12 @@ export async function handleAiGrade(job: Job) {
           console.error("[GRADING FATAL ERROR]: Failed to parse calibration JSON", e);
       }
 
-      // Build Context String
       const lecturerName = submission.workSession.lecturer.fullName || "Lecturer";
       const className = submission.workSession.class ? `${submission.workSession.class.code} - ${submission.workSession.class.name}` : "Unknown Class";
       const studentId = submission.studentRegNo || submission.user?.fullName || "Student";
       const sessionTitle = submission.workSession.title;
 
-      const contextString = `
+      const baseContextString = `
 You are grading on behalf of ${lecturerName}.
 Course: ${className}.
 Assessment: ${sessionTitle}.
@@ -302,68 +305,66 @@ Student Identifier: ${studentId}.
         questionPaper: questionPaperText,
         lecturerNotes: submission.workSession.instructions || undefined,
         calibration: calibrationSettings,
-        context: contextString
+        context: baseContextString
       };
 
-      // 3. Grade (Zero-Trust Tracing)
       const totalMarks = submission.workSession.totalMarks || 100;
-
-      console.log(`[AI_GRADE] Invoking AI for Job ${job.id}`);
-      console.log(`- Config: Strictness=${config.strictness}`);
-      console.log(`- Context: ${contextString.trim()}`);
-      console.log(`- Payload: Submission=${ocrText.length} chars, Rubric=${rubricContent.length} chars`);
-      if (submissionBuffers && submissionBuffers.length > 0) {
-          console.log(`- Visual: ${submissionBuffers.length} Buffers loaded (${submissionMime})`);
-      }
-
       let result: GradingResult;
 
-      if (job.type === 'AI_GRADE_AGGREGATE') {
-          console.log(`[FAN_IN] Aggregating results for ${submissionId}...`);
+      if (chunks.length > 0) {
+          console.log(`[IN_MEMORY_FAN_OUT] Processing ${chunks.length} chunks via Promise.all...`);
 
-          // L10 Hardening: Strict bounds for UUID to prevent accidental LIKE matches
-          const chunkJobs = await prisma.job.findMany({
-              where: {
-                  type: 'AI_GRADE_CHUNK',
-                  payload: { contains: `"submissionId":"${submissionId}"` }, // Safe enough given UUID v4 format
-                  status: 'COMPLETED'
+          const chunkPromises = chunks.map(async (chunk) => {
+              // 1. OCR the chunk
+              const submissionData = await submissionOcrTask(chunk.path);
+              const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
+
+              // 2. Prepare isolated config
+              const chunkConfig: GradeConfig = {
+                  ...config,
+                  context: `Extract all questions/answers from THESE 3 PAGES ONLY. Maintain the sequence.\n\n${baseContextString}`
+              };
+
+              // 3. Grade chunk with retry mechanism
+              let attempt = 0;
+              const MAX_RETRIES = 3;
+              while (attempt < MAX_RETRIES) {
+                  try {
+                      return await gradeSubmission(ocrText, rubricContent, totalMarks, chunkConfig, submissionBuffers, submissionMime);
+                  } catch (err) {
+                      attempt++;
+                      if (attempt >= MAX_RETRIES) throw err;
+                      await new Promise(res => setTimeout(res, 1000 * attempt));
+                  }
               }
+              throw new Error("Failed to process chunk after max retries.");
           });
 
-          if (chunkJobs.length === 0) {
-              throw new Error("No completed chunks found for aggregation.");
-          }
+          const chunkResults = await Promise.all(chunkPromises);
+
+          // ---------------------------------------------------------
+          // IN-MEMORY FAN-IN AGGREGATION
+          // ---------------------------------------------------------
+          console.log(`[IN_MEMORY_FAN_IN] Aggregating results from ${chunkResults.length} chunks...`);
 
           const mergedResults: Record<string, any> = {};
           let aggregatedStudentRemarks = "";
           let aggregatedTeacherRemarks = "";
           let detectedIdentity: string | null = null;
 
-          for (const chunkJob of chunkJobs) {
-              if (!chunkJob.result) continue;
-              let chunkOutput;
-              try {
-                  chunkOutput = JSON.parse(chunkJob.result);
-              } catch (e) {
-                  console.warn("Failed to parse chunk job result", e);
-                  continue;
+          for (const chunkResult of chunkResults) {
+              if (chunkResult.detectedIdentity && !detectedIdentity) {
+                  detectedIdentity = chunkResult.detectedIdentity;
               }
 
-              if (!chunkOutput.result) continue;
-              const chunkGradingResult = chunkOutput.result;
-
-              if (chunkGradingResult.detectedIdentity && !detectedIdentity) {
-                  detectedIdentity = chunkGradingResult.detectedIdentity;
+              if (chunkResult.studentRemarks) {
+                  aggregatedStudentRemarks += chunkResult.studentRemarks + " ";
+              }
+              if (chunkResult.teacherRemarks) {
+                  aggregatedTeacherRemarks += chunkResult.teacherRemarks + " ";
               }
 
-              if (chunkGradingResult.studentRemarks) {
-                  aggregatedStudentRemarks += chunkGradingResult.studentRemarks + " ";
-              }
-              if (chunkGradingResult.teacherRemarks) {
-                  aggregatedTeacherRemarks += chunkGradingResult.teacherRemarks + " ";
-              }
-
-              for (const qRes of chunkGradingResult.results || []) {
+              for (const qRes of chunkResult.results || []) {
                   const qId = qRes.question_id;
                   if (!mergedResults[qId]) {
                       mergedResults[qId] = {
@@ -375,13 +376,11 @@ Student Identifier: ${studentId}.
                           confidence: qRes.confidence || 1.0
                       };
                   } else {
-                      // Accumulate concept results
                       mergedResults[qId].concept_results.push(...(qRes.concept_results || []));
                       if (qRes.justification) {
                           mergedResults[qId].justification += "\n" + qRes.justification;
                       }
                       mergedResults[qId].review_flag = mergedResults[qId].review_flag || !!qRes.review_flag;
-                      // average confidence
                       mergedResults[qId].confidence = (mergedResults[qId].confidence + (qRes.confidence || 1.0)) / 2;
                   }
               }
@@ -395,48 +394,22 @@ Student Identifier: ${studentId}.
               teacherRemarks: aggregatedTeacherRemarks.trim()
           };
 
-          console.log(`[FAN_IN] Aggregation complete. Passing to Deterministic Math Engine.`);
+          console.log(`[IN_MEMORY_FAN_IN] Aggregation complete.`);
 
       } else {
-          // Simulator Check
+          // Normal atomic execution
+          const submissionData = await submissionOcrTask();
+          const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
+
           if (!process.env.DEEPSEEK_API_KEY) {
               console.log(`[Simulator] Using DeepSeek Simulator`);
               const sim = await simulateDeepSeekCall(ocrText);
               if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
-
-              // We won't maintain the simulator in Phase 2 for brevity, just throw or bypass
               throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
           } else {
-              // Pass image buffers for multimodal grading
               result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
               console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
           }
-      }
-
-      if (job.type === 'AI_GRADE_CHUNK') {
-          const { totalChunks } = data;
-
-          const completedChunks = await prisma.job.count({
-              where: {
-                  type: 'AI_GRADE_CHUNK',
-                  payload: { contains: `"submissionId":"${submissionId}"` },
-                  status: 'COMPLETED'
-              }
-          });
-
-          // +1 because THIS job is currently PROCESSING and will be COMPLETED right after returning
-          if (completedChunks + 1 === totalChunks) {
-              console.log(`[FAN_IN] All ${totalChunks} chunks completed for ${submissionId}. Enqueueing AI_GRADE_AGGREGATE...`);
-              await prisma.job.create({
-                  data: {
-                      type: 'AI_GRADE_AGGREGATE',
-                      payload: JSON.stringify({ submissionId }),
-                      status: 'PENDING'
-                  }
-              });
-          }
-
-          return { success: true, result }; // will be saved into job.result
       }
 
       // --- DETERMINISTIC MATH ENGINE ---

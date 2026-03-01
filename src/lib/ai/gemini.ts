@@ -37,7 +37,7 @@ export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = 
     });
 
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.5-flash", // Explicit OpenRouter model ID
+      model: "google/gemini-1.5-flash", // Explicit OpenRouter model ID
       messages: [
         {
           role: "user",
@@ -108,7 +108,7 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
     `;
 
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-1.5-flash",
       messages: [
         {
           role: "user",
