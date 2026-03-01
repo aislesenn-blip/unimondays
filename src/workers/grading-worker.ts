@@ -368,12 +368,6 @@ Student Identifier: ${studentId}.
               return { success: false, message: 'Parent failed due to child chunk failure.' };
           }
 
-          const failedChunks = allChunks.filter(c => c.status === 'FAILED');
-          if (failedChunks.length > 0) {
-              console.error(`[AI_GRADE_AGGREGATE] Found ${failedChunks.length} FAILED chunks. Aborting aggregation.`);
-              throw new Error("One or more chunks failed during processing. Grading aborted.");
-          }
-
           const pendingChunks = allChunks.filter(c => c.status !== 'COMPLETED');
           if (pendingChunks.length > 0) {
               console.log(`[AI_GRADE_AGGREGATE] Waiting on ${pendingChunks.length} chunks to complete. Delaying via continuation...`);
