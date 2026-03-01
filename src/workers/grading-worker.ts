@@ -6,6 +6,18 @@ import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
+import * as canvas from '@napi-rs/canvas';
+
+if (!globalThis.DOMMatrix) {
+  globalThis.DOMMatrix = canvas.DOMMatrix as any;
+}
+if (!globalThis.DOMPoint) {
+  globalThis.DOMPoint = canvas.DOMPoint as any;
+}
+if (!globalThis.DOMRect) {
+  globalThis.DOMRect = canvas.DOMRect as any;
+}
+
 import { pdf } from 'pdf-to-img';
 import { v4 as uuidv4 } from 'uuid';
 
