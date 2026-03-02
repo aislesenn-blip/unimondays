@@ -1,45 +1,68 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["dataProxy"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_DIRECT")
 }
 
-// 1. ENUMS (SQLite doesn't support enums natively, handled by Prisma)
+// App-level Enums. DB uses TEXT.
+enum GradingStatus {
+  PENDING
+  MAPPING
+  GRADING
+  REDUCING
+  COMPLETED
+  FAILED
+}
 
-// 2. UNIVERSITIES (Deleted)
+enum JobType {
+  MAP_SUBMISSION
+  CHILD_TASK_OCR
+  CHILD_TASK_GRADE_CHUNK
+  CHILD_TASK_IDENTIFY_STUDENT
+  REDUCE_GRADES
+  PROCESS_BULK_SESSION
+}
 
-// 3. USERS
+enum JobStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  WAITING_FOR_CHILDREN
+}
+
 model User {
   id                  String    @id @default(uuid())
   email               String    @unique
   fullName            String?   @map("full_name")
-  role                String    @default("STUDENT") // UserRole enum
+  role                String    @default("STUDENT")
   tier                String?   @default("Lite")
   quota               Int?      @default(100)
   used                Int?      @default(0)
-  calibrationSettings String?   @map("calibration_settings") // JSON string for default user calibration
+  calibrationSettings String?   @map("calibration_settings")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt           DateTime? @map("deleted_at")
 
-  classes             Classes[] // As lecturer
-  workSessions        WorkSession[] // As lecturer
+  classes             Classes[]
+  workSessions        WorkSession[]
   submissions         Submission[]
   auditLogs           AuditLog[]
-  bulkSessions        BulkSession[] // New relationship
-  standardizedRubrics StandardizedRubric[] // New relationship
+  bulkSessions        BulkSession[]
+  standardizedRubrics StandardizedRubric[]
 
   @@index([email])
   @@map("users")
 }
 
-// 4. CLASSES
 model Classes {
   id         String    @id @default(uuid())
   name       String
@@ -59,45 +82,41 @@ model Classes {
   @@map("classes")
 }
 
-// 5. WORK SESSIONS (ex-QUIZZES)
 model WorkSession {
-  id               String    @id @default(uuid())
-  title            String
-  workCode         String    @unique @map("work_code")
-  lecturerId       String    @map("lecturer_id")
-  classId          String?   @map("class_id")
-  deadline         DateTime?
-  status           String?   @default("DRAFT")
-  rubric           String?
-  rubricUrl        String?   @map("rubric_url")
-  markingScheme    String?   @map("marking_scheme")
-  goldStandardUrl  String?   @map("gold_standard_url")
-  questionPaperUrl String?   @map("question_paper_url")
-  instructions     String?
-  calibration      String? // JSON string for 5-point calibration
-  strictness       String? // 'LENIENT', 'MODERATE', 'STRICT'
-  totalMarks       Int?      @map("total_marks")
-  releaseMode      String?   @default("MANUAL") @map("release_mode")
-  bulkSessionId    String?   @map("bulk_session_id")
-  standardizedRubricId String? @map("standardized_rubric_id")
-
-  // V2.0 Enterprise Logic
+  id                   String    @id @default(uuid())
+  title                String
+  workCode             String    @unique @map("work_code")
+  lecturerId           String    @map("lecturer_id")
+  classId              String?   @map("class_id")
+  deadline             DateTime?
+  status               String?   @default("DRAFT")
+  rubric               String?
+  rubricUrl            String?   @map("rubric_url")
+  markingScheme        String?   @map("marking_scheme")
+  goldStandardUrl      String?   @map("gold_standard_url")
+  questionPaperUrl     String?   @map("question_paper_url")
+  instructions         String?
+  calibration          String?
+  strictness           String?
+  totalMarks           Int?      @map("total_marks")
+  releaseMode          String?   @default("MANUAL") @map("release_mode")
+  bulkSessionId        String?   @map("bulk_session_id")
+  standardizedRubricId String?   @map("standardized_rubric_id")
   strictDeadline       Boolean?  @default(false) @map("strict_deadline")
   areGradesReleased    Boolean?  @default(false) @map("are_grades_released")
   includeInCalculation Boolean?  @default(true) @map("include_in_calculation")
   allowAppeals         Boolean?  @default(false) @map("allow_appeals")
   appealDeadline       DateTime? @map("appeal_deadline")
-  confidenceThreshold  Int?      @default(85) @map("confidence_threshold") // 0-100
+  confidenceThreshold  Int?      @default(85) @map("confidence_threshold")
+  type                 String?   @default("WORK_SESSION")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
 
-  type      String?   @default("WORK_SESSION")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  lecturer    User         @relation(fields: [lecturerId], references: [id])
-  class       Classes?     @relation(fields: [classId], references: [id])
-  submissions Submission[]
-  bulkSession BulkSession? @relation(fields: [bulkSessionId], references: [id])
+  lecturer           User                @relation(fields: [lecturerId], references: [id])
+  class              Classes?            @relation(fields: [classId], references: [id])
+  submissions        Submission[]
+  bulkSession        BulkSession?        @relation(fields: [bulkSessionId], references: [id])
   standardizedRubric StandardizedRubric? @relation(fields: [standardizedRubricId], references: [id])
 
   @@index([classId])
@@ -107,26 +126,27 @@ model WorkSession {
   @@map("work_sessions")
 }
 
-// 6. SUBMISSIONS
 model Submission {
-  id              String      @id @default(uuid())
-  workSessionId   String      @map("work_session_id")
-  userId          String?     @map("user_id")
-  studentRegNo    String?     @map("student_reg_no")
-  studentName     String?     @map("student_name")
-  filePath        String?     @map("file_path")
-  ocrText         String?     @map("ocr_text")
-  status          String      @default("PENDING") // SubmissionStatus enum
-  feedback        String? // Stored as string
-  confidenceScore Float?      @map("confidence_score")
-  submittedAt     DateTime?   @default(now()) @map("submitted_at")
-  deletedAt       DateTime?   @map("deleted_at")
-  workSession     WorkSession @relation(fields: [workSessionId], references: [id])
-  user            User?       @relation(fields: [userId], references: [id])
-  score           Score?
-  appeals         Appeal[]
+  id              String    @id @default(uuid())
+  workSessionId   String    @map("work_session_id")
+  userId          String?   @map("user_id")
+  studentRegNo    String?   @map("student_reg_no")
+  studentName     String?   @map("student_name")
+  filePath        String?   @map("file_path")
+  ocrText         String?   @map("ocr_text")
+  status          String    @default("PENDING")
+  gradingStatus   String?   @map("grading_status")
+  feedback        String?
+  confidenceScore Float?    @map("confidence_score")
+  submittedAt     DateTime? @default(now()) @map("submitted_at")
+  deletedAt       DateTime? @map("deleted_at")
 
-  // Unique constraint on workSessionId + userId
+  workSession WorkSession @relation(fields: [workSessionId], references: [id])
+  user        User?       @relation(fields: [userId], references: [id])
+  score       Score?
+  appeals     Appeal[]
+  jobs        Job[]
+
   @@unique([workSessionId, userId])
   @@index([workSessionId])
   @@index([userId])
@@ -135,31 +155,29 @@ model Submission {
   @@map("submissions")
 }
 
-// 7. SCORES
 model Score {
   id               String    @id @default(uuid())
   submissionId     String    @unique @map("submission_id")
   totalMarks       Float     @map("total_marks")
-  breakdown        String    @map("breakdown") // Stored as string
+  breakdown        String    @map("breakdown")
   remarks          String?
   studentRemarks   String?   @map("student_remarks")
   teacherRemarks   String?   @map("teacher_remarks")
-  detectedIdentity String?   @map("detected_identity") // AI extracted name/ID
+  detectedIdentity String?   @map("detected_identity")
   isOverridden     Boolean?  @default(false) @map("is_overridden")
   gradedAt         DateTime? @default(now()) @map("graded_at")
 
   submission     Submission             @relation(fields: [submissionId], references: [id])
-  conceptResults StudentConceptResult[] // Phase 2: Atomic concept tracking
+  conceptResults StudentConceptResult[]
 
   @@map("scores")
 }
 
-// 7.5 STUDENT CONCEPT RESULTS (Phase 2 Atomic Grading)
 model StudentConceptResult {
   id           String @id @default(uuid())
   scoreId      String @map("score_id")
-  conceptId    String @map("concept_id") // Links to ConceptUnit.conceptId
-  status       String // "MET" | "PARTIALLY_MET" | "FAILED"
+  conceptId    String @map("concept_id")
+  status       String
   awardedMarks Float  @map("awarded_marks")
   reasoning    String
 
@@ -169,24 +187,32 @@ model StudentConceptResult {
   @@map("student_concept_results")
 }
 
-// 8. JOBS
 model Job {
-  id          String    @id @default(uuid())
-  type        String // JobType enum
-  payload     String    @map("payload") // Stored as string
-  status      String    @default("PENDING") // JobStatus enum
-  result      String?   @map("result") // Stored as string
-  error       String?
-  retryCount  Int?      @default(0) @map("retry_count")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
-  processedAt DateTime? @map("processed_at")
+  id             String    @id @default(uuid())
+  type           String
+  payload        String
+  status         String    @default("PENDING")
+  result         String?
+  error          String?
+  retryCount     Int?      @default(0) @map("retry_count")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+  processedAt    DateTime? @map("processed_at")
+  parentId       String?   @map("parent_id")
+  submissionId   String?   @map("submission_id")
+  tasksTotal     Int?      @map("tasks_total")
+  tasksCompleted Int?      @default(0) @map("tasks_completed")
+
+  parent     Job?        @relation("JobHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children   Job[]       @relation("JobHierarchy")
+  submission Submission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@index([status, type])
+  @@index([parentId])
+  @@index([submissionId])
   @@map("jobs")
 }
 
-// 9. AUDIT LOGS
 model AuditLog {
   id        String    @id @default(uuid())
   userId    String?   @map("user_id")
@@ -201,12 +227,11 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-// 10. APPEALS
 model Appeal {
   id           String   @id @default(uuid())
   submissionId String   @map("submission_id")
   reason       String
-  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  status       String   @default("PENDING")
   adminComment String?  @map("admin_comment")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
@@ -217,40 +242,33 @@ model Appeal {
   @@map("appeals")
 }
 
-// 11. BULK SESSIONS (New Cloud Marking Feature)
 model BulkSession {
-  id             String @id @default(uuid())
-  title          String
-  cloudLink      String @map("cloud_link") // Google Drive / Dropbox Link
-  lecturerId     String @map("lecturer_id")
-  status         String @default("PENDING") // PENDING, PROCESSING, READY, COMPLETED, FAILED
-  totalFiles     Int?   @default(0) @map("total_files")
-  processedFiles Int?   @default(0) @map("processed_files")
-
-  // Configuration for the Bulk Job
-  markingScheme    String? @map("marking_scheme") // Text or URL
-  goldStandardUrl  String? @map("gold_standard_url") // Uploaded PDF
-  questionPaperUrl String? @map("question_paper_url") // Uploaded Blank Question Paper
-  calibration      String? // JSON string
-  totalMarks       Int?    @default(100) @map("total_marks")
-
-  // Results
-  successCount      Int?    @default(0) @map("success_count")
-  unidentifiedCount Int?    @default(0) @map("unidentified_count")
-  errorMessage      String? @map("error_message")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  title             String
+  cloudLink         String   @map("cloud_link")
+  lecturerId        String   @map("lecturer_id")
+  status            String   @default("PENDING")
+  totalFiles        Int?     @default(0) @map("total_files")
+  processedFiles    Int?     @default(0) @map("processed_files")
+  markingScheme     String?  @map("marking_scheme")
+  goldStandardUrl   String?  @map("gold_standard_url")
+  questionPaperUrl  String?  @map("question_paper_url")
+  calibration       String?
+  totalMarks        Int?     @default(100) @map("total_marks")
+  successCount      Int?     @default(0) @map("success_count")
+  unidentifiedCount Int?     @default(0) @map("unidentified_count")
+  errorMessage      String?  @map("error_message")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
 
   lecturer     User          @relation(fields: [lecturerId], references: [id])
-  workSessions WorkSession[] // If converted/synced
+  workSessions WorkSession[]
 
   @@index([lecturerId])
   @@index([status])
   @@map("bulk_sessions")
 }
 
-// 12. STANDARDIZED RUBRICS (CTO V3 Architecture)
 model StandardizedRubric {
   id                String   @id @default(uuid())
   lecturerId        String   @map("lecturer_id")
@@ -262,8 +280,8 @@ model StandardizedRubric {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
 
-  lecturer  User             @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
-  questions RubricQuestion[]
+  lecturer     User             @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  questions    RubricQuestion[]
   workSessions WorkSession[]
 
   @@index([lecturerId])
@@ -273,14 +291,12 @@ model StandardizedRubric {
 model RubricQuestion {
   id                   String @id @default(uuid())
   standardizedRubricId String @map("standardized_rubric_id")
-  questionId           String @map("question_id") // e.g., "1a", "Q2"
+  questionId           String @map("question_id")
   questionText         String @map("question_text")
   marksAllocated       Float  @map("marks_allocated")
-  questionType         String @map("question_type") // "Essay" | "MCQ" | "Calculation" | "Diagram"
+  questionType         String @map("question_type")
   learningObjective    String @map("learning_objective")
-
-  // MCQ Options stored as JSON array if questionType is "MCQ"
-  mcqOptions String? @map("mcq_options")
+  mcqOptions           String? @map("mcq_options")
 
   rubric          StandardizedRubric @relation(fields: [standardizedRubricId], references: [id], onDelete: Cascade)
   conceptUnits    ConceptUnit[]
@@ -295,10 +311,10 @@ model RubricQuestion {
 model ConceptUnit {
   id               String  @id @default(uuid())
   rubricQuestionId String  @map("rubric_question_id")
-  conceptId        String  @map("concept_id") // Optional internal identifier
+  conceptId        String  @map("concept_id")
   conceptText      String  @map("concept_text")
   marks            Float
-  partialRule      String? @map("partial_rule") // E.g. "0.5 if implied"
+  partialRule      String? @map("partial_rule")
 
   question RubricQuestion @relation(fields: [rubricQuestionId], references: [id], onDelete: Cascade)
 
@@ -309,7 +325,7 @@ model ConceptUnit {
 model EvaluationTier {
   id               String @id @default(uuid())
   rubricQuestionId String @map("rubric_question_id")
-  tierName         String @map("tier_name") // e.g., "Tier1", "Tier2", "Tier3"
+  tierName         String @map("tier_name")
   description      String
 
   question RubricQuestion @relation(fields: [rubricQuestionId], references: [id], onDelete: Cascade)
@@ -322,7 +338,7 @@ model OutOfScopeRule {
   id               String @id @default(uuid())
   rubricQuestionId String @map("rubric_question_id")
   description      String
-  maxMarks         Float  @map("max_marks") // Penalty limit or total cap
+  maxMarks         Float  @map("max_marks")
 
   question RubricQuestion @relation(fields: [rubricQuestionId], references: [id], onDelete: Cascade)
 
@@ -334,7 +350,7 @@ model PenaltyRule {
   id               String @id @default(uuid())
   rubricQuestionId String @map("rubric_question_id")
   description      String
-  deduct           Float // Deduction per mistake
+  deduct           Float
 
   question RubricQuestion @relation(fields: [rubricQuestionId], references: [id], onDelete: Cascade)
 

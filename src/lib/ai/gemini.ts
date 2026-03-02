@@ -1,233 +1,38 @@
-import OpenAI from 'openai';
 
-// Ensure we don't crash at build time if env var is missing,
-// but validation logic inside functions will handle runtime checks.
-// The SDK throws if initialized without apiKey, so we pass a placeholder or empty string
-// if the env var is missing, but only inside a conditional check or rely on runtime check.
+// src/lib/ai/gemini.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const apiKey = process.env.OPENROUTER_API_KEY || "dummy-key-for-build";
-
-const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: apiKey,
-  defaultHeaders: {
-    "HTTP-Referer": "https://playbook.edu", // Required by OpenRouter
-    "X-Title": "Playbook EdTech", // Required by OpenRouter
-  }
-});
-
-export async function ocrDocument(buffer: Buffer | Buffer[], mimeType: string = "application/pdf"): Promise<string> {
-  // Runtime check for real key
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not set. OCR service unavailable.");
-  }
-
-  try {
-    const buffers = Array.isArray(buffer) ? buffer : [buffer];
-    const imageContents = buffers.map(buf => {
-      const base64Data = buf.toString("base64");
-      const dataUrl = `data:${mimeType};base64,${base64Data}`;
-      return {
-        type: "image_url" as const,
-        image_url: {
-          url: dataUrl,
-          detail: "high" as const // Force high resolution for OCR accuracy
-        }
-      };
-    });
-
-    const modelsToTry = [
-      "google/gemini-2.5-flash",
-      "anthropic/claude-3.5-sonnet"
-    ];
-
-    let attempt = 0;
-    const MAX_RETRIES = 3;
-    let lastError: any = null;
-
-    while (attempt < MAX_RETRIES) {
-      for (const currentModel of modelsToTry) {
-        try {
-          const response = await openai.chat.completions.create({
-            model: currentModel,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown. You must actively look for, analyze, and grade all visual elements, diagrams, charts, and hand-drawn graphs provided by the student. Evaluate these visual answers against the rubric just as rigorously as text." },
-                  ...imageContents
-                ],
-              },
-            ],
-            temperature: 0.0,
-            top_p: 0.1,
-            max_tokens: 4096,
-          });
-
-          const text = response.choices[0]?.message?.content;
-          if (!text) throw new Error(`No text returned from OpenRouter Vision API using ${currentModel}`);
-
-          return text;
-        } catch (modelErr: any) {
-            lastError = modelErr;
-            console.error(`Attempt ${attempt + 1}: Model ${currentModel} failed in ocrDocument:`, modelErr?.message || modelErr);
-            if (currentModel === modelsToTry[modelsToTry.length - 1]) {
-                if (attempt === MAX_RETRIES - 1) {
-                  throw modelErr; // Last model on last attempt failed, throw to the outer catch
-                }
-                break; // Break the inner loop to retry the while loop
-            }
-        }
-      }
-      attempt++;
-      if (attempt < MAX_RETRIES) {
-          await new Promise(res => setTimeout(res, 1000 * attempt));
-      }
-    }
-
-    console.error("[OCR FATAL] Exhausted all retries. Last error: ", lastError?.message || lastError);
-    throw new Error(`Failed to process OCR after max retries. Last error: ${lastError?.message || lastError || 'Unknown'}`);
-
-  } catch (error: any) {
-    console.error("OpenRouter OCR Error:", error);
-
-    // Handle Rate Limits (OpenAI 429) & Service Unavailable (503)
-    if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
-      throw new Error("RATE_LIMIT_HIT: OpenRouter/Gemini Service overloaded.");
-    }
-
-    throw new Error(`Failed to perform OCR on document: ${error.message}`);
-  }
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error("GEMINI_API_KEY environment variable is not set!");
 }
 
-export interface PdfSplit {
-  regNo: string;
-  name?: string;
-  startPage: number; // 1-based
-  endPage: number;   // 1-based
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// TODO: Implement actual file-to-binary conversion
+function fileToGenerativePart(path: string) {
+  // This is a placeholder. In a real implementation, you would read the file
+  // from blob storage and convert it to a base64 string.
+  return {
+    inlineData: {
+      data: "", // Base64 string of the file
+      mimeType: "application/pdf",
+    },
+  };
 }
 
-export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not set. Structure analysis service unavailable.");
-  }
+export async function performOcr(filePath: string): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+  const prompt = "Extract all text content from this document. Preserve the structure and layout as best as possible.";
+  const filePart = fileToGenerativePart(filePath);
 
   try {
-    const base64Data = buffer.toString("base64");
-    const mime = "application/pdf"; // Assuming PDF context from function name
-    const dataUrl = `data:${mime};base64,${base64Data}`;
-
-    const prompt = `
-      Analyze this document containing multiple student scripts.
-      Your task is to identify the start and end page numbers for each student's script and extract their identity.
-
-      Instructions:
-      1. Scan ALL pages of a script for Registration Numbers (e.g., RegNo, Matric No) or Names. Do NOT just look at the first page. A student might write their name on page 3.
-      2. Scripts are continuous (e.g., if Student A is on pages 1-3, Student B starts on page 4).
-      3. If a page has no clear identity but follows a script, assume it belongs to the previous student.
-      4. If a script has no visible RegNo across any of its pages, use "UNIDENTIFIED" as the regNo.
-      5. Extract the Student Name if visible on any of the script's pages.
-
-      Output Format:
-      Return a STRICT JSON array of objects with keys:
-      - "regNo" (string)
-      - "name" (string, optional)
-      - "startPage" (1-based integer)
-      - "endPage" (1-based integer)
-
-      Do not include any markdown formatting. Just the JSON.
-    `;
-
-    const modelsToTry = [
-      "google/gemini-2.5-flash",
-      "anthropic/claude-3.5-sonnet"
-    ];
-
-    let attempt = 0;
-    const MAX_RETRIES = 3;
-    let content: string | null | undefined;
-
-    while (attempt < MAX_RETRIES) {
-        for (const currentModel of modelsToTry) {
-            try {
-                const response = await openai.chat.completions.create({
-                  model: currentModel,
-                  messages: [
-                    {
-                      role: "user",
-                      content: [
-                        { type: "text", text: prompt },
-                        {
-                          type: "image_url",
-                          image_url: {
-                            url: dataUrl,
-                          }
-                        }
-                      ],
-                    },
-                  ],
-                  response_format: { type: "json_object" },
-                  temperature: 0.0,
-                  top_p: 0.1,
-                });
-
-                content = response.choices[0]?.message?.content;
-                if (!content) throw new Error(`No content returned from OpenRouter using ${currentModel}`);
-                break; // Success, break out of model loop
-            } catch (modelErr: any) {
-                console.error(`Attempt ${attempt + 1}: Model ${currentModel} failed in analyzePdfStructure:`, modelErr?.message || modelErr);
-                if (currentModel === modelsToTry[modelsToTry.length - 1]) {
-                    if (attempt === MAX_RETRIES - 1) {
-                      throw modelErr;
-                    }
-                }
-            }
-        }
-        if (content) break;
-        attempt++;
-        if (attempt < MAX_RETRIES) {
-             await new Promise(res => setTimeout(res, 1000 * attempt));
-        }
-    }
-
-    if (!content) throw new Error("No content returned after max retries");
-
-    // Robust JSON Extraction: Find the first [ or { and the last ] or }
-    let cleanContent = content;
-    const arrayMatch = content.match(/\[[\s\S]*\]/);
-    const objectMatch = content.match(/\{[\s\S]*\}/);
-
-    if (arrayMatch && (!objectMatch || arrayMatch[0].length > objectMatch[0].length)) {
-      cleanContent = arrayMatch[0];
-    } else if (objectMatch) {
-      cleanContent = objectMatch[0];
-    } else {
-      // Fallback to old behavior if no clear boundaries
-      cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    }
-
-    let json;
-    try {
-        json = JSON.parse(cleanContent);
-    } catch (parseError) {
-        throw new Error(`Failed to parse AI response as JSON. Cleaned Content: ${cleanContent.substring(0, 100)}...`);
-    }
-
-    if (Array.isArray(json)) return json as PdfSplit[];
-    if (json.splits && Array.isArray(json.splits)) return json.splits as PdfSplit[];
-
-    // Fallback if structure is unknown but likely array-like
-    if (Object.keys(json).length === 1 && Array.isArray(Object.values(json)[0])) {
-        return Object.values(json)[0] as PdfSplit[];
-    }
-
-    throw new Error("Invalid JSON structure returned from AI");
-
-  } catch (error: any) {
-    console.error("OpenRouter Structure Analysis Error:", error);
-    if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
-      throw new Error("RATE_LIMIT_HIT: OpenRouter/Gemini Service overloaded.");
-    }
-    throw new Error(`Failed to analyze PDF structure: ${error.message}`);
+    const result = await model.generateContent([prompt, filePart]);
+    const response = await result.response;
+    const text = response.text();
+    return text;
+  } catch (error) {
+    console.error("Error performing OCR with Gemini:", error);
+    throw new Error("Failed to perform OCR on the document.");
   }
 }
