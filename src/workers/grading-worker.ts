@@ -190,16 +190,10 @@ export async function handleAiGrade(job: Job) {
       let questionPaperText: string | undefined;
 
       try {
-          if (job.type === 'AI_GRADE_SUBMISSION' || job.type === 'AI_GRADE_CHUNK') {
-              [rubricContent, questionPaperText] = await Promise.all([
-                  fetchStandardizedRubricTask(),
-                  questionPaperOcrTask()
-              ]);
-          } else {
-              rubricContent = await fetchStandardizedRubricTask();
-              // Don't OCR question paper for AGGREGATE
-              questionPaperText = undefined;
-          }
+          [rubricContent, questionPaperText] = await Promise.all([
+              fetchStandardizedRubricTask(),
+              questionPaperOcrTask()
+          ]);
       } catch (e: any) {
           console.error("[GRADING FATAL ERROR]: Prerequisite Check Failed", e);
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
@@ -241,233 +235,19 @@ Student Identifier: ${studentId}.
       const totalMarks = submission.workSession.totalMarks || 100;
       let result: GradingResult;
 
-      if (chunks.length > 0 && job.type === 'AI_GRADE_SUBMISSION') {
-          // Idempotency check: Do not dispatch chunks if they already exist for this submission run
-          const existingChunks = await prisma.job.findFirst({
-              where: {
-                  type: 'AI_GRADE_CHUNK',
-                  payload: {
-                      contains: `"originalJobId":"${job.id}"`
-                  }
-              }
-          });
+      // Execute grading as a single payload
+      console.log(`[AI_GRADE_SUBMISSION] Processing entire submission as a single payload...`);
+      const submissionData = await submissionOcrTask();
+      const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
 
-          if (existingChunks) {
-              console.warn(`[FAN_OUT] Chunks already exist for Submission ${submission.id}, skipping dispatch to prevent duplicates.`);
-              return { success: true, message: 'Chunks already fanned out' };
-          }
-
-          console.log(`[FAN_OUT] Dispatching ${chunks.length} AI_GRADE_CHUNK jobs...`);
-
-          // Create chunk jobs
-          for (const chunk of chunks) {
-              await prisma.job.create({
-                  data: {
-                      type: 'AI_GRADE_CHUNK',
-                      payload: JSON.stringify({
-                          submissionId: submission.id,
-                          chunkPath: chunk.path,
-                          originalJobId: job.id
-                      }),
-                      status: 'PENDING'
-                  }
-              });
-          }
-
-          // Create the aggregate job
-          await prisma.job.create({
-              data: {
-                  type: 'AI_GRADE_AGGREGATE',
-                  payload: JSON.stringify({
-                      submissionId: submission.id,
-                      expectedChunks: chunks.length,
-                      originalJobId: job.id
-                  }),
-                  status: 'PENDING'
-              }
-          });
-
-          console.log(`[FAN_OUT] Successfully enqueued chunk jobs for Submission ${submission.id}. Exiting parent job.`);
-          return { success: true, message: 'Fanned out chunk jobs' };
-
-      } else if (job.type === 'AI_GRADE_CHUNK') {
-          console.log(`[AI_GRADE_CHUNK] Processing chunk ${data.chunkPath}`);
-
-          const submissionData = await submissionOcrTask(data.chunkPath);
-          const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
-
-          const chunkConfig: GradeConfig = {
-              ...config,
-              context: `Extract all questions/answers from THESE 3 PAGES ONLY. Maintain the sequence.\n\n${baseContextString}`
-          };
-
-          const chunkResult = await gradeSubmission(ocrText, rubricContent, totalMarks, chunkConfig, submissionBuffers, submissionMime);
-
-          // Save result so the aggregate job can find it
-          await prisma.job.update({
-              where: { id: job.id },
-              data: {
-                  result: JSON.stringify(chunkResult),
-                  status: 'COMPLETED'
-              }
-          });
-
-          console.log(`[AI_GRADE_CHUNK] Completed chunk ${data.chunkPath}`);
-          return { success: true, message: 'Chunk graded successfully' };
-
-      } else if (job.type === 'AI_GRADE_AGGREGATE') {
-          console.log(`[AI_GRADE_AGGREGATE] Checking completion status of chunks...`);
-
-          // Check if all chunks are complete
-          const allChunks = await prisma.job.findMany({
-              where: {
-                  type: 'AI_GRADE_CHUNK',
-                  payload: { contains: `"originalJobId":"${data.originalJobId}"` }
-              }
-          });
-
-          if (allChunks.length < data.expectedChunks) {
-              console.warn(`[AI_GRADE_AGGREGATE] Waiting for all chunks to be enqueued. Retrying...`);
-              return { continuation: true, nextPayload: data };
-          }
-
-          // Check for any FAILED chunks to prevent infinite waits
-          const failedChunks = allChunks.filter(c => c.status === 'FAILED');
-          if (failedChunks.length > 0) {
-              console.error(`[AI_GRADE_AGGREGATE] Critical Failure: ${failedChunks.length} chunks FAILED. Aborting submission ${submission.id}.`);
-              await prisma.submission.update({
-                  where: { id: submission.id },
-                  data: {
-                      status: 'FAILED',
-                      feedback: JSON.stringify({ error: `Grading failed because ${failedChunks.length} section(s) of the document could not be processed.` })
-                  }
-              });
-              return { success: false, message: 'Parent failed due to child chunk failure.' };
-          }
-
-          const pendingChunks = allChunks.filter(c => c.status !== 'COMPLETED');
-          if (pendingChunks.length > 0) {
-              console.log(`[AI_GRADE_AGGREGATE] Waiting on ${pendingChunks.length} chunks to complete. Delaying via continuation...`);
-              return { continuation: true, nextPayload: data };
-          }
-
-          console.log(`[AI_GRADE_AGGREGATE] All chunks completed. Starting FAN_IN aggregation...`);
-
-          const chunkResults = allChunks.map(c => JSON.parse(c.result || '{}'));
-
-          const mergedResults = new Map<string, any>();
-          let aggregatedStudentRemarks = "";
-          let aggregatedTeacherRemarks = "";
-          let detectedIdentity: string | null = null;
-
-          for (const chunkResult of chunkResults) {
-              if (chunkResult.detectedIdentity && !detectedIdentity) {
-                  detectedIdentity = chunkResult.detectedIdentity;
-              }
-
-              if (chunkResult.studentRemarks) {
-                  aggregatedStudentRemarks += chunkResult.studentRemarks + " ";
-              }
-              if (chunkResult.teacherRemarks) {
-                  aggregatedTeacherRemarks += chunkResult.teacherRemarks + " ";
-              }
-
-              for (const qRes of chunkResult.results || []) {
-                  // Must use the mapped question text/label for accurate tracking and merging
-                  // The prompt returns `question_id` but in practice it represents the question label
-                  const standardRubricObj = JSON.parse(rubricContent);
-                  const dbQuestion = standardRubricObj.questions.find((q: any) => q.id === qRes.question_id || q.questionId === qRes.question_id || q.QuestionID === qRes.question_id);
-                  const mergeKey = dbQuestion?.questionId || dbQuestion?.QuestionID || qRes.question_id;
-
-                  if (!mergedResults.has(mergeKey)) {
-                      mergedResults.set(mergeKey, {
-                          question_id: qRes.question_id,
-                          mergeKey: mergeKey, // Internal key for sorting later
-                          status: qRes.status,
-                          concept_results: [...(qRes.concept_results || [])],
-                          justification: qRes.justification || "",
-                          review_flag: !!qRes.review_flag,
-                          confidence: qRes.confidence || 1.0
-                      });
-                  } else {
-                      const existing = mergedResults.get(mergeKey);
-
-                      // Status overwrite precedence
-                      if (existing.status === "Not Attempted" && qRes.status !== "Not Attempted") {
-                          existing.status = qRes.status;
-                          existing.justification = qRes.justification || existing.justification;
-                      } else if (qRes.status !== "Not Attempted" && qRes.justification) {
-                          if (!existing.justification.includes(qRes.justification)) {
-                              existing.justification += " " + qRes.justification;
-                          }
-                      }
-
-                      // Deduplicate Concept Units
-                      const mergedConcepts = new Map<string, any>();
-                      // Add existing ones
-                      for (const c of existing.concept_results) {
-                          mergedConcepts.set(c.conceptId, c);
-                      }
-                      // Merge new ones
-                      for (const newC of qRes.concept_results || []) {
-                          if (mergedConcepts.has(newC.conceptId)) {
-                              const existingC = mergedConcepts.get(newC.conceptId);
-                              // Keep the one with higher marks if duplicate
-                              const newMarks = Number(newC.awardedMarks) || 0;
-                              const oldMarks = Number(existingC.awardedMarks) || 0;
-                              if (newMarks > oldMarks) {
-                                  mergedConcepts.set(newC.conceptId, newC);
-                              }
-                          } else {
-                              mergedConcepts.set(newC.conceptId, newC);
-                          }
-                      }
-
-                      existing.concept_results = Array.from(mergedConcepts.values());
-                      existing.review_flag = existing.review_flag || !!qRes.review_flag;
-                      existing.confidence = (existing.confidence + (qRes.confidence || 1.0)) / 2;
-                  }
-              }
-          }
-
-          // SORTING LOGIC: Convert map values and sort alphanumerically by mergeKey (e.g., Q1, Q2, Q10)
-          const sortedMergedArray = Array.from(mergedResults.values()).sort((a, b) => {
-              const parseNum = (str: string) => {
-                  const match = str.match(/\d+/);
-                  return match ? parseInt(match[0], 10) : 0;
-              };
-              const numA = parseNum(a.mergeKey);
-              const numB = parseNum(b.mergeKey);
-              if (numA !== numB) {
-                  return numA - numB;
-              }
-              return a.mergeKey.localeCompare(b.mergeKey);
-          });
-
-          result = {
-              exam_id: submission.workSessionId,
-              results: sortedMergedArray,
-              detectedIdentity: detectedIdentity,
-              studentRemarks: aggregatedStudentRemarks.trim(),
-              teacherRemarks: aggregatedTeacherRemarks.trim()
-          };
-
-          console.log(`[AI_GRADE_AGGREGATE] Aggregation and Sorting complete.`);
-
+      if (!process.env.DEEPSEEK_API_KEY) {
+          console.log(`[Simulator] Using DeepSeek Simulator`);
+          const sim = await simulateDeepSeekCall(ocrText);
+          if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
+          throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
       } else {
-          // Normal atomic execution
-          const submissionData = await submissionOcrTask();
-          const { text: ocrText, buffers: submissionBuffers, mimeType: submissionMime } = submissionData;
-
-          if (!process.env.DEEPSEEK_API_KEY) {
-              console.log(`[Simulator] Using DeepSeek Simulator`);
-              const sim = await simulateDeepSeekCall(ocrText);
-              if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
-              throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
-          } else {
-              result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
-              console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
-          }
+          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
+          console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
       }
 
       // --- DETERMINISTIC MATH ENGINE ---

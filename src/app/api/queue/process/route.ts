@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         const job = await prisma.job.findFirst({
             where: {
                 status: 'PENDING',
-                type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING', 'AI_GRADE_CHUNK', 'AI_GRADE_AGGREGATE'] },
+                type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
                 retryCount: { lt: 3 } // Max 3 retries
             },
             orderBy: { createdAt: 'asc' }
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
                 let jobResult: any = null;
                 if (job.type === 'CLOUD_MARKING') {
                     jobResult = await handleCloudMarking(job);
-                } else if (job.type === 'AI_GRADE_SUBMISSION' || job.type === 'AI_GRADE_CHUNK' || job.type === 'AI_GRADE_AGGREGATE') {
+                } else if (job.type === 'AI_GRADE_SUBMISSION') {
                     jobResult = await handleAiGrade(job);
                 } else {
                     throw new Error(`Unknown Job Type: ${job.type}`);
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
                                 }
                             });
                             console.log(`[QUEUE] Max retries reached for CLOUD_MARKING. Updated BulkSession ${payloadData.bulkSessionId} to FAILED.`);
-                        } else if ((job.type === 'AI_GRADE_SUBMISSION' || job.type === 'AI_GRADE_CHUNK' || job.type === 'AI_GRADE_AGGREGATE') && payloadData.submissionId) {
+                        } else if (job.type === 'AI_GRADE_SUBMISSION' && payloadData.submissionId) {
                             await prisma.submission.update({
                                 where: { id: payloadData.submissionId },
                                 data: {
