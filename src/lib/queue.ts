@@ -8,7 +8,7 @@ export interface JobPayload {
   [key: string]: any;
 }
 
-export async function enqueueJob(type: string, payload: JobPayload): Promise<Job> {
+export async function enqueueJob(type: string, payload: JobPayload, priority: number = 0): Promise<Job> {
   // priority is ignored
   const payloadStr = JSON.stringify(payload);
   return await prisma.job.create({

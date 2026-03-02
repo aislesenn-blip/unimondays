@@ -63,7 +63,7 @@ export async function handleOcrSplit(job: Job) {
 
     if (submission) {
       // Enqueue Grading
-      await enqueueJob('AI_GRADE', { submissionId: submission.id }, 0);
+      await enqueueJob('AI_GRADE_SUBMISSION', { submissionId: submission.id });
       createdSubmissionIds.push(submission.id);
     }
   }
