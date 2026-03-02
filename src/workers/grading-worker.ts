@@ -2,12 +2,11 @@ import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { readFile, saveBuffer } from '@/lib/storage';
+import { readFile } from '@/lib/storage';
 import { ocrDocument } from '@/lib/ai/gemini';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 import sharp from 'sharp';
-import { PDFDocument } from 'pdf-lib';
 import * as canvas from '@napi-rs/canvas';
 
 if (!globalThis.DOMMatrix) {
@@ -21,7 +20,6 @@ if (!globalThis.DOMRect) {
 }
 
 import { pdf } from 'pdf-to-img';
-import { v4 as uuidv4 } from 'uuid';
 
 export async function handleAiGrade(job: Job) {
   let data: any;
@@ -64,8 +62,8 @@ export async function handleAiGrade(job: Job) {
   try {
       // PARALLEL TASK 1: Submission OCR (Return buffer array for visual analysis)
       const submissionOcrTask = async (chunkPath?: string): Promise<{ text: string, buffers: Buffer[], mimeType: string }> => {
-          let targetPath = chunkPath || submission.filePath;
-          let ocrText = chunkPath ? null : submission.ocrText;
+          const targetPath = chunkPath || submission.filePath;
+          const ocrText = chunkPath ? null : submission.ocrText;
 
           if (!targetPath) throw new Error("No file path and no OCR text for submission.");
 
@@ -201,9 +199,7 @@ export async function handleAiGrade(job: Job) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
-
-
-      // Prepare Config
+      // Reconstruct file checking block from the fan_out to get chunks
       const strictnessMap: Record<string, number> = {
         'LENIENT': 0.8, 'MODERATE': 1.0, 'STRICT': 1.2
       };
