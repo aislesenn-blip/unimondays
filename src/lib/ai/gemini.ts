@@ -3,13 +3,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable is not set!");
+  console.error("GEMINI_API_KEY environment variable is not set!");
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'missing-key');
 
 export async function performOcr(fileBuffer: Buffer, mimeType: string): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const prompt = "Extract all text content from this document. Preserve the structure and layout as best as possible.";
 
