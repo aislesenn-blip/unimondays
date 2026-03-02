@@ -30,15 +30,34 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
     setLoading(true);
     try {
-      // 1. Prepare form data for the unified endpoint
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("workSessionId", session.id);
+      // 1. Client-Side Upload Directly to Supabase Storage
+      const { supabaseClient } = await import("@/lib/supabase-client");
 
-      // 2. Send to the unified /api/upload endpoint
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${session.id}/${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `submissions/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabaseClient.storage
+        .from('exam_pdfs')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload file to storage: ${uploadError.message}`);
+      }
+
+      // 2. Send Lightweight API Call to Next.js API Route
       const res = await fetch("/api/upload", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filePath: uploadData.path,
+          workSessionId: session.id,
+        }),
       });
 
       const data = await res.json();
