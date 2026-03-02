@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateRequest } from '@/lib/auth';
-import { storage } from '@/lib/storage';
 import { prisma } from '@/lib/prisma';
 import { triggerNextJob } from '@/lib/jobs';
 
@@ -11,19 +10,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const workSessionId = formData.get('workSessionId') as string;
+    const body = await req.json();
+    const { filePath, workSessionId } = body;
 
-    if (!file || !workSessionId) {
-      return NextResponse.json({ error: 'Missing file or workSessionId' }, { status: 400 });
+    if (!filePath || !workSessionId) {
+      return NextResponse.json({ error: 'Missing filePath or workSessionId' }, { status: 400 });
     }
-    
-    // 1. Upload file to secure storage
-    const folder = `submissions/${workSessionId}`;
-    const filePath = await storage.uploadFile(file, folder);
 
-    // 2. Create the Submission Record in the database
+    // 1. Create the Submission Record in the database
     const submission = await prisma.submission.create({
         data: {
             workSessionId: workSessionId,
@@ -35,7 +29,7 @@ export async function POST(req: NextRequest) {
         }
     });
 
-    // 3. Trigger the background processing job (MAP_SUBMISSION)
+    // 2. Trigger the background processing job (MAP_SUBMISSION)
     await prisma.job.create({
         data: {
             type: 'MAP_SUBMISSION',

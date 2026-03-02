@@ -40,15 +40,38 @@ export default function QuizEntry() {
   const handleUpload = async () => {
     if (!file || !quizDetails) return;
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("quizCode", code);
 
     try {
+      // 1. Client-Side Upload Directly to Supabase Storage
+      const { supabaseClient } = await import("@/lib/supabase-client");
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${quizDetails.id}/${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `submissions/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabaseClient.storage
+        .from('exam_pdfs')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload file to storage: ${uploadError.message}`);
+      }
+
+      // 2. Send Lightweight API Call to Next.js API Route
       const res = await fetch("/api/upload", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filePath: uploadData.path,
+          workSessionId: quizDetails.id, // Re-using workSessionId field mapping
+        }),
       });
+
       if (res.ok) {
         const data = await res.json();
         // Trigger processing immediately for student
