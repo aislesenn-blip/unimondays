@@ -90,7 +90,7 @@ export async function standardizeRubric(rubricText: string, buffer?: Buffer, mim
         throw new Error("No AI API Key is set. Standardization service unavailable.");
     }
 
-    let chunkBuffers: Buffer[] = [];
+    const chunkBuffers: Buffer[] = [];
 
     if (buffer && mimeType === 'application/pdf') {
         const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });

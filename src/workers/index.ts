@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+
 import { claimJob, completeJob, failJob, JobType } from '@/lib/queue';
 import { Job } from '@prisma/client';
 import { handleOcrSplit } from './ocr-worker';
@@ -22,8 +22,8 @@ export async function processJobs() {
   console.log("Worker started. Monitoring queue...");
 
   // Basic metrics
-  let processedCount = 0;
-  let errorCount = 0;
+
+
 
   while (true) {
     try {
@@ -54,7 +54,7 @@ export async function processJobs() {
             duration,
             timestamp: new Date().toISOString()
           }));
-          processedCount++;
+
         } catch (error: any) {
           const duration = Date.now() - startTime;
           console.error(JSON.stringify({
@@ -65,7 +65,7 @@ export async function processJobs() {
             timestamp: new Date().toISOString()
           }));
           await failJob(job.id, error.message || String(error));
-          errorCount++;
+
         }
       } else {
         // No job found, sleep for a bit (Exponential backoff could be added here)
