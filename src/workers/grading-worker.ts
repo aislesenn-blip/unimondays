@@ -1,10 +1,11 @@
+
 import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readFile, saveBuffer } from '@/lib/storage';
-import { ocrDocument } from '@/lib/ai/gemini';
-import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
+import { performOcr } from '@/lib/ai/gemini';
+import { gradeChunk, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
@@ -123,7 +124,7 @@ export async function handleAiGrade(job: Job) {
               console.log(`[OCR_START] Sending ${processedBuffers.length} images to Gemini...`);
               // Provide as image/png if converted from PDF, otherwise use original mimetype
               const actualMimeType = mimeType === 'application/pdf' ? 'image/png' : mimeType;
-              const text = await ocrDocument(processedBuffers, actualMimeType);
+              const text = await performOcr(processedBuffers, actualMimeType);
               console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
 
               // Save immediately
@@ -175,7 +176,7 @@ export async function handleAiGrade(job: Job) {
               console.log(`[SUPABASE_FETCH] Question Paper: ${qp}`);
               const buffer = await readFile(qp, 'exam_pdfs');
               const mimeType = qp.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-              const text = await ocrDocument(buffer, mimeType);
+              const text = await performOcr(buffer, mimeType);
               console.log(`[OCR_SUCCESS] Question Paper extracted: ${text.length} chars.`);
               return text;
           } catch (e: any) {
@@ -250,7 +251,7 @@ Student Identifier: ${studentId}.
           if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
           throw new Error("Simulator not supported for Phase 2 Atomic Grading.");
       } else {
-          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
+          result = await gradeChunk(ocrText, rubricContent, totalMarks, config, submissionBuffers, submissionMime);
           console.log(`[AI_SUCCESS] Atomic Validation Complete.`);
       }
 

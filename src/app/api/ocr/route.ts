@@ -1,7 +1,8 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { validateRequest } from '@/lib/auth';
 import { storage } from '@/lib/storage';
-import { ocrDocument } from '@/lib/ai/gemini';
+import { performOcr } from '@/lib/ai/gemini';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
     else if (filePath.toLowerCase().endsWith('.jpg') || filePath.toLowerCase().endsWith('.jpeg')) mimeType = 'image/jpeg';
 
     // Call Gemini OCR
-    const text = await ocrDocument(buffer, mimeType);
+    const text = await performOcr(buffer, mimeType);
 
     return NextResponse.json({ text });
   } catch (error: any) {

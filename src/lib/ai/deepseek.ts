@@ -7,7 +7,7 @@ if (!process.env.DEEPSEEK_API_KEY) {
   throw new Error("DEEPSEEK_API_KEY environment variable is not set!");
 }
 
-const deepseek = new OpenAI({
+export const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
   baseURL: "https://api.deepseek.com/v1",
 });
