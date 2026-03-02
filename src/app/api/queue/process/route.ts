@@ -8,6 +8,7 @@ export const maxDuration = 300; // 5 Minutes (Vercel Pro/Enterprise)
 export const dynamic = 'force-dynamic'; // Disable caching
 
 export async function POST(req: NextRequest) {
+  console.log("[QUEUE_WAKEUP] Triggered. Checking DB...");
   // Security: Ensure only internal calls or authorized crons can trigger this
   // For now, we'll allow it but you might want to add a CRON_SECRET check
   const authHeader = req.headers.get('authorization');
@@ -209,7 +210,7 @@ export async function POST(req: NextRequest) {
     }, { status: 202 }); // Accepted
 
   } catch (error: any) {
-    console.error("[QUEUE] Critical Failure:", error);
+    console.error("[QUEUE_FATAL_ERROR]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
