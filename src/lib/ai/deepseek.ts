@@ -3,13 +3,17 @@
 import OpenAI from 'openai';
 import { safeJsonParse } from '@/lib/utils/json';
 
-if (!process.env.OPENROUTER_API_KEY) {
-  console.error("OPENROUTER_API_KEY environment variable is not set!");
+if (!process.env.DEEPSEEK_API_KEY) {
+  console.error("DEEPSEEK_API_KEY environment variable is not set! (Used for OpenRouter)");
 }
 
 export const deepseek = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY || "missing-key",
+  apiKey: process.env.DEEPSEEK_API_KEY || "missing-key",
   baseURL: "https://openrouter.ai/api/v1",
+  defaultHeaders: {
+    "HTTP-Referer": "https://unimondays.com",
+    "X-Title": "Playbook Lite",
+  },
 });
 
 export async function gradeChunk(chunk: string, rubric: string): Promise<any> {
@@ -41,8 +45,8 @@ export async function gradeChunk(chunk: string, rubric: string): Promise<any> {
     return parsedJson;
 
   } catch (error) {
-    console.error("Error grading chunk with DeepSeek:", error);
-    throw new Error("Failed to grade text chunk.");
+    console.error("[OPENROUTER ERROR]:", error);
+    throw new Error(`Failed to grade text chunk. OpenRouter Error: ${(error as Error).message}`);
   }
 }
 
@@ -72,7 +76,7 @@ export async function identifyStudent(chunk: string, classId?: string): Promise<
             studentRegNo: result.studentRegNo || null,
         };
     } catch (error) {
-        console.error("Error identifying student with DeepSeek:", error);
+        console.error("[OPENROUTER ERROR]: Error identifying student with DeepSeek:", error);
         // In this case, we don't throw, as failing to ID a student is not a catastrophic failure for the whole process.
         // We return nulls and let the system continue grading.
         return { studentName: null, studentRegNo: null };
