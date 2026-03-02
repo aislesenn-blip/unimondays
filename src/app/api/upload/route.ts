@@ -17,19 +17,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing filePath or workSessionId' }, { status: 400 });
     }
 
-    // 1. Create the Submission Record in the database
-    const submission = await prisma.submission.create({
-        data: {
+    // 1. Upsert the Submission Record in the database to prevent P2002 errors
+    const submission = await prisma.submission.upsert({
+        where: {
+            workSessionId_userId: {
+                workSessionId: workSessionId,
+                userId: user.id,
+            }
+        },
+        update: {
+            filePath: filePath,
+            status: 'SUBMITTED',
+            ocrText: null, // Reset previous OCR
+            gradingStatus: null, // Reset grading
+            feedback: null,
+            confidenceScore: null,
+        },
+        create: {
             workSessionId: workSessionId,
             userId: user.id,
             filePath: filePath,
             studentName: user.fullName,
             status: 'SUBMITTED',
-            // ocrText, gradingStatus, etc will be filled in by the background job
         }
     });
 
-    // 2. Trigger the background processing job (MAP_SUBMISSION)
+    // 2. Clear any existing score if this is a resubmission
+    await prisma.score.deleteMany({
+        where: { submissionId: submission.id }
+    });
+
+    // 3. Trigger the background processing job (MAP_SUBMISSION)
     await prisma.job.create({
         data: {
             type: 'MAP_SUBMISSION',
