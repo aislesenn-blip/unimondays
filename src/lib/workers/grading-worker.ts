@@ -1,7 +1,33 @@
 
 // src/lib/workers/grading-worker.ts
 import prisma from "@/lib/db"; // Correct: Use the centralized, Data Proxy-enabled client
-import { Job, JobType, JobStatus, GradingStatus } from "@prisma/client";
+import { Job } from "@prisma/client";
+
+const JobType = {
+  MAP_SUBMISSION: 'MAP_SUBMISSION',
+  CHILD_TASK_OCR: 'CHILD_TASK_OCR',
+  CHILD_TASK_IDENTIFY_STUDENT: 'CHILD_TASK_IDENTIFY_STUDENT',
+  CHILD_TASK_GRADE_CHUNK: 'CHILD_TASK_GRADE_CHUNK',
+  REDUCE_GRADES: 'REDUCE_GRADES'
+};
+
+const JobStatus = {
+  PENDING: 'PENDING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+  WAITING_FOR_CHILDREN: 'WAITING_FOR_CHILDREN'
+};
+
+const GradingStatus = {
+  PENDING: 'PENDING',
+  MAPPING: 'MAPPING',
+  OCR: 'OCR',
+  GRADING: 'GRADING',
+  REDUCING: 'REDUCING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED'
+};
 import { performOcr } from "@/lib/ai/gemini";
 import { gradeChunk, identifyStudent } from "@/lib/ai/deepseek";
 import { enqueueJob } from "@/lib/queue";
@@ -86,7 +112,9 @@ async function handleOcrTask(job: Job) {
   if (!job.parentId || !job.submissionId) throw new Error("OCR task is missing parent/submission context.");
 
   const { filePath } = JSON.parse(job.payload);
-  const ocrText = await performOcr(filePath);
+  const buffer = await fetch(filePath).then(r => r.arrayBuffer());
+  const mimeType = filePath.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
+  const ocrText = await performOcr(Buffer.from(buffer), mimeType);
 
   await prisma.submission.update({ 
     where: { id: job.submissionId }, 
@@ -188,7 +216,7 @@ async function handleReduceGrades(job: Job) {
 
 // == UTILITY FUNCTIONS ==
 
-const updateJobStatus = (jobId: string, status: JobStatus) => {
+const updateJobStatus = (jobId: string, status: string) => {
   return prisma.job.update({ where: { id: jobId }, data: { status } });
 };
 
@@ -199,7 +227,7 @@ const saveJobResult = (jobId: string, result: any) => {
     });
 }
 
-const createChildJob = async (parentJob: Job, type: JobType, payload: object) => {
+const createChildJob = async (parentJob: Job, type: string, payload: object) => {
     if (!parentJob.submissionId) {
         throw new Error(`Parent job ${parentJob.id} is missing a submissionId.`);
     }

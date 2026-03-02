@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
         }
 
         await prisma.$transaction(async (tx) => {
-          await tx.score.create({ data: { submissionId: job.submissionId!, value: finalScore, breakdown: JSON.stringify({ feedback: combinedFeedback }) } });
+          await tx.score.create({ data: { submissionId: job.submissionId!, totalMarks: finalScore, breakdown: JSON.stringify({ feedback: combinedFeedback }) } });
           await tx.submission.update({ where: { id: job.submissionId! }, data: { status: 'COMPLETED' } });
           await tx.job.update({ where: { id: job.parentId! }, data: { status: 'COMPLETED' } });
           await tx.job.update({ where: { id: job.id }, data: { status: 'COMPLETED' } });
