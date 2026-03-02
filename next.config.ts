@@ -6,15 +6,20 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '20mb',
     },
-    // @ts-ignore
-    outputFileTracingIncludes: {
-      '/**/*': [
-        './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
-        './node_modules/pdfjs-dist/standard_fonts/**/*'
-      ],
-    },
   },
-  serverExternalPackages: ['@napi-rs/canvas', 'pdf-to-img', 'pdfjs-dist'],
+  // @ts-ignore
+  outputFileTracingIncludes: {
+    '/**/*': [
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
+      './node_modules/pdfjs-dist/standard_fonts/**/*'
+    ],
+  },
+  outputFileTracingExcludes: {
+    '/**/*': [
+      './node_modules/prisma/**/*'
+    ]
+  },
+  serverExternalPackages: ['@napi-rs/canvas', 'pdf-to-img', 'pdfjs-dist', 'pdf-lib'],
 };
 
 export default nextConfig;
