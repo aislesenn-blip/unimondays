@@ -186,10 +186,20 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Recursive Trigger (The "Hydraulic Press")
-        // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
-        // If rate limit hit, we STOP to let the API cool down.
-        if (!rateLimitHit && claimedJobs.length === BATCH_SIZE) {
-            console.log(`[QUEUE] Batch full & healthy. Triggering recursion: ${baseUrl}/api/queue/process`);
+        // Check if there are ANY pending jobs left in the database.
+        // Jobs in this batch (like AI_GRADE_SUBMISSION fan-outs) might have spawned NEW jobs.
+        const pendingCount = await prisma.job.count({
+            where: {
+                status: 'PENDING',
+                retryCount: { lt: 3 }
+            }
+        });
+
+        if (!rateLimitHit && pendingCount > 0) {
+            console.log(`[QUEUE] Queue not empty (${pendingCount} pending). Triggering recursion: ${baseUrl}/api/queue/process`);
+
+            // Add a small delay to prevent hyper-active polling loops if jobs are just waiting on continuations
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Fire and forget next batch
             fetch(`${baseUrl}/api/queue/process`, {
