@@ -16,10 +16,11 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingExcludes: {
     '/**/*': [
-      './node_modules/prisma/**/*'
+      './node_modules/prisma/**/*',
+      './node_modules/@swc/core/**/*'
     ]
   },
-  serverExternalPackages: ['@napi-rs/canvas', 'pdf-to-img', 'pdfjs-dist', 'pdf-lib'],
+  serverExternalPackages: ['@napi-rs/canvas', 'pdf-to-img', 'pdfjs-dist', 'pdf-lib', 'tesseract.js', 'prisma', '@prisma/client'],
 };
 
 export default nextConfig;

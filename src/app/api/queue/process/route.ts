@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { handleAiGrade } from '@/workers/grading-worker';
-import { handleCloudMarking } from '@/workers/cloud-worker';
 
 export const maxDuration = 300; // 5 Minutes (Vercel Pro/Enterprise)
 export const dynamic = 'force-dynamic'; // Disable caching
@@ -93,8 +91,10 @@ export async function POST(req: NextRequest) {
                             // EXECUTE WORKER BASED ON TYPE
                 let jobResult: any = null;
                 if (job.type === 'CLOUD_MARKING') {
+                    const { handleCloudMarking } = await import('@/workers/cloud-worker');
                     jobResult = await handleCloudMarking(job);
                 } else if (job.type === 'AI_GRADE_SUBMISSION') {
+                    const { handleAiGrade } = await import('@/workers/grading-worker');
                     jobResult = await handleAiGrade(job);
                 } else {
                     throw new Error(`Unknown Job Type: ${job.type}`);
