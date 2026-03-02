@@ -2,33 +2,39 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Users, Activity, AlertTriangle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine } from 'recharts';
+import { ArrowUpRight, ArrowDownRight, Users, Activity } from "lucide-react";
 
+// Assuming these types are defined elsewhere, but including for context
 interface QuestionStat {
   question: string;
-  failureRate: number; // percentage
-  avgScore: number;
-  maxScore: number;
+  failureRate: number;
 }
-
 interface StudentProgress {
   studentName: string;
   data: { session: string; score: number; date: string }[];
 }
-
 interface AnalyticsDashboardProps {
-  classHealth: {
-    average: number;
-    highest: number;
-    lowest: number;
-    passRate: number;
-    totalStudents: number;
-  };
-  bottlenecks: QuestionStat[]; // Top 5 hardest questions
-  studentTimeline: StudentProgress[]; // Data for all students
+  classHealth: { average: number; passRate: number; highest: number; lowest: number; };
+  bottlenecks: QuestionStat[];
+  studentTimeline: StudentProgress[];
+}
+
+// A small, reusable component for stat cards
+function StatCard({ title, value, icon: Icon, note, valueColor }: any) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className={cn("text-2xl font-bold", valueColor)}>{value}</div>
+        <p className="text-xs text-muted-foreground">{note}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function AnalyticsDashboard({ classHealth, bottlenecks, studentTimeline }: AnalyticsDashboardProps) {
@@ -37,115 +43,85 @@ export function AnalyticsDashboard({ classHealth, bottlenecks, studentTimeline }
   const currentStudentData = studentTimeline.find(s => s.studentName === selectedStudent)?.data || [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
 
-      {/* Metric B: Class Health Pulse */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
-            <CardTitle className="text-xs md:text-sm font-medium">Class Avg</CardTitle>
-            <Activity className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl md:text-2xl font-bold">{classHealth.average.toFixed(1)}%</div>
-            <p className="text-[10px] md:text-xs text-muted-foreground">Overall</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
-            <CardTitle className="text-xs md:text-sm font-medium">Pass Rate</CardTitle>
-            <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl md:text-2xl font-bold">{classHealth.passRate.toFixed(1)}%</div>
-            <p className="text-[10px] md:text-xs text-muted-foreground">&gt;50% Score</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
-            <CardTitle className="text-xs md:text-sm font-medium">Highest</CardTitle>
-            <ArrowUpRight className="h-3 w-3 md:h-4 md:w-4 text-green-500" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl md:text-2xl font-bold">{classHealth.highest}%</div>
-            <p className="text-[10px] md:text-xs text-muted-foreground">Top Score</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
-            <CardTitle className="text-xs md:text-sm font-medium">Lowest</CardTitle>
-            <ArrowDownRight className="h-3 w-3 md:h-4 md:w-4 text-red-500" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl md:text-2xl font-bold">{classHealth.lowest}%</div>
-            <p className="text-[10px] md:text-xs text-muted-foreground">Min Score</p>
-          </CardContent>
-        </Card>
+      {/* 1. Class Health Pulse - Cleaner Layout */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Class Average" value={`${classHealth.average.toFixed(1)}%`} icon={Activity} note="Overall performance" />
+        <StatCard title="Pass Rate" value={`${classHealth.passRate.toFixed(1)}%`} icon={Users} note="Scored above 50%" />
+        <StatCard title="Highest Score" value={`${classHealth.highest}%`} icon={ArrowUpRight} note="Top individual score" valueColor="text-success" />
+        <StatCard title="Lowest Score" value={`${classHealth.lowest}%`} icon={ArrowDownRight} note="Lowest individual score" valueColor="text-destructive" />
       </div>
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-7">
+      {/* 2. Main Grid - Switched to a more balanced 5-col layout */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
 
-        {/* Metric A: Bottleneck Finder */}
-        <Card className="col-span-4">
+        {/* Bottleneck Finder - Themed Chart */}
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Bottleneck Finder</CardTitle>
-            <CardDescription>
-              Questions with the highest failure rates across all assessments.
-            </CardDescription>
+            <CardDescription>Questions with the highest failure rates across all assessments.</CardDescription>
           </CardHeader>
-          <CardContent className="pl-2">
+          <CardContent>
             <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={bottlenecks}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="question" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+              <BarChart data={bottlenecks} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                <XAxis dataKey="question" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
                 <Tooltip
-                    cursor={{fill: 'transparent'}}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                  contentStyle={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)' }}
                 />
-                <Bar dataKey="failureRate" fill="#ef4444" radius={[4, 4, 0, 0]} name="Failure Rate (%)" />
+                <Bar dataKey="failureRate" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} name="Failure Rate" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Metric C: Student CA Profile */}
-        <Card className="col-span-3">
+        {/* Student Progress - Using proper Select component */}
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Student Progress</CardTitle>
-            <CardDescription>
-              Track individual performance over time.
-            </CardDescription>
-            <div className="pt-2">
-                <Select value={selectedStudent} onChange={(e: any) => setSelectedStudent(e.target.value)}>
-                    {studentTimeline.map(s => (
-                        <option key={s.studentName} value={s.studentName}>
-                            {s.studentName}
-                        </option>
-                    ))}
-                </Select>
-            </div>
+            <CardDescription>Track individual performance over time.</CardDescription>
           </CardHeader>
-          <CardContent>
-            {currentStudentData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={currentStudentData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="session" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} />
-                    <Tooltip />
-                    <ReferenceLine y={50} stroke="red" strokeDasharray="3 3" />
-                    <Line type="monotone" dataKey="score" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+          <CardContent className="space-y-4">
+            <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a student" />
+              </SelectTrigger>
+              <SelectContent>
+                {studentTimeline.map(s => (
+                  <SelectItem key={s.studentName} value={s.studentName}>
+                    {s.studentName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <ResponsiveContainer width="100%" height={300}>
+              {currentStudentData.length > 0 ? (
+                <LineChart data={currentStudentData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <XAxis dataKey="session" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <Tooltip 
+                    contentStyle={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)' }}
+                  />
+                  <ReferenceLine y={50} stroke="hsl(var(--destructive))" strokeDasharray="3 3" />
+                  <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} />
                 </LineChart>
-                </ResponsiveContainer>
-            ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    Select a student to view progress.
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+                  No data available for this student.
                 </div>
-            )}
+              )}
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
     </div>
   );
+}
+
+// Helper for conditional classnames
+function cn(...classes: any[]) {
+  return classes.filter(Boolean).join(' ')
 }

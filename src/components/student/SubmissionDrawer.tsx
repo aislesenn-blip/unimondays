@@ -13,8 +13,6 @@ import {
 } from "@/components/ui/sheet";
 import { Upload, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { supabaseClient } from "@/lib/supabase-client";
-import { v4 as uuidv4 } from "uuid";
 
 interface SubmissionDrawerProps {
   session: any;
@@ -32,46 +30,31 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
     setLoading(true);
     try {
-      // 1. Upload to Supabase Storage (Client-side)
-      const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const filePath = `submissions/${filename}`;
+      // 1. Prepare form data for the unified endpoint
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("workSessionId", session.id);
 
-      const { error: uploadError } = await supabaseClient
-        .storage
-        .from('exam_pdfs')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      // 2. Submit Metadata to API
-      const res = await fetch("/api/student/submit", {
+      // 2. Send to the unified /api/upload endpoint
+      const res = await fetch("/api/upload", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          filePath,
-          workSessionId: session.id,
-          filename: file.name
-        }),
+        body: formData,
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || "Submission failed");
-        return;
+        throw new Error(data.error || "Submission failed");
       }
 
-      toast.success("Submitted successfully!");
-      onSuccess();
+      toast.success("Submitted successfully! Processing has started.");
+      onSuccess(); // Refresh the submission list
       onOpenChange(false);
-      setFile(null); // Reset file
+      setFile(null);
+
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "An unexpected error occurred during submission");
+      toast.error(error.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
@@ -115,14 +98,12 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                     onChange={(e) => {
                         const selected = e.target.files?.[0];
                         if (selected) {
-                            // MANDATE 1: 20MB Limit
                             if (selected.size > 20 * 1024 * 1024) {
                                 toast.error("File is too large. Please upload a file smaller than 20MB.");
-                                e.target.value = ""; // Clear input
+                                e.target.value = "";
                                 setFile(null);
                                 return;
                             }
-                            // Strict Type Check
                             const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
                             if (!allowedTypes.includes(selected.type)) {
                                 toast.error("Invalid file type. Only PDF, PNG, and JPG are allowed.");
@@ -167,7 +148,7 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
               <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
             </SheetClose>
             <Button onClick={handleSubmit} disabled={!file || loading} className="w-full sm:w-auto">
-                {loading ? "Uploading..." : "Submit Assignment"}
+                {loading ? "Submitting..." : "Submit Assignment"}
             </Button>
           </SheetFooter>
         </div>

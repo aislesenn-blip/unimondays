@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateRequest } from '@/lib/auth';
 import { storage } from '@/lib/storage';
+import { prisma } from '@/lib/prisma';
+import { triggerNextJob } from '@/lib/jobs';
 
 export async function POST(req: NextRequest) {
   const user = await validateRequest(req);
@@ -11,35 +13,42 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    const bucket = formData.get('bucket') as string || 'exam_pdfs'; // Default bucket
-    const folder = formData.get('folder') as string || 'uploads';
+    const workSessionId = formData.get('workSessionId') as string;
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (!file || !workSessionId) {
+      return NextResponse.json({ error: 'Missing file or workSessionId' }, { status: 400 });
     }
+    
+    // 1. Upload file to secure storage
+    const folder = `submissions/${workSessionId}`;
+    const filePath = await storage.uploadFile(file, folder);
 
-    // Validate file type (basic)
-    if (!file.type.startsWith('application/pdf') && !file.type.startsWith('image/')) {
-       return NextResponse.json({ error: 'Invalid file type. Only PDF and Images allowed.' }, { status: 400 });
-    }
+    // 2. Create the Submission Record in the database
+    const submission = await prisma.submission.create({
+        data: {
+            workSessionId: workSessionId,
+            userId: user.id,
+            filePath: filePath,
+            studentName: user.fullName,
+            status: 'SUBMITTED',
+            // ocrText, gradingStatus, etc will be filled in by the background job
+        }
+    });
 
-    // Upload to Storage
-    // The storage service handles bucket selection or path prefixing
-    // SupabaseStorageService uses 'exam_pdfs' as default bucket but supports folder prefixes.
-    // TmpStorageService ignores bucket but uses folder.
+    // 3. Trigger the background processing job (MAP_SUBMISSION)
+    await prisma.job.create({
+        data: {
+            type: 'MAP_SUBMISSION',
+            submissionId: submission.id,
+            status: 'QUEUED',
+            payload: '{}'
+        }
+    });
 
-    // We pass bucket/folder info. Since StorageService interface is generic (folder only),
-    // we assume 'folder' is the key path.
-    // For Supabase, path = `${folder}/${filename}` inside bucket `exam_pdfs`.
-    // If bucket is `feedback_exports`, we handle it in service logic or modify service.
+    return NextResponse.json({ success: true, submissionId: submission.id });
 
-    // Let's assume standard uploads go to 'exam_pdfs'.
-    const path = await storage.uploadFile(file, folder);
-
-    // Return the path (or signed URL if needed, but path is safer for DB ref)
-    return NextResponse.json({ path });
   } catch (error: any) {
-    console.error("Upload Error:", error);
-    return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 });
+    console.error("Unified Upload & Submit Error:", error);
+    return NextResponse.json({ error: error.message || 'Operation failed' }, { status: 500 });
   }
 }
