@@ -187,17 +187,31 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Recursive Trigger (The "Hydraulic Press")
-        // If we processed any jobs AND didn't hit a rate limit, trigger self to see if more jobs exist.
-        // Even if we didn't fill the batch, a single job (like AI_GRADE_SUBMISSION) might have spawned new chunks!
-        // If rate limit hit, we STOP to let the API cool down.
-        if (!rateLimitHit && claimedJobs.length > 0) {
-            console.log(`[QUEUE] Processed ${claimedJobs.length} jobs & healthy. Triggering recursion: ${baseUrl}/api/queue/process`);
+        // To prevent stalling after parent jobs spawn child chunks, it must query the database
+        // and recursively trigger itself if ANY pending jobs remain (pendingCount > 0),
+        // rather than relying on full batch sizes.
+        if (!rateLimitHit) {
+            const pendingCount = await prisma.job.count({
+                where: {
+                    status: 'PENDING',
+                    type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING', 'AI_GRADE_CHUNK', 'AI_GRADE_AGGREGATE'] },
+                    retryCount: { lt: 3 }
+                }
+            });
 
-            // Fire and forget next batch
-            fetch(`${baseUrl}/api/queue/process`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            }).catch(e => console.error("Failed to trigger next batch", e));
+            if (pendingCount > 0) {
+                console.log(`[QUEUE] Processed ${claimedJobs.length} jobs. ${pendingCount} pending jobs remain. Delaying 1s before recursion...`);
+
+                // 1-second delay to prevent tight polling loops for continuation: true jobs
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                fetch(`${baseUrl}/api/queue/process`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                }).catch(e => console.error("Failed to trigger next batch", e));
+            } else {
+                console.log(`[QUEUE] No more pending jobs. Queue goes to sleep.`);
+            }
         }
     });
 
