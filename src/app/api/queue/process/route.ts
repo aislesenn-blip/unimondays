@@ -8,6 +8,7 @@ export const maxDuration = 300; // 5 Minutes (Vercel Pro/Enterprise)
 export const dynamic = 'force-dynamic'; // Disable caching
 
 export async function POST(req: NextRequest) {
+  console.log("[QUEUE_WAKEUP] Triggered. Checking DB...");
   // Security: Ensure only internal calls or authorized crons can trigger this
   // For now, we'll allow it but you might want to add a CRON_SECRET check
   const authHeader = req.headers.get('authorization');
@@ -46,8 +47,11 @@ export async function POST(req: NextRequest) {
         const job = await prisma.job.findFirst({
             where: {
                 status: 'PENDING',
-                type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
-                retryCount: { lt: 3 } // Max 3 retries
+                type: { in: ['AI_GRADE_SUBMISSION', 'AI_GRADE', 'CLOUD_MARKING'] },
+                OR: [
+                    { retryCount: { lt: 3 } },
+                    { retryCount: null }
+                ]
             },
             orderBy: { createdAt: 'asc' }
         });
@@ -90,7 +94,7 @@ export async function POST(req: NextRequest) {
                 let jobResult: any = null;
                 if (job.type === 'CLOUD_MARKING') {
                     jobResult = await handleCloudMarking(job);
-                } else if (job.type === 'AI_GRADE_SUBMISSION') {
+                } else if (job.type === 'AI_GRADE_SUBMISSION' || job.type === 'AI_GRADE') {
                     jobResult = await handleAiGrade(job);
                 } else {
                     throw new Error(`Unknown Job Type: ${job.type}`);
@@ -118,7 +122,7 @@ export async function POST(req: NextRequest) {
                 }
 
             } catch (error: any) {
-                console.error(`[QUEUE] Job ${job.id} Failed with Error:`, error.stack || error);
+                console.error("[QUEUE_FATAL_ERROR]", error);
 
                 // RATE LIMIT ARMOR (Handling 429s/503s)
                 const isRateLimit = error.message?.includes('RATE_LIMIT_HIT') || error.message?.includes('429') || error.message?.includes('503');
@@ -171,7 +175,7 @@ export async function POST(req: NextRequest) {
                                 }
                             });
                             console.log(`[QUEUE] Max retries reached for CLOUD_MARKING. Updated BulkSession ${payloadData.bulkSessionId} to FAILED.`);
-                        } else if (job.type === 'AI_GRADE_SUBMISSION' && payloadData.submissionId) {
+                        } else if ((job.type === 'AI_GRADE_SUBMISSION' || job.type === 'AI_GRADE') && payloadData.submissionId) {
                             await prisma.submission.update({
                                 where: { id: payloadData.submissionId },
                                 data: {
@@ -209,7 +213,7 @@ export async function POST(req: NextRequest) {
     }, { status: 202 }); // Accepted
 
   } catch (error: any) {
-    console.error("[QUEUE] Critical Failure:", error);
+    console.error("[QUEUE_FATAL_ERROR]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

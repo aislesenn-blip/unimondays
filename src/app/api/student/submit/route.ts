@@ -185,7 +185,8 @@ export async function POST(req: NextRequest) {
         data: {
             type: 'AI_GRADE_SUBMISSION',
             payload: JSON.stringify({ submissionId: submission.id }),
-            status: 'PENDING'
+            status: 'PENDING',
+            retryCount: 0
         }
     });
 
