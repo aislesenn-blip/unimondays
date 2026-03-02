@@ -1,12 +1,12 @@
 
 // src/lib/queue.ts
-import { Queue } from "@upstash/qstash";
+import { Client } from "@upstash/qstash";
 
 if (!process.env.QSTASH_TOKEN || !process.env.QSTASH_URL) {
   throw new Error("QStash environment variables are not set!");
 }
 
-export const qstash = new Queue({
+export const qstash = new Client({
   token: process.env.QSTASH_TOKEN,
 });
 

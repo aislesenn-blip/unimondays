@@ -10,19 +10,19 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '20mb',
     },
-    // This is the most critical change: Externalize heavy packages.
-    // Next.js will not bundle these into the serverless functions,
-    // drastically reducing the size of your API routes.
-    serverComponentsExternalPackages: [
-        '@prisma/client',
-        'prisma',
-        'pdf-lib',
-        'sharp',
-        '@napi-rs/canvas',
-        'pdf-to-img',
-        'pdfjs-dist'
-    ],
   },
+  // This is the most critical change: Externalize heavy packages.
+  // Next.js will not bundle these into the serverless functions,
+  // drastically reducing the size of your API routes.
+  serverExternalPackages: [
+      '@prisma/client',
+      'prisma',
+      'pdf-lib',
+      'sharp',
+      '@napi-rs/canvas',
+      'pdf-to-img',
+      'pdfjs-dist'
+  ],
   // Aggressively exclude unnecessary Prisma query engine binaries and other large files.
   // This targets files that are not needed for the Vercel (Linux) runtime.
   outputFileTracingExcludes: {
@@ -39,7 +39,7 @@ const nextConfig = {
       'node_modules/.prisma/client/libquery_engine-debian-openssl-1.0.x.so.node',
       'node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node',
       'node_modules/.prisma/client/libquery_engine-rhel-openssl-1.0.x.so.node',
-      'node_modules/.prisma/client/libquery_engine-rhel-openssl-1.1.x.so.node',
+      'node_modules/.prisma_client/libquery_engine-rhel-openssl-1.1.x.so.node',
       'node_modules/.prisma/client/libquery_engine-rhel-openssl-3.0.x.so.node',
       
       // Exclude other large, non-essential packages
