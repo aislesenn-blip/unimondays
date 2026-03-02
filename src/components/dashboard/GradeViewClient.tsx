@@ -31,7 +31,7 @@ interface GradeViewClientProps {
     maxScore: number;
     aiReasoning: string;
     confidence: number;
-    fileUrl: string | null;
+    filePath: string | null;
     ocrText: string | null;
     breakdown: any[];
   };
@@ -110,8 +110,8 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
           <div className="bg-white shadow-xl rounded-sm w-full md:w-[600px] min-h-[500px] md:min-h-[850px] relative border flex flex-col shrink-0 mb-8">
             <div className="bg-gray-50 p-3 border-b flex justify-between items-center text-xs text-gray-500">
               <span className="font-mono">Document Viewer</span>
-              {submission.fileUrl && (
-                <a href={submission.fileUrl} download target="_blank" rel="noopener noreferrer">
+              {submission.filePath && (
+                <a href={submission.filePath} download target="_blank" rel="noopener noreferrer">
                   <Button variant="ghost" size="icon" className="h-6 w-6">
                      <Download className="h-3 w-3" />
                   </Button>
@@ -119,9 +119,9 @@ export function GradeViewClient({ sessionId, workId, submission }: GradeViewClie
               )}
             </div>
             <div className="flex-1 p-0 relative bg-gray-200">
-               {submission.fileUrl ? (
+               {submission.filePath ? (
                  <iframe
-                   src={submission.fileUrl}
+                   src={submission.filePath}
                    className="w-full h-full border-0"
                    title="Submission PDF"
                  />

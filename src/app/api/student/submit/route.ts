@@ -48,13 +48,14 @@ export async function POST(req: NextRequest) {
 
     // 2. Create Submission and Job records in a single transaction
     const { job, submission } = await prisma.$transaction(async (tx) => {
+      const displayId = `SUB-${Date.now().toString().slice(-6)}`;
       const newSubmission = await tx.submission.create({
         data: {
           workSessionId: validation.data.workSessionId,
-          studentId: validation.data.studentId,
-          fileUrl: blob.url, // Save the blob URL
+          userId: validation.data.studentId,
+          filePath: blob.url, // Save the blob URL
           status: 'QUEUED',
-          displayId: `SUB-${Date.now().toString().slice(-6)}`,
+          studentRegNo: displayId,
         }
       });
 
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
           type: 'MAP_SUBMISSION',
           submissionId: newSubmission.id,
           status: 'QUEUED',
+          payload: '{}',
         }
       });
 
@@ -75,7 +77,7 @@ export async function POST(req: NextRequest) {
     // 4. Return an immediate, optimistic response to the frontend
     return NextResponse.json(
       { 
-        displayId: submission.displayId, 
+        displayId: submission.studentRegNo,
         status: "PENDING" 
       }, 
       { status: 201 }
