@@ -2,12 +2,11 @@ import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { readFile, saveBuffer } from '@/lib/storage';
+import { readFile } from '@/lib/storage';
 import { ocrDocument } from '@/lib/ai/gemini';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 import sharp from 'sharp';
-import { PDFDocument } from 'pdf-lib';
 import * as canvas from '@napi-rs/canvas';
 
 if (!globalThis.DOMMatrix) {
@@ -21,7 +20,6 @@ if (!globalThis.DOMRect) {
 }
 
 import { pdf } from 'pdf-to-img';
-import { v4 as uuidv4 } from 'uuid';
 
 export async function handleAiGrade(job: Job) {
   let data: any;
@@ -64,8 +62,8 @@ export async function handleAiGrade(job: Job) {
   try {
       // PARALLEL TASK 1: Submission OCR (Return buffer array for visual analysis)
       const submissionOcrTask = async (chunkPath?: string): Promise<{ text: string, buffers: Buffer[], mimeType: string }> => {
-          let targetPath = chunkPath || submission.filePath;
-          let ocrText = chunkPath ? null : submission.ocrText;
+          const targetPath = chunkPath || submission.filePath;
+          const ocrText = chunkPath ? null : submission.ocrText;
 
           if (!targetPath) throw new Error("No file path and no OCR text for submission.");
 
@@ -208,42 +206,6 @@ export async function handleAiGrade(job: Job) {
       }
 
       // Reconstruct file checking block from the fan_out to get chunks
-      let isPdf = false;
-      let pageCount = 1;
-      let chunks: { path: string, pageCount: number }[] = [];
-      let srcDoc: PDFDocument | null = null;
-
-      if (job.type === 'AI_GRADE_SUBMISSION' && submission.filePath) {
-          const buffer = await readFile(submission.filePath, 'exam_pdfs');
-          isPdf = submission.filePath.toLowerCase().endsWith('.pdf') ||
-                        (buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46);
-
-          if (isPdf) {
-              srcDoc = await PDFDocument.load(buffer);
-              pageCount = srcDoc.getPageCount();
-          }
-
-          if (isPdf && srcDoc && pageCount > 3) {
-              const CHUNK_SIZE = 3;
-              for (let start = 0; start < pageCount; start += CHUNK_SIZE) {
-                  const end = Math.min(start + CHUNK_SIZE, pageCount);
-                  const newDoc = await PDFDocument.create();
-                  const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
-                  const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
-                  copiedPages.forEach(page => newDoc.addPage(page));
-                  const chunkBytes = await newDoc.save();
-                  const sliceBuffer = Buffer.from(chunkBytes);
-
-                  const uniqueSuffix = uuidv4().substring(0, 8);
-                  const fileName = `chunk_${submission.id}_${start}_${end}_${uniqueSuffix}.pdf`;
-
-                  const slicePath = await saveBuffer(sliceBuffer, fileName, 'exam_pdfs');
-                  chunks.push({ path: slicePath, pageCount: end - start });
-              }
-          }
-      }
-
-      // Prepare Config
       const strictnessMap: Record<string, number> = {
         'LENIENT': 0.8, 'MODERATE': 1.0, 'STRICT': 1.2
       };
