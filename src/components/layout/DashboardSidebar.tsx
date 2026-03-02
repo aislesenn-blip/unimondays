@@ -88,7 +88,7 @@ export function DashboardSidebar({ collapsed = false, onToggleCollapse, isMobile
                 </div>
             )}
             <div className={cn("flex items-center gap-3 rounded-lg px-3 py-2", collapsed && "justify-center")}>
-                <img src={displayUser.avatar || `https://ui-avatars.com/api/?name=${displayUser.fullName}&background=random`} alt={displayUser.fullName} className="h-8 w-8 rounded-full object-cover shrink-0"/>
+                <img src={displayUser.avatar || `https://ui-avatars.com/api/?name=${displayUser.fullName}&background=random`} alt={displayUser.fullName || ""} className="h-8 w-8 rounded-full object-cover shrink-0"/>
                 {!collapsed && (
                 <div className="flex flex-col overflow-hidden">
                     <span className="text-sm font-medium truncate">{displayUser.fullName}</span>

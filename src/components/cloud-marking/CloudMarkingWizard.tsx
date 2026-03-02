@@ -334,7 +334,7 @@ export function CloudMarkingWizard() {
                       <UploadCloud className="h-6 w-6 text-slate-500" />
                   </div>
                   <p className="text-sm font-medium">Drag & drop your merged PDF here</p>
-                  <p classNamem="text-xs text-muted-foreground mt-1 mb-4">or click to browse</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">or click to browse</p>
                   <Input
                       id="tus-upload"
                       type="file"
@@ -361,7 +361,7 @@ export function CloudMarkingWizard() {
           </div>
         )}
 
-      </EVAL_WRITTEN_CODE_BLOCK>
+      </CardContent>
       <CardFooter className="flex justify-end gap-2">
          {state.step < STEPS.length && (
             <Button 
