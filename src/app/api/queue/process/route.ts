@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
                     // Mark COMPLETED
                     await prisma.job.update({
                         where: { id: job.id },
-                        data: { status: 'COMPLETED', result: 'Success' }
+                        data: { status: 'COMPLETED' }
                     });
                     processedCount++;
                 }
@@ -142,18 +142,20 @@ export async function POST(req: NextRequest) {
                 }
 
                 // GENERIC FAILURE
+                const newRetryCount = (job.retryCount || 0) + 1;
+
                 const updatedJob = await prisma.job.update({
                     where: { id: job.id },
                     data: {
-                        status: 'FAILED',
+                        status: newRetryCount >= 3 ? 'FAILED' : 'PENDING',
                         error: error.message || "Unknown error during job execution",
-                        retryCount: { increment: 1 }
+                        retryCount: newRetryCount
                     }
                 });
                 errors++;
 
                 // HARD FAILURE HANDLING: If job maxed out retries, update parent entity to FAILED
-                if ((updatedJob.retryCount || 0) >= 3) {
+                if (newRetryCount >= 3) {
                     try {
                         let payloadData: any = {};
                         if (job.payload) {
