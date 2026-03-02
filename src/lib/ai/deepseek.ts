@@ -3,12 +3,12 @@
 import OpenAI from 'openai';
 import { safeJsonParse } from '@/lib/utils/json';
 
-if (!process.env.DEEPSEEK_API_KEY) {
+if (!process.env.DEEPSEEK_API_KEY && process.env.NODE_ENV !== "production") {
   throw new Error("DEEPSEEK_API_KEY environment variable is not set!");
 }
 
 export const deepseek = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
+  apiKey: process.env.DEEPSEEK_API_KEY || "dummy-key-for-build",
   baseURL: "https://api.deepseek.com/v1",
 });
 

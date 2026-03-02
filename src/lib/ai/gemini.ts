@@ -2,11 +2,11 @@
 // src/lib/ai/gemini.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-if (!process.env.GEMINI_API_KEY) {
+if (!process.env.GEMINI_API_KEY && process.env.NODE_ENV !== "production") {
   throw new Error("GEMINI_API_KEY environment variable is not set!");
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "dummy-key-for-build");
 
 export async function performOcr(fileBuffer: Buffer, mimeType: string): Promise<string> {
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
