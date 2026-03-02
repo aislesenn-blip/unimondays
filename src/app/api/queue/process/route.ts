@@ -1,26 +1,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
-
-// Helper: OCR Simulation
-async function performOcrAndSplit(filePath: string): Promise<string[]> {
-  console.log(`AI WORKER: Performing OCR on ${filePath}.`);
-  const mockOcrResult = `This is the extracted text from page 1.\n---PAGE_BREAK---\nThis is the extracted text from page 2.\n---PAGE_BREAK---\nThis is the extracted text from page 3.`;
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  return mockOcrResult.split('---PAGE_BREAK---');
-}
-
-// Helper: Grading Simulation
-async function gradeChunkWithDeepSeek(textChunk: string): Promise<any> {
-  console.log(`AI GRADER: Grading chunk with DeepSeek...`);
-  const mockApiResponse = `Of course! Here is the JSON: {\"score\": 85, \"feedback\": \"Well-written but needs more examples.\"}`;
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  const jsonMatch = mockApiResponse.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Failed to extract JSON from AI.");
-  return JSON.parse(jsonMatch[0]);
-}
+import { performOcr } from "@/lib/ai/gemini";
+import { gradeChunk } from "@/lib/ai/deepseek";
+import { supabase } from "@/lib/supabase";
 
 // Helper: Fire-and-forget Job Trigger
 function triggerNextJob(jobId: string) {
@@ -67,7 +51,16 @@ export async function POST(req: NextRequest) {
         if (!job.submission || !job.submission.filePath) {
           throw new Error(`Job ${job.id} is missing submission data or filePath.`);
         }
-        const textChunks = await performOcrAndSplit(job.submission.filePath);
+        
+        // LIVE: Fetch file from Supabase
+        const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(job.submission.filePath);
+        if (downloadError) throw new Error(`Failed to download file from storage: ${downloadError.message}`);
+        
+        const fileBuffer = Buffer.from(await fileData.arrayBuffer());
+        
+        // LIVE: Perform OCR with Gemini
+        const ocrResult = await performOcr(fileBuffer, fileData.type);
+        const textChunks = ocrResult.split('---PAGE_BREAK---'); // Assuming a simple page break marker
         const numChunks = textChunks.length;
 
         const childJobs = await prisma.$transaction(async (tx) => {
@@ -103,7 +96,20 @@ export async function POST(req: NextRequest) {
         const payload = JSON.parse(job.payload as string);
         if (!payload.textChunk) throw new Error(`Job ${job.id} missing textChunk.`);
 
-        const gradingResult = await gradeChunkWithDeepSeek(payload.textChunk);
+        // LIVE: Fetch rubric
+        const workSession = await prisma.workSession.findFirst({
+            where: { submissions: { some: { id: job.submissionId! } } },
+            include: { standardizedRubric: true }
+        });
+
+        if (!workSession || !workSession.standardizedRubric) {
+            throw new Error(`Could not find a standardized rubric for submission ${job.submissionId}`);
+        }
+
+        const rubric = JSON.stringify(workSession.standardizedRubric);
+
+        // LIVE: Grade with DeepSeek using the rubric
+        const gradingResult = await gradeChunk(payload.textChunk, rubric);
 
         const reduceJob = await prisma.$transaction(async (tx) => {
           await tx.job.update({
@@ -122,7 +128,7 @@ export async function POST(req: NextRequest) {
                 parentId: parentJob.id,
                 submissionId: parentJob.submissionId,
                 status: 'QUEUED',
-                payload: '{}', // Add empty payload to satisfy schema
+                payload: '{}',
               },
             });
             return newReduceJob;
@@ -150,7 +156,7 @@ export async function POST(req: NextRequest) {
           const result = JSON.parse(child.result as string);
           const payload = JSON.parse(child.payload as string);
           finalScore += result?.score || 0;
-          combinedFeedback += `Page ${payload.pageNumber}: ${result?.feedback}\n`;
+          combinedFeedback += `Page ${payload.pageNumber}: ${result?.feedback || 'No feedback provided.'}\n`;
         }
 
         await prisma.$transaction(async (tx) => {

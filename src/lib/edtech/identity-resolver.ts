@@ -19,33 +19,35 @@ export interface StudentIdentity {
  */
 export function resolveIdentity(sub: any): StudentIdentity {
   const userId = sub.userId || null;
-  let regNo = sub.studentRegNo || sub.score?.detectedIdentity || sub.user?.email || null;
+  // Prioritize the explicitly set registration number.
+  let regNo = sub.studentRegNo || sub.user?.email || null;
 
-  if (regNo === 'UNIDENTIFIED_IDENTITY' || regNo === 'UNIDENTIFIED') {
-    regNo = null;
+  const detectedIdentity = sub.score?.detectedIdentity;
+  const validDetectedIdentity = detectedIdentity && !['UNIDENTIFIED_IDENTITY', 'UNIDENTIFIED'].includes(detectedIdentity) ? detectedIdentity : null;
+
+  // If no firm regNo, consider the AI-detected one.
+  if (!regNo && validDetectedIdentity && /^\d/.test(validDetectedIdentity)) { // Simple check if it looks like a reg number
+    regNo = validDetectedIdentity;
   }
 
   const isGhost = !userId && !regNo;
 
-  // Deterministic Key Routing: If mapped to a real user or a firm regNo, use it.
-  // Otherwise, it remains a solitary ghost script.
-  const key = userId || sub.studentRegNo || regNo || `ghost-${sub.id}`;
+  // **CRITICAL FIX**: The key must be stable. It CANNOT be based on a detected name.
+  // It must be based on a permanent, unique identifier.
+  const key = userId || regNo || `ghost-${sub.id}`;
 
-  const detectedName = sub.score?.detectedIdentity;
-  const validDetectedName = detectedName && detectedName !== 'UNIDENTIFIED_IDENTITY' ? detectedName : null;
-
-  // Identity Fusion Hierarchy:
+  // Identity Fusion Hierarchy for DISPLAY NAME:
   // 1. Registered User Name (Absolute Ground Truth)
   // 2. Explicitly Assigned Student Name (via UI Override or initial creation)
   // 3. AI Detected Name (Cloud Marking Extraction)
   // 4. Ghost Placeholder
   const primaryName = sub.user?.fullName
     || sub.studentName
-    || validDetectedName
+    || validDetectedIdentity // Use the valid detected identity for display
     || `Unidentified Script (${sub.id?.substring(0, 6) || 'Unknown'})`;
 
   // Provide as much secondary context as possible
-  const secondaryInfo = sub.studentRegNo || sub.user?.email || validDetectedName || regNo || 'N/A';
+  const secondaryInfo = sub.studentRegNo || sub.user?.email || validDetectedIdentity || 'N/A';
 
   return {
     key,
@@ -63,12 +65,14 @@ export function resolveIdentity(sub: any): StudentIdentity {
  * It dynamically upgrades fidelity without overwriting absolute ground truths.
  */
 export function upgradeIdentity(existing: any, newIdentity: StudentIdentity) {
-  // If the existing name is a placeholder and the new name is real, upgrade it.
-  if (existing.primaryName.startsWith('Unidentified') && !newIdentity.primaryName.startsWith('Unidentified')) {
+  // Upgrade the display name if the new one is of higher quality (i.e., not a placeholder)
+  const isExistingPlaceholder = existing.primaryName.startsWith('Unidentified');
+  const isNewNameReal = !newIdentity.primaryName.startsWith('Unidentified');
+  if (isExistingPlaceholder && isNewNameReal) {
     existing.primaryName = newIdentity.primaryName;
   }
 
-  // Cross-pollination of identity info
+  // If the existing secondary info is weak, upgrade it.
   if ((existing.secondaryInfo === 'N/A' || !existing.secondaryInfo) && newIdentity.secondaryInfo !== 'N/A') {
     existing.secondaryInfo = newIdentity.secondaryInfo;
   }
@@ -79,7 +83,7 @@ export function upgradeIdentity(existing: any, newIdentity: StudentIdentity) {
       existing.userId = newIdentity.userId;
       existing.regNo = newIdentity.regNo;
 
-      // Upgrade Key mapping
+      // **CRITICAL FIX**: The key MUST be upgraded to reflect the new, stable identity.
       existing.key = newIdentity.key;
   }
 }
