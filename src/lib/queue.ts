@@ -1,13 +1,23 @@
 
 // src/lib/queue.ts
-import { Client } from "@upstash/qstash";
+import { Client, Receiver } from "@upstash/qstash";
 
-if (!process.env.QSTASH_TOKEN || !process.env.QSTASH_URL) {
-  throw new Error("QStash environment variables are not set!");
+if (
+  !process.env.QSTASH_TOKEN ||
+  !process.env.QSTASH_URL ||
+  !process.env.QSTASH_CURRENT_SIGNING_KEY ||
+  !process.env.QSTASH_NEXT_SIGNING_KEY
+) {
+  throw new Error("QStash environment variables are not set correctly!");
 }
 
 export const qstash = new Client({
   token: process.env.QSTASH_TOKEN,
+});
+
+export const receiver = new Receiver({
+  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
+  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
 });
 
 export const getBaseUrl = () => {

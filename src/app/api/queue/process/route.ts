@@ -1,18 +1,14 @@
 
 // src/app/api/queue/process/route.ts
-import { NextResponse } from "next/server";
-import { qstash } from "@/lib/queue";
+import { NextRequest, NextResponse } from "next/server";
+import { receiver } from "@/lib/queue";
 import { gradingWorker } from "@/lib/workers/grading-worker";
 
-interface QStashRequestBody {
-  jobId: string;
-}
-
-async function handler(request: Request) {
-  const body: QStashRequestBody = await request.json();
+async function handler(req: NextRequest) {
+  const body = await req.json();
   const { jobId } = body;
 
-  const retries = parseInt(request.headers.get("Upstash-Retried") || "0", 10);
+  const retries = parseInt(req.headers.get("Upstash-Retried") || "0", 10);
   const maxRetries = 5;
 
   if (!jobId) {
@@ -31,8 +27,21 @@ async function handler(request: Request) {
   }
 }
 
-export const POST = async (req: Request) => {
-  return await qstash.verifySignature(req, {
-    handler: handler,
+export async function POST(req: NextRequest) {
+  const signature = req.headers.get("upstash-signature");
+  if (!signature) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+  }
+
+  const isValid = await receiver.verify({ 
+    signature, 
+    body: await req.text()
   });
-};
+
+  if (!isValid) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
+  // We need to clone the request to read the body again in the handler
+  return handler(req.clone());
+}
