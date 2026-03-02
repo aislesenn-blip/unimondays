@@ -1,25 +1,23 @@
-import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
-export const metadata: Metadata = {
-  title: "Playbook Lite",
-  description: "World-class AI-driven educational platform.",
+export const metadata = {
+  title: "Playbook | EdTech Platform",
+  description: "AI-Powered EdTech Platform for Teachers and Students",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.variable} font-sans`}>{children}</body>
+    <html lang="en">
+      <body className={`${inter.variable} font-sans min-h-screen bg-slate-50 text-slate-900 selection:bg-slate-200`}>
+        {children}
+      </body>
     </html>
   );
 }
