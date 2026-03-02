@@ -3,13 +3,13 @@
 import OpenAI from 'openai';
 import { safeJsonParse } from '@/lib/utils/json';
 
-if (!process.env.DEEPSEEK_API_KEY) {
-  console.error("DEEPSEEK_API_KEY environment variable is not set!");
+if (!process.env.OPENROUTER_API_KEY) {
+  console.error("OPENROUTER_API_KEY environment variable is not set!");
 }
 
 export const deepseek = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY || "missing-key",
-  baseURL: "https://api.deepseek.com/v1",
+  apiKey: process.env.OPENROUTER_API_KEY || "missing-key",
+  baseURL: "https://openrouter.ai/api/v1",
 });
 
 export async function gradeChunk(chunk: string, rubric: string): Promise<any> {
@@ -17,16 +17,22 @@ export async function gradeChunk(chunk: string, rubric: string): Promise<any> {
 
   try {
     const response = await deepseek.chat.completions.create({
-      model: "deepseek-coder", // or deepseek-chat
+      model: "deepseek/deepseek-chat",
       messages: [
         { role: "system", content: "You are a grading assistant. You must respond with only a valid JSON object and no other text." },
         { role: "user", content: `${prompt}\n\n---\n\nText chunk to grade:\n\n${chunk}` },
       ],
-      response_format: { type: "json_object" },
     });
 
     const aiResponse = response.choices[0].message.content || "{}";
-    const parsedJson = safeJsonParse(aiResponse);
+
+    // Robust regex to extract JSON from DeepSeek's response
+    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error(`Failed to extract valid JSON from DeepSeek response. Raw response: ${aiResponse}`);
+    }
+
+    const parsedJson = safeJsonParse(jsonMatch[0]);
 
     if (parsedJson === null) {
         throw new Error(`Failed to parse valid JSON from DeepSeek response. Raw response: ${aiResponse}`);
@@ -45,16 +51,16 @@ export async function identifyStudent(chunk: string, classId?: string): Promise<
 
     try {
         const response = await deepseek.chat.completions.create({
-            model: "deepseek-coder",
+            model: "deepseek/deepseek-chat",
             messages: [
                 { role: "system", content: "You are a student identification assistant. You must respond with only a valid JSON object and no other text." },
                 { role: "user", content: `${prompt}\n\n---\n\nText chunk:\n\n${chunk}` },
             ],
-            response_format: { type: "json_object" },
         });
 
         const aiResponse = response.choices[0].message.content || "{}";
-        const result = safeJsonParse(aiResponse);
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        const result = jsonMatch ? safeJsonParse(jsonMatch[0]) : null;
 
         if (result === null) {
             console.warn(`Could not parse student identity from chunk. Raw response: ${aiResponse}`);

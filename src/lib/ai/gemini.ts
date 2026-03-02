@@ -11,7 +11,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'missing-key'
 export async function performOcr(fileBuffer: Buffer, mimeType: string): Promise<string> {
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  const prompt = "Extract all text content from this document. Preserve the structure and layout as best as possible.";
+  const prompt = "Extract all text from this document. You MUST insert the exact string ---PAGE_BREAK--- between the content of each page.";
 
   const filePart = {
     inlineData: {
