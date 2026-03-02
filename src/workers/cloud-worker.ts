@@ -215,7 +215,7 @@ export async function handleCloudMarking(job: Job) {
             const batchPromises = batchSplits.map(async (split) => {
                 // L10 Hardening: Clear slice variables eagerly
                 let sliceBuffer: Buffer | null = null;
-                const newDoc: any = null;
+                let newDoc: any = null;
                 try {
                     if (split.startPage < 1 || split.endPage > pageCount) return 0;
 
@@ -301,7 +301,7 @@ export async function handleCloudMarking(job: Job) {
             for (let j = lastProcessedIndex; j < endIndex; j++) {
                 batchPromises.push((async () => {
                     try {
-                        const newDoc: any = await PDFDocument.create();
+                        let newDoc: any = await PDFDocument.create();
                         const [copiedPage] = await newDoc.copyPages(srcDoc, [j]);
                         newDoc!.addPage(copiedPage);
                         const pdfBytes = await newDoc.save();
