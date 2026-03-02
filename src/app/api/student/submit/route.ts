@@ -1,82 +1,88 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
-import { JobType, GradingStatus } from "@prisma/client";
-import { enqueueJob } from "@/lib/queue";
+import { put } from "@vercel/blob";
 
-export async function POST(request: NextRequest) {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const submissionSchema = z.object({
+  workSessionId: z.string(),
+  studentId: z.string(),
+});
+
+function triggerNextJob(jobId: string) {
+  const queueProcessorUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/queue/process`;
+  console.log(`Firing async trigger for new submission job: ${jobId}`);
+  fetch(queueProcessorUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Internal-Secret": process.env.INTERNAL_API_SECRET || "some-secret",
+    },
+    body: JSON.stringify({ jobId }),
+  }).catch(error => {
+    // This is critical for debugging - if the trigger fails, we need to know why.
+    console.error(`FATAL: Failed to trigger job for ${jobId}. This submission is now orphaned. Error:`, error);
+  });
+}
+
+export async function POST(req: NextRequest) {
+  const formData = await req.formData();
+  const scriptFile = formData.get("scriptFile") as File;
+  const workSessionId = formData.get("workSessionId") as string;
+  const studentId = formData.get("studentId") as string;
+
+  if (!scriptFile) {
+    return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
+  }
+
+  const validation = submissionSchema.safeParse({ workSessionId, studentId });
+  if (!validation.success) {
+    return NextResponse.json({ error: "Invalid input.", details: validation.error.flatten() }, { status: 400 });
   }
 
   try {
-    const { filePath, workSessionId, filename } = await request.json();
-
-    if (!filePath || !workSessionId) {
-      return NextResponse.json(
-        { error: "Missing filePath or workSessionId" },
-        { status: 400 }
-      );
-    }
-
-    const workSession = await prisma.workSession.findUnique({
-      where: { id: workSessionId }
+    // 1. Upload file to blob storage
+    const blob = await put(scriptFile.name, scriptFile, {
+      access: 'public',
     });
 
-    if (!workSession) {
-        return NextResponse.json({ error: "Work session not found" }, { status: 404 });
-    }
+    // 2. Create Submission and Job records in a single transaction
+    const { job, submission } = await prisma.$transaction(async (tx) => {
+      const newSubmission = await tx.submission.create({
+        data: {
+          workSessionId: validation.data.workSessionId,
+          studentId: validation.data.studentId,
+          fileUrl: blob.url, // Save the blob URL
+          status: 'QUEUED',
+          displayId: `SUB-${Date.now().toString().slice(-6)}`,
+        }
+      });
 
-    // 1. Create the Submission record
-    const submission = await prisma.submission.create({
-      data: {
-        workSessionId,
-        userId: user.id, // Use authenticated user ID
-        studentRegNo: user.studentId || '', // Use studentId from user model
-        studentName: user.name || '', // Use name from user model
-        filePath,
-        fileName: filename || file.name,
-        status: "PENDING",
-        gradingStatus: GradingStatus.PENDING,
-      },
+      const newJob = await tx.job.create({
+        data: {
+          type: 'MAP_SUBMISSION',
+          submissionId: newSubmission.id,
+          status: 'QUEUED',
+        }
+      });
+
+      return { job: newJob, submission: newSubmission };
     });
 
-    // 2. Create the Parent Job (MAP_SUBMISSION)
-    const parentJob = await prisma.job.create({
-      data: {
-        type: JobType.MAP_SUBMISSION,
-        status: "PENDING",
-        submissionId: submission.id,
-        payload: JSON.stringify({
-          submissionId: submission.id,
-          filePath,
-          workSessionId: workSession.id,
-          standardizedRubricId: workSession.standardizedRubricId, // Pass rubric for grading
-        }),
-      },
-    });
+    // 3. Fire the "fire-and-forget" trigger for the background worker
+    triggerNextJob(job.id);
 
-    // 3. Enqueue the Parent Job for immediate processing
-    await enqueueJob(parentJob.id);
-
-    // 4. Update submission status to reflect enqueuing
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: { gradingStatus: GradingStatus.MAPPING },
-    });
-
-    return NextResponse.json({
-      message: "Submission received and is being processed.",
-      submissionId: submission.id,
-      jobId: parentJob.id,
-    });
-  } catch (error) {
-    console.error("Error creating submission and job:", error);
+    // 4. Return an immediate, optimistic response to the frontend
     return NextResponse.json(
-      { error: "Failed to process submission." },
-      { status: 500 }
+      { 
+        displayId: submission.displayId, 
+        status: "PENDING" 
+      }, 
+      { status: 201 }
     );
+
+  } catch (error) {
+    console.error("Submission failed:", error);
+    return NextResponse.json({ error: "Failed to process submission." }, { status: 500 });
   }
 }
