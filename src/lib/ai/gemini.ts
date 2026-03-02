@@ -26,7 +26,7 @@ export async function performOcr(fileBuffer: Buffer, mimeType: string): Promise<
     const text = response.text();
     return text;
   } catch (error) {
-    console.error("Error performing OCR with Gemini:", error);
-    throw new Error("Failed to perform OCR on the document.");
+    console.error("[GEMINI ERROR]:", error);
+    throw new Error(`Failed to perform OCR on the document. Gemini Error: ${(error as Error).message}`);
   }
 }
