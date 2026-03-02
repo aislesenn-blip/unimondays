@@ -19,18 +19,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
            <h1 className="text-2xl font-bold tracking-tight text-foreground/90 capitalize">{pathname.split('/').pop()?.replace('-', ' ') || 'Dashboard'}</h1>
         </header>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className="p-8 sm:p-12 w-full max-w-[1600px] mx-auto flex-1"
-          >
-            {children}
-          </motion.div>
-        </AnimatePresence>
+        <div className="p-8 sm:p-12 w-full max-w-[1600px] mx-auto flex-1">
+          {children}
+        </div>
       </main>
 
       <Toaster position="top-center" richColors theme="dark" />
