@@ -1,0 +1,14 @@
+
+> playbook-lite@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+  ▲ Next.js 14.2.4
+  - Local:        http://localhost:3001
+
+ ✓ Starting...
+ ✓ Ready in 3.6s
+ ○ Compiling /student/[code]/results ...
+ ✓ Compiled /student/[code]/results in 8.3s (1387 modules)
+ ✓ Compiled in 711ms (684 modules)
+ GET /student/MATH-401/results 200 in 9725ms
