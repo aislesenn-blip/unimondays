@@ -41,7 +41,7 @@ export function DashboardSidebar({ collapsed = false, onToggleCollapse, isMobile
   const displayUser = user || { fullName: "Guest User", institution: "Playbook AI", avatar: "" };
 
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider >
       <div className={cn("flex h-full flex-col bg-card text-card-foreground transition-all duration-300")}>
         
         {/* Header */}
@@ -88,7 +88,7 @@ export function DashboardSidebar({ collapsed = false, onToggleCollapse, isMobile
                 </div>
             )}
             <div className={cn("flex items-center gap-3 rounded-lg px-3 py-2", collapsed && "justify-center")}>
-                <img src={displayUser.avatar || `https://ui-avatars.com/api/?name=${displayUser.fullName}&background=random`} alt={displayUser.fullName} className="h-8 w-8 rounded-full object-cover shrink-0"/>
+                <img src={displayUser.avatar as string | undefined || `https://ui-avatars.com/api/?name=${displayUser.fullName}&background=random`} alt={displayUser.fullName || undefined} className="h-8 w-8 rounded-full object-cover shrink-0"/>
                 {!collapsed && (
                 <div className="flex flex-col overflow-hidden">
                     <span className="text-sm font-medium truncate">{displayUser.fullName}</span>

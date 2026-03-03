@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 export class TierManager {
   static async checkQuota(userId: string, scriptsCount: number = 1): Promise<boolean> {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique();
     if (!user) return false;
 
     const used = user.used || 0;

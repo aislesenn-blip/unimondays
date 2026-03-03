@@ -223,7 +223,7 @@ export default function StandardizeRubricPage() {
             <div className="space-y-6">
                 {(() => {
                     try {
-                        return standardizedRubric.Questions.map((q, qIdx) => (
+                        return standardizedRubric.Questions.map((q: any, qIdx: any) => (
                             <Card key={qIdx} className="overflow-hidden border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md bg-white dark:bg-slate-950">
                                 <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                                      <div className="flex items-baseline gap-3">
@@ -243,7 +243,7 @@ export default function StandardizeRubricPage() {
                                         <div className="space-y-4">
                                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Required Concepts</h3>
                                             <div className="space-y-3">
-                                                {q.ConceptUnits.map((cu, cIdx) => (
+                                                {q.ConceptUnits.map((cu: any, cIdx: any) => (
                                                     <div key={cIdx} className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4 pl-4 border-l-2 border-primary/20">
                                                         <div className="flex-1">
                                                             <Popover>
@@ -354,7 +354,7 @@ export default function StandardizeRubricPage() {
                                                 <div className="space-y-4">
                                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Out of Scope Rules</h3>
                                                     <ul className="space-y-2">
-                                                        {q.OutOfScope.map((os, oIdx) => (
+                                                        {q.OutOfScope.map((os: any, oIdx: any) => (
                                                             <li key={oIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                                 <span className="text-rose-500 mt-0.5">•</span>
                                                                 <Popover>
@@ -386,7 +386,7 @@ export default function StandardizeRubricPage() {
                                                 <div className="space-y-4">
                                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Penalties</h3>
                                                     <ul className="space-y-2">
-                                                        {q.Penalties.map((pen, pIdx) => (
+                                                        {q.Penalties.map((pen: any, pIdx: any) => (
                                                             <li key={pIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                                 <span className="text-rose-500 mt-0.5">-</span>
                                                                 <Popover>

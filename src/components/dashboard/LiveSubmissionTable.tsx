@@ -151,7 +151,7 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
               </TableCell>
             </TableRow>
           ) : (
-            submissions?.map((sub) => {
+            submissions?.map((sub: any) => {
               // Identity Separation Logic
               // Name: Prioritize AI Detected -> User FullName -> Fallback
               const detectedName = sub.score?.detectedIdentity;

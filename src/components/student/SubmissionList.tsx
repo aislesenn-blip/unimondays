@@ -54,7 +54,7 @@ export function SubmissionList() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {submissions.map((sub) => (
+          {submissions.map((sub: any) => (
             <TableRow key={sub.id}>
               <TableCell className="font-medium">{sub.workSessionTitle}</TableCell>
               <TableCell className="text-muted-foreground">{sub.lecturerName}</TableCell>

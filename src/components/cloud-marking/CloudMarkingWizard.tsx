@@ -1,3 +1,4 @@
+"use client";
 
 "use client";
 
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { Progress } from "@/components/ui/progress";
 import * as tus from "tus-js-client";
 import { CardHeader, CardTitle } from "@/components/ui/card";
@@ -244,17 +245,17 @@ export function CloudMarkingWizard() {
               </div>
               <div className="space-y-2">
                 <Label>AI Strictness</Label>
-                <Select
+                <select
                   value={state.strictness}
-                  onValueChange={(value) => dispatch({ type: "SET_FIELD", field: "strictness", value })}
+                  onChange={(value) => dispatch({ type: "SET_FIELD", field: "strictness", value })}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="LENIENT">Lenient</SelectItem>
-                    <SelectItem value="MODERATE">Moderate</SelectItem>
-                    <SelectItem value="STRICT">Strict</SelectItem>
-                  </SelectContent>
-                </Select>
+
+
+                    <option value="LENIENT">Lenient</option>
+                    <option value="MODERATE">Moderate</option>
+                    <option value="STRICT">Strict</option>
+
+                </select>
               </div>
             </div>
           </div>
@@ -334,7 +335,7 @@ export function CloudMarkingWizard() {
                       <UploadCloud className="h-6 w-6 text-slate-500" />
                   </div>
                   <p className="text-sm font-medium">Drag & drop your merged PDF here</p>
-                  <p classNamem="text-xs text-muted-foreground mt-1 mb-4">or click to browse</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">or click to browse</p>
                   <Input
                       id="tus-upload"
                       type="file"
@@ -361,7 +362,7 @@ export function CloudMarkingWizard() {
           </div>
         )}
 
-      </EVAL_WRITTEN_CODE_BLOCK>
+      </CardContent>
       <CardFooter className="flex justify-end gap-2">
          {state.step < STEPS.length && (
             <Button 

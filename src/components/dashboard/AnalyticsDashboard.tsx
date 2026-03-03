@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Users, Activity } from "lucide-react";
 
@@ -84,18 +84,16 @@ export function AnalyticsDashboard({ classHealth, bottlenecks, studentTimeline }
             <CardDescription>Track individual performance over time.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a student" />
-              </SelectTrigger>
-              <SelectContent>
+            <select className="w-full border p-2 rounded" value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)}>
+
+
                 {studentTimeline.map(s => (
-                  <SelectItem key={s.studentName} value={s.studentName}>
+                  <option key={s.studentName} value={s.studentName}>
                     {s.studentName}
-                  </SelectItem>
+                  </option>
                 ))}
-              </SelectContent>
-            </Select>
+
+            </select>
             
             <ResponsiveContainer width="100%" height={300}>
               {currentStudentData.length > 0 ? (
