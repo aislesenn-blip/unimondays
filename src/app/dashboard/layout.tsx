@@ -1,23 +1,16 @@
-import { DashboardShell } from "@/components/layout/DashboardShell";
-import { getAuthenticatedUser } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { Sidebar } from "@/components/layout/Sidebar";
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Global dashboard protection:
-  // Redirect orphaned users (valid session cookie but missing in DB) with error param
-  // to break potential middleware redirect loops.
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    redirect("/login?error=orphaned");
-  }
-
   return (
-    <DashboardShell>
-      {children}
-    </DashboardShell>
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto w-full p-4 md:p-8 lg:p-12 relative max-w-7xl mx-auto">
+        {children}
+      </main>
+    </div>
   );
 }

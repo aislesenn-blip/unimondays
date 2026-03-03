@@ -1,0 +1,18 @@
+
+> playbook-lite@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.4
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1987ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 8.7s (1385 modules)
+ GET /dashboard 200 in 9705ms
+ ✓ Compiled in 958ms (682 modules)
+ ○ Compiling /dashboard/classes/create ...
+ ✓ Compiled /dashboard/classes/create in 5.1s (1374 modules)
+ ✓ Compiled /dashboard/classes/[id] in 448ms (1388 modules)
+ GET /dashboard/classes/1 200 in 1265ms
+ ✓ Compiled /dashboard/classes/[id]/work/create in 426ms (1406 modules)

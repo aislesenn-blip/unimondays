@@ -1,8 +1,0 @@
-
-{
-  "functions": {
-    "src/app/api/queue/process/route.ts": {
-      "maxDuration": 300
-    }
-  }
-}
