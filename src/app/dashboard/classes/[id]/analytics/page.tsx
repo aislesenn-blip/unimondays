@@ -1,16 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { AnalyticsDashboard } from "@/components/dashboard/AnalyticsDashboard";
 import { notFound, redirect } from "next/navigation";
-import { computeClassAnalytics } from "@/lib/edtech/analytics-engine";
+import { getClassAnalytics as computeClassAnalytics } from "@/lib/edtech/analytics-engine";
 
 export default async function AnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getAuthenticatedUser();
+  const user = await requireUser();
   if (!user) redirect("/login");
   const { id } = await params;
 
   // Fetch Class
-  const classData = await prisma.classes.findUnique({
+  const classData = await prisma.class.findUnique({
       where: { id },
       include: { workSessions: true }
   });
@@ -21,12 +21,12 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   const submissions = await prisma.submission.findMany({
       where: {
           workSession: { classId: id },
-          status: { in: ['GRADED', 'FLAGGED', 'RELEASED', 'APPEALED'] }
+          status: { in: ['GRADED', 'FLAGGED'] }
       },
       include: {
           score: true,
           workSession: true,
-          user: true
+          student: true
       },
       orderBy: { submittedAt: 'asc' }
   });

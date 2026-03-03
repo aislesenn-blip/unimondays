@@ -1,16 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { MasterCASpreadsheet } from "@/components/dashboard/MasterCASpreadsheet";
 import { redirect, notFound } from "next/navigation";
 import { resolveIdentity, upgradeIdentity } from "@/lib/edtech/identity-resolver";
 
 export default async function CAPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getAuthenticatedUser();
+  const user = await requireUser();
   if (!user) redirect("/login");
   const { id } = await params;
 
   // Fetch Class & Work Sessions
-  const classData = await prisma.classes.findUnique({
+  const classData = await prisma.class.findUnique({
     where: { id },
     include: {
       workSessions: {
@@ -21,18 +21,18 @@ export default async function CAPage({ params }: { params: Promise<{ id: string 
   });
 
   if (!classData) notFound();
-  if (classData.lecturerId !== user.id && user.role !== 'ADMIN') redirect("/dashboard");
+  if (classData.lecturerId !== user.id && !(user as any).isAdmin) redirect("/dashboard");
 
   // Fetch all graded submissions for this class
   // Deep Audit Fix: Include 'FLAGGED' so that Cloud Marked ghost data with confidence issues still appear on the Master CA
   const submissions = await prisma.submission.findMany({
     where: {
       workSession: { classId: id },
-      status: { in: ['GRADED', 'RELEASED', 'APPEALED', 'FLAGGED'] }
+      status: { in: ['GRADED', 'FLAGGED'] }
     },
     include: {
       score: true,
-      user: true,
+      student: true,
       workSession: true
     }
   });
@@ -65,8 +65,8 @@ export default async function CAPage({ params }: { params: Promise<{ id: string 
     student.secondaryInfo = student.secondaryInfo || student.secondaryInfo;
 
     // Only assign score if one exists (FLAGGED might be null in some weird edge cases, though our AI always creates a score)
-    if (sub.score && typeof sub.score.totalMarks === 'number') {
-      student.scores[sub.workSessionId] = sub.score.totalMarks;
+    if (sub.score && typeof sub.score.score === 'number') {
+      student.scores[sub.workSessionId] = sub.score.score;
     }
   });
 
@@ -75,8 +75,8 @@ export default async function CAPage({ params }: { params: Promise<{ id: string 
   const workSessions = classData.workSessions.map(ws => ({
     id: ws.id,
     title: ws.title,
-    totalMarks: ws.totalMarks || 100,
-    includeInCalculation: ws.includeInCalculation ?? true
+    totalMarks: (ws as any).totalMarks || 100,
+    includeInCalculation: (ws as any).includeInCalculation ?? true
   }));
 
   return (

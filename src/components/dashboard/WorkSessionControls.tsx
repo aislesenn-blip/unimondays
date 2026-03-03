@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Slider } from "@/components/ui/slider";
 import { AlertCircle, ArrowRight, Loader2, Sparkles, Unlock, Lock, Users } from "lucide-react";
 import { toast } from "sonner";
-import { updateWorkSessionSettings, publishGrades, unpublishGrades } from "./actions";
+import { updateWorkSessionSettings, publishGrades, unpublishGrades } from "@/app/dashboard/work-sessions/[id]/actions";
 
 export function WorkSessionControls({ session }: { session: any }) {
     const [isPending, startTransition] = useTransition();

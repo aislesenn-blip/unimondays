@@ -18,7 +18,7 @@ export async function getSubmissionsForSession(workSessionId: string) {
         workSessionId: workSessionId,
       },
       include: {
-        user: true, // Include the related User model via the 'student' relation. Renamed from student.
+        student: true, // Include the related User model via the 'student' relation. Renamed from student.
         score: true,   // Include the related Score
         appeals: {     // Include any appeals
           orderBy: {

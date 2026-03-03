@@ -243,7 +243,7 @@ export default function StandardizeRubricPage() {
                                         <div className="space-y-4">
                                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Required Concepts</h3>
                                             <div className="space-y-3">
-                                                {q.ConceptUnits.map((cu, cIdx) => (
+                                                {q.ConceptUnits.map((cu: any, cIdx: number) => (
                                                     <div key={cIdx} className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4 pl-4 border-l-2 border-primary/20">
                                                         <div className="flex-1">
                                                             <Popover>
@@ -354,7 +354,7 @@ export default function StandardizeRubricPage() {
                                                 <div className="space-y-4">
                                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Out of Scope Rules</h3>
                                                     <ul className="space-y-2">
-                                                        {q.OutOfScope.map((os, oIdx) => (
+                                                        {q.OutOfScope.map((os: any, oIdx: number) => (
                                                             <li key={oIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                                 <span className="text-rose-500 mt-0.5">•</span>
                                                                 <Popover>
@@ -386,7 +386,7 @@ export default function StandardizeRubricPage() {
                                                 <div className="space-y-4">
                                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Penalties</h3>
                                                     <ul className="space-y-2">
-                                                        {q.Penalties.map((pen, pIdx) => (
+                                                        {q.Penalties.map((pen: any, pIdx: number) => (
                                                             <li key={pIdx} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                                 <span className="text-rose-500 mt-0.5">-</span>
                                                                 <Popover>

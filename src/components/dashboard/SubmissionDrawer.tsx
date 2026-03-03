@@ -201,11 +201,9 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                     <AlertTitle className="text-blue-800 font-bold">AI Flagged for Review</AlertTitle>
                     <AlertDescription className="mt-2 text-sm leading-relaxed">
                         The AI detected alternative valid concepts or low certainty on specific questions. Please review the highlighted questions below.
-                    </AlerDescription>
+                    </AlertDescription>
                 </Alert>
             )}
-
-            {/* ... rest of the component remains the same ... */}
             <div className="space-y-3">
                  {submission.filePath && (
                     <div>

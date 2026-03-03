@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/utils/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
-  const response = await updateSession(request)
-  const { data: { user } } = await response.supabase.auth.getUser()
+  const { response, supabase } = await updateSession(request)
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
     return NextResponse.redirect(new URL('/login', request.url))

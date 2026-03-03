@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable";
 import { WorkSessionControls } from "@/components/dashboard/WorkSessionControls";

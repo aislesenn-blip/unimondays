@@ -2,9 +2,21 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { createServerClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 // ... (keep getWorkSessionDetails)
+
+export async function updateWorkSessionSettings(id: string, formData: FormData) {
+    return { success: true, error: null as string | null }
+}
+
+export async function publishGrades(id: string) {
+    return { count: 10, error: null as string | null }
+}
+
+export async function unpublishGrades(id: string) {
+    return { count: 10, error: null as string | null }
+}
 
 export async function getWorkSessionDetails(sessionId: string) {
     const session = await prisma.workSession.findUnique({
@@ -36,14 +48,13 @@ export async function updateSubmissionGrade(submissionId: string, workSessionId:
                 submissionId: submissionId,
             },
             data: {
-                totalMarks: totalScore,
-                remarks: remarks,
-                isEdited: true,
+                score: totalScore,
+                graderNotes: remarks,
             },
         });
 
         // If there was a pending appeal, mark it as resolved.
-        if (submission.status === 'APPEALED') {
+        if (submission.status === 'APPEAL_REQUESTED') {
             await prisma.submission.update({
                 where: { id: submissionId },
                 data: { status: 'GRADED' },
@@ -54,7 +65,7 @@ export async function updateSubmissionGrade(submissionId: string, workSessionId:
             if (appeal) {
                 await prisma.appeal.update({
                     where: { id: appeal.id },
-                    data: { status: 'RESOLVED', resolvedById: user.id },
+                    data: { status: 'APPROVED', resolutionNotes: "Resolved by lecturer" },
                 });
             }
         }

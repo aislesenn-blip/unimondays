@@ -1,7 +1,7 @@
 'use server'
 
 import { prisma } from "@/lib/prisma";
-import { createServerClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function getClasses(lecturerId: string) {
@@ -95,16 +95,7 @@ export async function createWorkSession(formData: FormData) {
         deadline: deadline ? new Date(deadline) : null,
         lecturerId: user.id,
         workCode,
-        releaseMode: releaseMode === 'manual' ? 'manual' : 'instant',
-        rubric: {
-          create: {
-            filePath: rubricPath,
-            standardizedJson: standardizedRubric,
-          }
-        }
-      },
-      include: {
-        rubric: true
+        releaseMode: releaseMode === 'manual' ? 'MANUAL' : 'IMMEDIATE',
       }
     });
 

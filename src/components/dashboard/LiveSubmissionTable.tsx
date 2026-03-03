@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SubmissionDrawer } from "@/components/dashboard/SubmissionDrawer";
-import { Loader2, CheckCircle2, AlertTriangle, FileText, RotateCw, XCircle, ShieldCheck, ShieldAlert, Shield, SearchCheck } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, FileText, RotateCw, XCircle, ShieldCheck, ShieldAlert, Shield, SearchCheck, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
