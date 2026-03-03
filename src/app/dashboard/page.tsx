@@ -1,73 +1,89 @@
-import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { CreateClassSheet } from "@/components/dashboard/CreateClassSheet";
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Plus, Users } from "lucide-react";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Users, Folder } from "lucide-react";
+import { motion } from "framer-motion";
 
-export default async function DashboardPage() {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-      redirect("/login");
-  }
+const MOCK_CLASSES = [
+  { id: "1", name: "Computer Science 101", code: "CS101-FALL", students: 32, avgScore: 88 },
+  { id: "2", name: "Data Structures & Algos", code: "CS201-SPR", students: 45, avgScore: 76 },
+];
 
-  const classes = await prisma.classes.findMany({
-    where: { lecturerId: user.id },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: {
-        select: { workSessions: true }
-      }
-    }
-  });
-
+export default function DashboardPage() {
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <div>
-            <h1 className="text-3xl font-bold tracking-tight">My Classes</h1>
-            <p className="text-muted-foreground mt-1">Manage your cohorts and assignments.</p>
+    <div className="flex-1 overflow-auto bg-slate-50 p-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
+            <p className="text-slate-500 mt-1">Manage your classes and assignments.</p>
+          </div>
+          <Button asChild>
+            <Link href="/dashboard/classes/create" className="gap-2">
+              <Plus className="h-4 w-4" />
+              Create Class
+            </Link>
+          </Button>
         </div>
-        <CreateClassSheet />
-      </div>
 
-      {classes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center bg-card/50">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Folder className="h-6 w-6 text-primary" />
-            </div>
-            <h3 className="mt-4 text-lg font-semibold">No classes created</h3>
-            <p className="mb-4 mt-2 text-sm text-muted-foreground max-w-sm">
-                Get started by creating your first class to organize work sessions and students.
-            </p>
-            <CreateClassSheet />
+        {/* Classes Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {MOCK_CLASSES.map((cls, index) => (
+            <motion.div
+              key={cls.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1, duration: 0.3 }}
+            >
+              <Link href={`/dashboard/classes/${cls.id}`}>
+                <Card className="h-full hover:border-slate-300 transition-colors cursor-pointer group">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <CardTitle className="group-hover:text-blue-600 transition-colors">
+                          {cls.name}
+                        </CardTitle>
+                        <CardDescription className="font-mono text-xs bg-slate-100 w-fit px-2 py-1 rounded">
+                          {cls.code}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-6 mt-4">
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Users className="h-4 w-4" />
+                        <span className="text-sm font-medium">{cls.students} Students</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <div className="w-2 h-2 rounded-full bg-green-500" />
+                        <span className="text-sm font-medium">Avg: {cls.avgScore}%</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </motion.div>
+          ))}
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: MOCK_CLASSES.length * 0.1, duration: 0.3 }}
+          >
+            <Link href="/dashboard/classes/create">
+              <Card className="h-full border-dashed border-2 bg-transparent hover:bg-slate-100/50 transition-colors cursor-pointer flex flex-col items-center justify-center p-6 text-slate-500 hover:text-slate-900">
+                <Plus className="h-8 w-8 mb-4 text-slate-400" />
+                <p className="font-medium">Create New Class</p>
+                <p className="text-sm text-center mt-1 text-slate-400">Add a new class and invite students</p>
+              </Card>
+            </Link>
+          </motion.div>
         </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {classes.map((cls) => (
-                <Link prefetch={true} key={cls.id} href={`/dashboard/classes/${cls.id}`}>
-                    <Card className="hover:bg-accent/50 transition-colors cursor-pointer h-full border-l-4 border-l-primary group">
-                        <CardHeader>
-                            <div className="flex justify-between items-start">
-                                <CardTitle className="text-xl">{cls.code}</CardTitle>
-                            </div>
-                            <CardDescription className="line-clamp-1 text-base">{cls.name}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex justify-between text-sm text-muted-foreground pt-4 border-t group-hover:border-primary/20 transition-colors">
-                                <span>{cls.semester || 'No Semester'}</span>
-                                <span className="flex items-center gap-1 font-medium text-foreground">
-                                    <Folder className="h-4 w-4" />
-                                    {cls._count.workSessions} Sessions
-                                </span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </Link>
-            ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
