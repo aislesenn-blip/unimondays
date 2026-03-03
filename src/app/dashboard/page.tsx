@@ -1,26 +1,21 @@
-import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
+
+import { createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CreateClassSheet } from "@/components/dashboard/CreateClassSheet";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Users, Folder } from "lucide-react";
+import { Folder } from "lucide-react";
+import { getClasses } from "./actions";
 
 export default async function DashboardPage() {
-  const user = await getAuthenticatedUser();
+  const supabase = createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   if (!user) {
       redirect("/login");
   }
 
-  const classes = await prisma.classes.findMany({
-    where: { lecturerId: user.id },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: {
-        select: { workSessions: true }
-      }
-    }
-  });
+  const classes = await getClasses(user.id);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
