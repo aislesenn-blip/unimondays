@@ -17,7 +17,7 @@ import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const initialState = {
-  message: null,
+  message: "",
 }
 
 function SubmitButton() {

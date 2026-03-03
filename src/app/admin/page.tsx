@@ -5,11 +5,11 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export default async function AdminPage() {
-  const currentUser = await getAuthenticatedUser();
+  const currentUser = await requireUser();
   // Simple check - in real app add ADMIN role
   if (!currentUser) redirect("/login");
 
@@ -60,11 +60,11 @@ export default async function AdminPage() {
                       </div>
                     </TableCell>
                     <TableCell>{(user as any).university?.name || "-"}</TableCell>
-                    <TableCell>{user.role}</TableCell>
-                    <TableCell>{user.tier}</TableCell>
+                    <TableCell>{user.isAdmin ? 'ADMIN' : 'USER'}</TableCell>
+                    <TableCell>-</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <span className="font-bold">{user.used}</span> / {user.quota}
+                        <span className="font-bold">-</span> / -
                       </div>
                     </TableCell>
                     <TableCell className="text-right">

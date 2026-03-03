@@ -1,5 +1,5 @@
 
-import { createServerClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CreateClassSheet } from "@/components/dashboard/CreateClassSheet";
 import Link from "next/link";
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="flex justify-between text-sm text-muted-foreground pt-4 border-t group-hover:border-primary/20 transition-colors">
-                                <span>{cls.semester || 'No Semester'}</span>
+                                <span>{(cls as any).semester || 'No Semester'}</span>
                                 <span className="flex items-center gap-1 font-medium text-foreground">
                                     <Folder className="h-4 w-4" />
                                     {cls._count.workSessions} Sessions

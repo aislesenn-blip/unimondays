@@ -1,6 +1,6 @@
 
 import { DashboardShell } from "@/components/layout/DashboardShell";
-import { createServerClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { UserAccountNav } from "@/components/layout/UserAccountNav";
 import { MainNav } from "@/components/layout/MainNav";
