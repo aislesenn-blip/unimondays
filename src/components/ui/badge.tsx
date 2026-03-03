@@ -1,10 +1,11 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-const Badge = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { variant?: 'default' | 'success' | 'destructive' | 'outline' }>(
+const Badge = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { variant?: 'default' | 'secondary' | 'success' | 'destructive' | 'outline' }>(
   ({ className, variant = 'default', ...props }, ref) => {
     const variants = {
       default: "bg-primary text-primary-foreground border-transparent",
+      secondary: "bg-secondary text-secondary-foreground border-transparent hover:bg-secondary/80",
       success: "bg-success text-success-foreground border-transparent",
       destructive: "bg-destructive text-destructive-foreground border-transparent",
       outline: "text-foreground border-border",

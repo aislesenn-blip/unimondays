@@ -48,7 +48,8 @@ export function Sidebar() {
 
       <div className="mt-auto">
         <div className="flex items-center gap-3 px-2 py-3">
-          <div className="h-9 w-9 rounded-full bg-muted border border-border flex items-center justify-center overflow-hidden">
+          <div className="h-9 w-9 rounded-full bg-muted border border-border flex items-center justify-center overflow-hidden relative">
+             {/* eslint-disable-next-line @next/next/no-img-element */}
              <img src="https://ui-avatars.com/api/?name=Teacher&background=random" alt="Avatar" className="w-full h-full object-cover" />
           </div>
           <div className="flex flex-col">
