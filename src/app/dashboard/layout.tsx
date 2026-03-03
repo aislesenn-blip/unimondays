@@ -1,22 +1,33 @@
+
 import { DashboardShell } from "@/components/layout/DashboardShell";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { UserAccountNav } from "@/components/layout/UserAccountNav";
+import { MainNav } from "@/components/layout/MainNav";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Global dashboard protection:
-  // Redirect orphaned users (valid session cookie but missing in DB) with error param
-  // to break potential middleware redirect loops.
-  const user = await getAuthenticatedUser();
+  const supabase = createServerClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+
   if (!user) {
-    redirect("/login?error=orphaned");
+    redirect("/login");
+  }
+
+  const userProfile = {
+      name: user.user_metadata.full_name || user.email,
+      email: user.email,
+      image: user.user_metadata.avatar_url
   }
 
   return (
-    <DashboardShell>
+    <DashboardShell 
+      nav={<MainNav />} 
+      userNav={<UserAccountNav user={userProfile} />}>
       {children}
     </DashboardShell>
   );

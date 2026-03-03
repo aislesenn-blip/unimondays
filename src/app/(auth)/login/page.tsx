@@ -1,10 +1,10 @@
-"use client";
+'use client'
 
-import Link from "next/link";
-import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import Link from 'next/link'
+import { useFormState, useFormStatus } from 'react-dom'
+import { loginUser } from '@/app/actions/auth'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Card,
   CardContent,
@@ -12,54 +12,26 @@ import {
   CardFooter,
   CardHeader,
   CardTitle
-} from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/card'
+import { ArrowLeft } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-function LoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const initialState = {
+  message: null,
+}
 
-  useEffect(() => {
-    const errorParam = searchParams.get("error");
-    if (errorParam === "orphaned") {
-      setError("Account setup incomplete. Please contact support.");
-    }
-  }, [searchParams]);
+function SubmitButton() {
+    const { pending } = useFormStatus()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
+    return (
+        <Button className="w-full" type="submit" disabled={pending}>
+            {pending ? "Signing in..." : "Sign In"}
+        </Button>
+    )
+}
 
-    const formData = new FormData(e.currentTarget as HTMLFormElement);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Login failed");
-        return;
-      }
-
-      // Success
-      router.push("/dashboard");
-    } catch (err) {
-      setError("An unexpected error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
+export default function LoginPage() {
+    const [state, formAction] = useFormState(loginUser, initialState)
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4 relative">
@@ -76,11 +48,11 @@ function LoginForm() {
             Enter your email to access your lecturer dashboard
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        <form action={formAction}>
           <CardContent className="space-y-4">
-            {error && (
+            {state?.message && (
               <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
-                {error}
+                {state.message}
               </div>
             )}
             <div className="space-y-2">
@@ -98,9 +70,7 @@ function LoginForm() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
-            </Button>
+            <SubmitButton />
             <div className="text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
               <Link href="/signup" className="text-primary hover:underline font-medium">
@@ -111,13 +81,5 @@ function LoginForm() {
         </form>
       </Card>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
-      <LoginForm />
-    </Suspense>
   );
 }

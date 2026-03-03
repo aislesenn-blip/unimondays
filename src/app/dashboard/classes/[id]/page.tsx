@@ -1,85 +1,28 @@
-import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
+
+import { createServerClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { CreateWorkSessionSheet } from "@/components/dashboard/CreateWorkSessionSheet";
-import { resolveIdentity, upgradeIdentity } from "@/lib/edtech/identity-resolver";
 import { CAOverview } from "@/components/dashboard/CAOverview";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, FileText, CheckCircle2, BarChart3, Table2 } from "lucide-react";
+import { ChevronRight, Calendar, BarChart3, Table2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { getClassDetails, getCAData } from "./actions";
 
-export default async function ClassDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getAuthenticatedUser();
+export default async function ClassDetailsPage({ params }: { params: { id: string } }) {
+  const supabase = createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { id } = await params;
-
-  const classItem = await prisma.classes.findUnique({
-    where: { id },
-    include: {
-      workSessions: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-            _count: {
-                select: { submissions: true }
-            }
-        }
-      }
-    }
-  });
+  const classItem = await getClassDetails(params.id);
 
   if (!classItem) notFound();
-  if (classItem.lecturerId !== user.id && user.role !== 'ADMIN') {
-      redirect("/dashboard"); // Or forbidden
+  if (classItem.lecturerId !== user.id && !user.user_metadata.isAdmin) {
+      redirect("/dashboard");
   }
 
-  // CA Calculation
-  const submissions = await prisma.submission.findMany({
-    where: {
-        workSession: { classId: id },
-        status: { in: ['GRADED', 'FLAGGED'] }
-    },
-    include: {
-        score: true,
-        user: true,
-        workSession: true
-    }
-  });
-
-  const studentMap = new Map();
-  submissions.forEach(sub => {
-    const identity = resolveIdentity(sub);
-    const key = identity.key;
-
-    if (!studentMap.has(key)) {
-        studentMap.set(key, {
-            id: key,
-            name: identity.primaryName,
-            primaryName: identity.primaryName, // Map for upgrade helper
-            secondaryInfo: identity.secondaryInfo, // Map for upgrade helper
-            totalScore: 0,
-            maxScore: 0,
-            submissionCount: 0
-        });
-    }
-
-    const student = studentMap.get(key);
-    upgradeIdentity(student, identity);
-    student.name = student.primaryName; // Commit upgrade
-
-    if (sub.score) {
-        student.totalScore += sub.score.totalMarks;
-        student.maxScore += (sub.workSession.totalMarks || 100);
-        student.submissionCount++;
-    }
-  });
-
-  const caData = Array.from(studentMap.values()).map(s => ({
-    ...s,
-    average: s.maxScore > 0 ? (s.totalScore / s.maxScore) * 100 : 0
-  }));
+  const caData = await getCAData(params.id);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -89,19 +32,19 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
             <p className="text-muted-foreground mt-1">{classItem.name}</p>
         </div>
         <div className="flex gap-2">
-            <Link prefetch={true} href={`/dashboard/classes/${id}/analytics`}>
+            <Link prefetch={true} href={`/dashboard/classes/${params.id}/analytics`}>
                 <Button variant="outline">
                     <BarChart3 className="mr-2 h-4 w-4" />
                     Analytics
                 </Button>
             </Link>
-            <Link prefetch={true} href={`/dashboard/classes/${id}/ca`}>
+            <Link prefetch={true} href={`/dashboard/classes/${params.id}/ca`}>
                 <Button variant="outline">
                     <Table2 className="mr-2 h-4 w-4" />
                     Master CA
                 </Button>
             </Link>
-            <CreateWorkSessionSheet classId={id} />
+            <CreateWorkSessionSheet classId={params.id} />
         </div>
       </div>
 
@@ -115,7 +58,7 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
             {classItem.workSessions.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-8 text-center">
                     <p className="text-muted-foreground mb-4">No work sessions yet.</p>
-                    <CreateWorkSessionSheet classId={id} />
+                    <CreateWorkSessionSheet classId={params.id} />
                 </div>
             ) : (
                 <div className="grid gap-4">

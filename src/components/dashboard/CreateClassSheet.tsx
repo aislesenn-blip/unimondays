@@ -1,8 +1,7 @@
-"use client";
+'use client'
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,35 +17,25 @@ import {
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
+import { createClass } from "@/app/dashboard/actions";
 
 export function CreateClassSheet() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
 
   const onSubmit = async (data: any) => {
-    try {
-      const res = await fetch('/api/classes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+    const formData = new FormData();
+    formData.append("name", data.name);
+    formData.append("code", data.code);
 
-      if (!res.ok) {
-        if (res.status === 409) {
-          throw new Error('A class with this name or code already exists.');
-        }
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create class');
-      }
+    const result = await createClass(formData);
 
-      const newClass = await res.json();
-      toast.success(`Class ${newClass.code} created successfully`);
+    if (result?.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Class created successfully");
       setOpen(false);
       reset();
-      router.refresh();
-    } catch (error: any) {
-      toast.error(error.message);
     }
   };
 
@@ -75,21 +64,6 @@ export function CreateClassSheet() {
             <Label htmlFor="code">Class Code</Label>
             <Input id="code" placeholder="e.g. CS101" {...register("code", { required: true })} />
             {errors.code && <span className="text-sm text-destructive">Required</span>}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="semester">Semester (Optional)</Label>
-            <Input id="semester" placeholder="e.g. Fall 2024" {...register("semester")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="mode">Mode (Optional)</Label>
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              {...register("mode")}
-            >
-              <option value="In-Person">In-Person</option>
-              <option value="Hybrid">Hybrid</option>
-              <option value="Online">Online</option>
-            </select>
           </div>
           <SheetFooter>
             <SheetClose asChild>

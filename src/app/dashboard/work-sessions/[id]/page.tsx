@@ -1,59 +1,56 @@
-import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { createServerClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import { SubmissionDrawer } from "@/components/dashboard/SubmissionDrawer";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { FileText, Download, User as UserIcon } from "lucide-react";
+import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable";
+import { WorkSessionControls } from "@/components/dashboard/WorkSessionControls";
+import { getWorkSessionDetails } from "./actions";
+import { getSubmissionsForSession } from "@/app/actions/teacher"; // Corrected import path
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable"; // New Client Component
-import { WorkSessionControls } from "@/components/dashboard/WorkSessionControls";
+import { Badge } from "@/components/ui/badge";
+import { FileText } from "lucide-react";
 
-export default async function WorkSessionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getAuthenticatedUser();
+export default async function WorkSessionDetailsPage({ params }: { params: { id: string } }) {
+  const supabase = createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { id } = await params;
-
-  const session = await prisma.workSession.findUnique({
-    where: { id },
-    include: {
-      class: true,
-      submissions: {
-        include: {
-          user: true,
-          score: true,
-          appeals: true // Include appeals for the client component
-        },
-        orderBy: { submittedAt: 'desc' }
-      }
-    }
-  });
-
+  const session = await getWorkSessionDetails(params.id);
   if (!session) notFound();
-  if (session.lecturerId !== user.id && user.role !== 'ADMIN') {
+  
+  if (session.lecturerId !== user.id && !user.user_metadata.isAdmin) {
       redirect("/dashboard");
   }
 
-  // Determine if marking scheme is a downloadable file
-  const markingSchemeUrl = session.markingScheme &&
-    (session.markingScheme.startsWith('http') || session.markingScheme.endsWith('.pdf') || session.markingScheme.includes('/'))
-    ? session.markingScheme
-    : null;
+  // Fetch submissions using the new server action
+  const submissions = await getSubmissionsForSession(params.id);
 
-  // FIX: Serialize Date objects to strings for Client Components
+  // Serialize Date objects to strings for Client Components
   const serializedSession = {
     ...session,
     appealDeadline: session.appealDeadline ? session.appealDeadline.toISOString() : null,
   };
+
+  const serializedSubmissions = submissions.map(s => ({
+      ...s,
+      submittedAt: s.submittedAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+      // Ensure nested objects with dates are also serialized
+      user: s.student ? {
+          ...s.student,
+          createdAt: s.student.createdAt.toISOString(),
+          updatedAt: s.student.updatedAt.toISOString(),
+      } : null,
+      score: s.score ? {
+          ...s.score,
+          createdAt: s.score.createdAt.toISOString(),
+          updatedAt: s.score.updatedAt.toISOString(),
+      } : null,
+      appeals: s.appeals.map(a => ({
+          ...a,
+          createdAt: a.createdAt.toISOString(),
+          updatedAt: a.updatedAt.toISOString(),
+      }))
+  }));
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -70,26 +67,18 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
             <div className="flex items-center gap-4 mt-2">
                 <Badge variant="outline" className="font-mono">{session.workCode}</Badge>
                 <span className="text-sm text-muted-foreground">
-                    {session.submissions.length} Submissions
+                    {submissions.length} Submissions
                 </span>
             </div>
         </div>
         <div className="flex gap-2">
-             {markingSchemeUrl && (
-                 <a href={`/api/download?url=${encodeURIComponent(markingSchemeUrl)}`} download>
+             {session.rubricId && (
+                 <a href={`/api/rubrics/${session.rubricId}`} target="_blank" rel="noopener noreferrer">
                      <Button variant="outline">
-                         <Download className="mr-2 h-4 w-4" />
-                         Marking Scheme
+                         <FileText className="mr-2 h-4 w-4" />
+                         View Rubric
                      </Button>
                  </a>
-             )}
-             {session.rubricUrl && (
-                <a href={`/api/download?url=${encodeURIComponent(session.rubricUrl)}&inline=true`} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline">
-                        <FileText className="mr-2 h-4 w-4" />
-                        View Rubric
-                    </Button>
-                </a>
              )}
         </div>
       </div>
@@ -99,7 +88,7 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
 
       <div className="rounded-md border bg-card">
          {/* Live Client Component for "Magic" Updates */}
-         <LiveSubmissionTable initialSubmissions={session.submissions} workSession={session} />
+         <LiveSubmissionTable initialSubmissions={serializedSubmissions} workSession={serializedSession} />
       </div>
     </div>
   );

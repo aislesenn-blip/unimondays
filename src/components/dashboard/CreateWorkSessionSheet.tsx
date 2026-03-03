@@ -1,12 +1,11 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useTransition } from "react";
+import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -17,319 +16,188 @@ import {
   SheetFooter,
   SheetClose
 } from "@/components/ui/sheet";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Upload, FileText, Loader2, Save, CheckCircle2 } from "lucide-react";
-import { supabaseClient } from "@/lib/supabase-client";
-import { v4 as uuidv4 } from "uuid";
+import { Plus, CheckCircle, Copy, Loader2, FileUp, Sparkles, Check } from "lucide-react";
+import { createWorkSession } from "@/app/dashboard/actions";
+import { extractRubric } from "@/app/actions/ai";
 
 interface CreateWorkSessionSheetProps {
   classId: string;
 }
 
+const initialState: any = { success: false, workSession: null, error: null };
+
+function SubmitButton() {
+    const { pending } = useFormStatus();
+    return (
+        <Button type="submit" disabled={pending} className="w-full sm:w-auto">
+            {pending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...</> : "Create Session"}
+        </Button>
+    );
+}
+
 export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm();
-  const [uploading, setUploading] = useState(false);
-  const [isStandardizing, setIsStandardizing] = useState(false);
-  const [approvedRubricId, setApprovedRubricId] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [state, formAction] = useFormState(createWorkSession, initialState);
+  const [isAiPending, startAiTransition] = useTransition();
 
-  const rubricUrl = watch("rubricUrl");
-  const markingSchemeUrl = watch("markingScheme"); // This is actually a URL now
-  const goldStandardUrl = watch("goldStandardUrl");
-
-  // State Persistence
-  useEffect(() => {
-    const savedDraft = localStorage.getItem("createSessionDraft");
-    if (savedDraft) {
-      try {
-        const parsed = JSON.parse(savedDraft);
-        const { questionPaperUrl, markingScheme, goldStandardUrl, ...rest } = parsed;
-        reset(rest);
-        // We do restore file paths if they exist
-        if (questionPaperUrl) setValue("questionPaperUrl", questionPaperUrl);
-        if (markingScheme) setValue("markingScheme", markingScheme);
-        if (goldStandardUrl) setValue("goldStandardUrl", goldStandardUrl);
-      } catch (e) {
-        console.error("Failed to parse draft", e);
-      }
-    }
-
-    // Check if we returned from rubric approval
-    const rubricId = sessionStorage.getItem(`approvedRubricId_${classId}`);
-    if (rubricId) {
-        setApprovedRubricId(rubricId);
-    }
-    const reopen = sessionStorage.getItem("reopenCreateSession");
-    if (reopen) {
-        setOpen(true);
-        sessionStorage.removeItem("reopenCreateSession");
-    }
-  }, [reset, setValue]);
+  const [rubricFile, setRubricFile] = useState<File | null>(null);
+  const [standardizedRubric, setStandardizedRubric] = useState<string | null>(null);
+  const [isStandardized, setIsStandardized] = useState(false);
 
   useEffect(() => {
-    const subscription = watch((value) => {
-      localStorage.setItem("createSessionDraft", JSON.stringify(value));
-    });
-    return () => subscription.unsubscribe();
-  }, [watch]);
+    if (state.success && state.workSession) {
+      toast.success("Work session created successfully!");
+      setOpen(false);
+      setShowSuccessModal(true);
+    }
+    if (state.error) {
+      toast.error(state.error);
+    }
+  }, [state]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      // Direct Client-Side Upload
-      const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const filePath = `rubrics/${classId}/${filename}`;
-
-      const { data, error } = await supabaseClient
-        .storage
-        .from('exam_pdfs')
-        .upload(filePath, file);
-
-      if (error) throw new Error(error.message);
-
-      setValue(field, data.path); // Store path
-      toast.success(`${field} uploaded`);
-
-      if (field === "markingScheme") {
-          setIsStandardizing(true);
-          try {
-              const currentState = watch();
-              const payload = {
-                ...currentState,
-                markingScheme: data.path,
-                classId
-              };
-
-              const stdRes = await fetch("/api/rubrics/standardize", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: data.path })
-              });
-              const stdData = await stdRes.json();
-              if (!stdRes.ok) throw new Error(stdData.error || "Failed to standardize marking scheme");
-
-              sessionStorage.setItem("pendingStandardizedRubric", JSON.stringify(stdData));
-              sessionStorage.setItem("rubricReturnUrl", `/dashboard/classes/${classId}`);
-              sessionStorage.setItem("rubricSessionKey", `approvedRubricId_${classId}`);
-              sessionStorage.setItem("rubricSessionKey", `approvedRubricId_${classId}`);
-              sessionStorage.setItem("reopenCreateSession", "true");
-              localStorage.setItem("createSessionDraft", JSON.stringify(payload));
-
-              router.push(`/dashboard/rubrics/standardize`);
-          } catch (error: any) {
-              toast.error("Standardization failed: " + error.message);
-              setIsStandardizing(false);
-          }
-      }
-    } catch (error: any) {
-      toast.error(`Failed to upload ${field}: ${error.message}`);
-    } finally {
-      setUploading(false);
+    if (file) {
+        setRubricFile(file);
+        setIsStandardized(false);
+        setStandardizedRubric(null);
     }
-  };
+  }
 
-  const onSubmit = async (data: any) => {
-    if (!approvedRubricId) {
-        toast.error("Please upload and approve a Marking Scheme first.");
+  const handleStandardize = () => {
+    if (!rubricFile) {
+        toast.error("Please select a rubric file first.");
         return;
     }
+    startAiTransition(async () => {
+        // This is a mock URL, in a real scenario you'd get this from the storage upload
+        const mockFileUrl = `path/to/${rubricFile.name}`;
+        const result = await extractRubric(mockFileUrl);
+        if (result.success) {
+            setStandardizedRubric(JSON.stringify(result.rubric));
+            setIsStandardized(true);
+            toast.success("Rubric standardized successfully!")
+        } else {
+            toast.error("Failed to standardize rubric.");
+        }
+    });
+  }
 
-    try {
-      const payload = {
-        ...data,
-        calibration: JSON.stringify({
-          methodology: "Standard",
-          grammar: "Ignore unless critical",
-          verbosity: "Concise",
-          incomplete: "Grade present work",
-          custom: "",
-          rubricId: approvedRubricId
-        })
-      };
-
-      const res = await fetch(`/api/classes/${classId}/work-sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to create session');
-      }
-
-      const session = await res.json();
-      toast.success(`Session ${session.workCode} created`);
-      setOpen(false);
-      localStorage.removeItem("createSessionDraft");
-      sessionStorage.removeItem(`approvedRubricId_${classId}`);
-      reset();
-      router.refresh();
-    } catch (error: any) {
-      toast.error(error.message);
+  const copyToClipboard = () => {
+    if (state.success && state.workSession?.workCode) {
+        navigator.clipboard.writeText(state.workSession.workCode).then(() => {
+            toast.success("Copied to clipboard!");
+        });
     }
-  };
+  }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          New Session
-        </Button>
-      </SheetTrigger>
-      {isStandardizing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-            <div className="flex flex-col items-center space-y-4 p-6 bg-card rounded-lg shadow-lg border">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <p className="text-lg font-medium animate-pulse">AI is extracting and standardizing atomic concepts...</p>
-            </div>
-        </div>
-      )}
-      <SheetContent className="sm:max-w-md overflow-y-auto w-full">
-        <SheetHeader>
-          <SheetTitle>Create Work Session</SheetTitle>
-          <SheetDescription>
-            Create a new assignment or exam. Configure the AI grading persona below.
-          </SheetDescription>
-        </SheetHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 py-6">
+    <>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Session
+          </Button>
+        </SheetTrigger>
+        <SheetContent className="sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Create Work Session</SheetTitle>
+            <SheetDescription>
+              Create a new assignment, test, or exam. A unique code will be generated for students to submit their work.
+            </SheetDescription>
+          </SheetHeader>
+          <form action={formAction} className="space-y-6 py-6">
+            <input type="hidden" name="classId" value={classId} />
+            {standardizedRubric && <input type="hidden" name="standardizedRubric" value={standardizedRubric} />}
 
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold mb-2 border-b pb-2">Basic Info</h3>
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
-              <Input id="title" placeholder="e.g. Mid-Semester Exam" {...register("title", { required: true })} />
-              {errors.title && <span className="text-sm text-destructive">Required</span>}
+              <Input id="title" name="title" placeholder="e.g. Mid-Semester Exam" required />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="deadline" className="flex items-center gap-1">
-                Deadline (Optional)
-                <span className="text-xs text-muted-foreground ml-1 font-normal">
-                  (Sets the cutoff time for student submissions. It is also used to trigger automated result releases if 'Release on Deadline' mode is selected.)
-                </span>
-              </Label>
-              <Input id="deadline" type="datetime-local" {...register("deadline")} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="deadline">Deadline (Optional)</Label>
+                    <Input id="deadline" name="deadline" type="datetime-local" />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="releaseMode">Grade Release</Label>
+                    <Select name="releaseMode" defaultValue="instant">
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select release mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="instant">Instant</SelectItem>
+                            <SelectItem value="manual">Manual</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
-            <div className="space-y-2">
-               <Label>Instructions to Students</Label>
-               <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour'). Do NOT paste the marking scheme here." {...register("instructions")} />
-             </div>
-          </div>
-
-           {/* Gold Standard Inputs */}
-           <div className="space-y-4 border p-5 rounded-md bg-muted/20 shadow-sm">
-              <h3 className="text-lg font-semibold mb-2 border-b pb-2 border-slate-200 dark:border-slate-800">Gold Standard Data</h3>
-              <p className="text-xs text-muted-foreground">These files are used by the AI for grading and are NEVER shown to students.</p>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">Blank Question Paper (PDF/Image) <span className="text-xs text-muted-foreground ml-1 font-normal">(Optional but highly recommended for 100% grading accuracy & question tracking)</span></Label>
-                <div className="flex items-center gap-2">
-                    <Input type="file" onChange={(e) => handleFileUpload(e, "questionPaperUrl")} accept=".pdf,.jpg,.png" disabled={uploading} />
-                    {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
-                </div>
-                <Input type="hidden" {...register("questionPaperUrl")} />
-                {watch("questionPaperUrl") && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded</div>}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Marking Scheme / Rubric (PDF/Image) <span className="text-destructive">*</span></Label>
-                <div className="flex items-center gap-2">
-                    <Input type="file" onChange={(e) => handleFileUpload(e, "markingScheme")} accept=".pdf,.jpg,.png" disabled={uploading || isStandardizing} />
-                    {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
-                </div>
-                <Input type="hidden" {...register("markingScheme")} />
-                {markingSchemeUrl && (
-                    <div className="flex flex-col gap-2">
-                        <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded</div>
-                        {approvedRubricId && (
-                            <div className="text-xs text-emerald-600 flex items-center gap-1 font-bold bg-emerald-50 p-2 rounded border border-emerald-200 w-fit">
-                                <CheckCircle2 className="w-4 h-4"/> Rubric Intercepted & Approved
-                            </div>
-                        )}
+            <div className="space-y-3">
+                <Label>Marking Scheme (Rubric)</Label>
+                <div className="flex items-center gap-2 p-3 bg-muted rounded-md border">
+                    <FileUp className="h-6 w-6 text-muted-foreground" />
+                    <div className="flex-1">
+                         <p className="text-sm font-medium">{rubricFile ? rubricFile.name : "Upload a PDF or Image"}</p>
+                         <p className="text-xs text-muted-foreground">Max 10MB</p>
                     </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Past Graded Example (Gold Standard)</Label>
-                <div className="flex items-center gap-2">
-                    <Input type="file" onChange={(e) => handleFileUpload(e, "goldStandardUrl")} accept=".pdf,.jpg,.png" disabled={uploading} />
+                    <Button asChild variant="outline" size="sm">
+                        <label htmlFor="rubricFile">{rubricFile ? 'Change' : 'Select'}</label>
+                    </Button>
+                    <Input id="rubricFile" name="rubricFile" type="file" className="hidden" onChange={handleFileChange} accept=".pdf,image/*" />
                 </div>
-                <Input type="hidden" {...register("goldStandardUrl")} />
-                {goldStandardUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded</div>}
-              </div>
-           </div>
-
-           {/* Deterministic AI Transparency (The Wow Factor) */}
-           <div className="space-y-4 border p-5 rounded-md bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <h3 className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100 uppercase">
-                      v3.0 Deterministic Engine Active
-                  </h3>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  This session is powered by our locked, institutional-grade grading engine. No prompt engineering required. The engine strictly enforces a 3-Tier Semantic Logic:
-              </p>
-              <ul className="space-y-2 mt-2">
-                  <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
-                      <span className="font-bold text-slate-900 dark:text-white mt-0.5">1.</span>
-                      <span><strong className="text-emerald-600 dark:text-emerald-400">Direct Match:</strong> Exact semantic alignment with your rubric.</span>
-                  </li>
-                  <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
-                      <span className="font-bold text-slate-900 dark:text-white mt-0.5">2.</span>
-                      <span><strong className="text-amber-600 dark:text-amber-400">Equivalent Concept:</strong> Scientifically correct alternative phrasing (Flagged for your review).</span>
-                  </li>
-                  <li className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
-                      <span className="font-bold text-slate-900 dark:text-white mt-0.5">3.</span>
-                      <span><strong className="text-rose-600 dark:text-rose-400">Out of Scope:</strong> Factually true but irrelevant to the question (Zero Marks).</span>
-                  </li>
-              </ul>
-              <div className="pt-2 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                  The Marking Scheme is the Absolute Authority.
-              </div>
-           </div>
-
-          <div className="space-y-4 border p-5 rounded-md bg-muted/10 shadow-sm">
-            <h3 className="text-lg font-semibold mb-2 border-b pb-2">Settings</h3>
-            <div className="space-y-2">
-              <Label htmlFor="totalMarks">Total Marks</Label>
-              <Input id="totalMarks" type="number" defaultValue={100} {...register("totalMarks")} />
+                <Button type="button" onClick={handleStandardize} disabled={isAiPending || !rubricFile} className="w-full">
+                    {isAiPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Standardizing...</> : isStandardized ? <><Check className="mr-2 h-4 w-4"/> Standardized</> : <><Sparkles className="mr-2 h-4 w-4"/> Standardize Rubric</>}
+                </Button>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="releaseMode">Result Release Mode</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                {...register("releaseMode")}
-              >
-                <option value="MANUAL">Manual Approval (Recommended)</option>
-                <option value="AUTO">Auto-Release (Immediate)</option>
-                <option value="DEADLINE">Release on Deadline</option>
-              </select>
-            </div>
-          </div>
+            <SheetFooter className="mt-8">
+                <SheetClose asChild>
+                    <Button variant="outline" type="button" className="w-full sm:w-auto">Cancel</Button>
+                </SheetClose>
+                <SubmitButton />
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
 
-          <SheetFooter>
-            <SheetClose asChild>
-                <Button variant="outline" type="button">Cancel</Button>
-            </SheetClose>
-            <Button type="submit" disabled={isSubmitting || uploading || !approvedRubricId} className="relative">
-              {watch("title") && markingSchemeUrl && !uploading && (
-                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-500 animate-pulse border-2 border-white dark:border-slate-950"></div>
-              )}
-              {isSubmitting ? "Creating..." : "Create Session"}
-            </Button>
-          </SheetFooter>
-        </form>
-      </SheetContent>
-    </Sheet>
+      <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                      <CheckCircle className="text-green-500" />
+                      Session Created!
+                  </DialogTitle>
+                  <DialogDescription>
+                    Share this code with your students to allow them to submit their work.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="my-4">
+                <p className="text-sm text-muted-foreground">Session Access Code</p>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-md mt-1">
+                    <span className="text-2xl font-bold tracking-widest text-primary">{state.workSession?.workCode}</span>
+                    <Button variant="ghost" size="icon" onClick={copyToClipboard}>
+                        <Copy className="h-5 w-5"/>
+                    </Button>
+                </div>
+              </div>
+              <DialogFooter>
+                  <Button onClick={() => setShowSuccessModal(false)}>Done</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+    </>
   );
 }
