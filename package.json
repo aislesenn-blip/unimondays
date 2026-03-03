@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "npx prisma@5.17.0 generate && next build",
+    "build": "next build",
     "start": "next start",
     "start:worker": "tsx scripts/start-worker.ts",
     "lint": "next lint"
