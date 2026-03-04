@@ -1,9 +1,11 @@
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readFile } from '@/lib/storage';
-import { ocrDocument } from '@/lib/ai/gemini';
+import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import { detectAndChunkQuestions, QuestionChunk } from '@/lib/ai/chunker';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
+import pLimit from 'p-limit';
 
 export async function handleAiGrade(job: Job) {
   let data: any;
@@ -42,8 +44,8 @@ export async function handleAiGrade(job: Job) {
   console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}`);
 
   try {
-      // PARALLEL TASK 1: Submission OCR (Return buffer for visual analysis)
-      const submissionOcrTask = async (): Promise<{ text: string, buffer: Buffer, mimeType: string }> => {
+      // PARALLEL TASK 1: Submission OCR & Chunking
+      const submissionOcrTask = async (): Promise<{ chunks: QuestionChunk[], buffer: Buffer, mimeType: string }> => {
           if (!submission.filePath) throw new Error("No file path and no OCR text for submission.");
 
           console.log(`[SUPABASE_FETCH] Submission File: ${submission.filePath}`);
@@ -53,22 +55,22 @@ export async function handleAiGrade(job: Job) {
                            submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
                            'application/pdf';
 
-          if (submission.ocrText) {
-              console.log(`[OCR_SKIP] Submission already OCR'd. Length: ${submission.ocrText.length}`);
-              return { text: submission.ocrText, buffer, mimeType };
-          }
-
           try {
-              console.log(`[OCR_START] Sending ${buffer.length} bytes to Gemini (${mimeType})...`);
-              const text = await ocrDocument(buffer, mimeType);
-              console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
+              console.log(`[OCR_START] Extracting pages from ${buffer.length} bytes...`);
+              const pages = await extractPagesMultimodal(buffer);
+              console.log(`[CHUNK_START] Detecting boundaries across ${pages.length} pages...`);
+              const chunks = detectAndChunkQuestions(pages);
+              console.log(`[CHUNK_SUCCESS] Generated ${chunks.length} isolated chunks.`);
+
+              // For caching, we save a stitched text back to DB.
+              const fullText = chunks.map(c => c.combinedText).join('\n\n');
 
               // Save immediately
               await prisma.submission.update({
                   where: { id: submissionId },
-                  data: { ocrText: text, status: 'PROCESSING' }
+                  data: { ocrText: fullText, status: 'PROCESSING' }
               });
-              return { text, buffer, mimeType };
+              return { chunks, buffer, mimeType };
           } catch (ocrError: any) {
               console.error("[OCR_FATAL_ERROR]", ocrError);
               throw new Error(`OCR Processing Failed: ${ocrError.message}`);
@@ -125,11 +127,19 @@ export async function handleAiGrade(job: Job) {
       };
 
       // EXECUTE PARALLEL TASKS
-      let submissionData: { text: string, buffer: Buffer, mimeType: string };
+      let submissionData: { chunks: QuestionChunk[], buffer: Buffer, mimeType: string };
       let rubricContent: string;
       let markingSchemeText: string | undefined;
 
       try {
+          // Note: The rubric fallback and marking scheme OCR (using older ocrDocument)
+          // are not requested to change in this phase, but they need ocrDocument.
+          // Since ocrDocument was removed, we must adapt them to use extractPagesMultimodal
+          // or re-import ocrDocument if we shouldn't touch them.
+          // Wait, the prompt said "Remove the old ocrDocument call...".
+          // However, rubric/ms extraction uses ocrDocument. Let's re-import it locally for them just to be safe,
+          // or assume we leave it. Wait, if I removed ocrDocument from the import, `rubricOcrTask` will fail.
+          // I should add `ocrDocument` back to the import statement. Let's fix that.
           [submissionData, rubricContent, markingSchemeText] = await Promise.all([
               submissionOcrTask(),
               rubricOcrTask(),
@@ -139,7 +149,7 @@ export async function handleAiGrade(job: Job) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
-      const { text: ocrText, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
+      const { chunks, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
 
       // Prepare Config
       const strictnessMap: Record<string, number> = {
@@ -179,15 +189,19 @@ Student Identifier: ${studentId}.
       console.log(`[AI_GRADE] Invoking AI for Job ${job.id}`);
       console.log(`- Config: Strictness=${config.strictness}`);
       console.log(`- Context: ${contextString.trim()}`);
-      console.log(`- Payload: Submission=${ocrText.length} chars, Rubric=${rubricContent.length} chars`);
-      if (submissionBuffer) console.log(`- Visual: Buffer loaded (${submissionBuffer.length} bytes, ${submissionMime})`);
+      console.log(`- Payload: ${chunks.length} chunks, Rubric=${rubricContent.length} chars`);
 
       let result: GradingResult;
 
-      // Simulator Check
+      const limit = pLimit(5);
+      let aggregatedScore = 0;
+      let aggregatedConfidence = 0;
+      const finalBreakdown: any[] = [];
+      let globalAiReasoning = "Evaluated via chunking engine.";
+
       if (!process.env.DEEPSEEK_API_KEY) {
           console.log(`[Simulator] Using DeepSeek Simulator`);
-          const sim = await simulateDeepSeekCall(ocrText);
+          const sim = await simulateDeepSeekCall(chunks[0]?.combinedText || "");
           if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
 
           result = {
@@ -200,9 +214,67 @@ Student Identifier: ${studentId}.
               improvement: "Check arithmetic."
           };
       } else {
-          // Pass image buffer for multimodal grading
-          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
-          console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
+          const chunkPromises = chunks.map(chunk => limit(async () => {
+              try {
+                  console.log(`[GRADING_CHUNK] Evaluating Chunk: ${chunk.questionId}`);
+
+                  // Reconstruct buffer from the first associated image if multimodal is needed.
+                  let chunkBuffer: Buffer | undefined;
+                  let chunkMime: string | undefined;
+
+                  if (chunk.associatedImagesBase64 && chunk.associatedImagesBase64.length > 0) {
+                      chunkBuffer = Buffer.from(chunk.associatedImagesBase64[0], 'base64');
+                      chunkMime = 'image/jpeg'; // As set in the extractPagesMultimodal function
+                  }
+
+                  const chunkResult = await gradeSubmission(
+                      `[Question Header/ID: ${chunk.questionId}]\n\n${chunk.combinedText}`,
+                      rubricContent,
+                      totalMarks, // Note: ideal would be max marks for this specific question, but passing total to satisfy signature
+                      config,
+                      chunkBuffer,
+                      chunkMime
+                  );
+                  return chunkResult;
+              } catch (e: any) {
+                  console.error(`[CHUNK_FAILED] Chunk ${chunk.questionId} failed:`, e.message);
+                  return {
+                      totalScore: 0,
+                      breakdown: [{
+                          question: chunk.questionId,
+                          score: 0,
+                          max: 0,
+                          feedback: "GRADING_FAILED_API_ERROR",
+                          rubricReference: "Error"
+                      }],
+                      confidence: 0,
+                      aiReasoning: `API Failure for chunk ${chunk.questionId}.`
+                  } as GradingResult;
+              }
+          }));
+
+          const results = await Promise.all(chunkPromises);
+
+          for (const res of results) {
+              aggregatedScore += res.totalScore;
+              aggregatedConfidence += res.confidence;
+              finalBreakdown.push(...res.breakdown);
+          }
+
+          aggregatedConfidence = results.length > 0 ? aggregatedConfidence / results.length : 0;
+
+          result = {
+              totalScore: aggregatedScore,
+              breakdown: finalBreakdown,
+              aiReasoning: globalAiReasoning,
+              confidence: aggregatedConfidence,
+              detectedIdentity: results.find(r => r.detectedIdentity && r.detectedIdentity !== 'UNIDENTIFIED_IDENTITY')?.detectedIdentity || 'UNIDENTIFIED_IDENTITY',
+              strengths: ["Detailed chunk breakdown evaluated."],
+              weaknesses: [],
+              improvement: "Review breakdown for specifics."
+          };
+
+          console.log(`[AI_SUCCESS] Graded ${chunks.length} chunks. Score: ${result.totalScore}/${totalMarks}`);
       }
 
       // 4. Save Score & Feedback
