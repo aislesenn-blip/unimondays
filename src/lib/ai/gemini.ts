@@ -1,14 +1,12 @@
 import OpenAI from 'openai';
-import pLimit from 'p-limit';
-
-// Polyfill required for pdf-to-img in Node.js/Serverless environments
 import { DOMMatrix, DOMPoint, DOMRect } from '@napi-rs/canvas';
-if (typeof globalThis.DOMMatrix === 'undefined') {
-  globalThis.DOMMatrix = DOMMatrix as any;
-  globalThis.DOMPoint = DOMPoint as any;
-  globalThis.DOMRect = DOMRect as any;
-}
 import { pdf } from 'pdf-to-img';
+
+if (typeof globalThis !== 'undefined') {
+  (globalThis as any).DOMMatrix = DOMMatrix;
+  (globalThis as any).DOMPoint = DOMPoint;
+  (globalThis as any).DOMRect = DOMRect;
+}
 
 // Ensure we don't crash at build time if env var is missing,
 // but validation logic inside functions will handle runtime checks.
@@ -262,4 +260,93 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
     }
     throw new Error(`Failed to analyze PDF structure: ${error.message}`);
   }
+}
+
+export interface PageData {
+  pageNumber: number;
+  extractedText: string;
+  pageImageBase64: string; // The visual buffer of this specific page
+}
+
+/**
+ * Extracts text page-by-page from a PDF by converting each page to an image and routing it to Gemini Vision.
+ * Implements strict batched concurrency to prevent Node.js OOM crashes and LLM API Rate Limits.
+ */
+export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageData[]> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not set. Multimodal extraction unavailable.");
+  }
+
+  console.log(`[MULTIMODAL_SLICER] Initializing PDF processing...`);
+
+  // 1. Initialize the lightweight PDF document
+  const document = await pdf(pdfBuffer, { scale: 1.5 }); // scale: 1.5 provides good resolution without massive memory footprint
+  const pageCount = document.length;
+  console.log(`[MULTIMODAL_SLICER] PDF loaded. Total pages: ${pageCount}`);
+
+  const results: PageData[] = [];
+  const BATCH_SIZE = 3; // Strict concurrency limit to prevent 429s and OOM
+
+  // 2. Process in strict sequential batches
+  for (let i = 1; i <= pageCount; i += BATCH_SIZE) {
+    const batchStart = i;
+    const batchEnd = Math.min(i + BATCH_SIZE - 1, pageCount);
+    console.log(`[MULTIMODAL_SLICER] Processing Batch: Pages ${batchStart} to ${batchEnd}...`);
+
+    const batchPromises: Promise<PageData>[] = [];
+
+    for (let pageNum = batchStart; pageNum <= batchEnd; pageNum++) {
+      batchPromises.push((async () => {
+        // Render specific page to Image Buffer (JPEG is lighter than PNG)
+        const pageImageBuffer = await document.getPage(pageNum);
+        const base64Data = pageImageBuffer.toString("base64");
+        const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+
+        // Send strictly this page to Gemini Vision
+        const response = await openai.chat.completions.create({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Extract all handwritten and printed text, tables, and diagrams from this document page. Return it as clean markdown. Do not hallucinate data." },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: dataUrl,
+                    detail: "high"
+                  }
+                }
+              ],
+            },
+          ],
+          max_tokens: 4096,
+          temperature: 0.0,
+          top_p: 0.1,
+          seed: 12345
+        });
+
+        const text = response.choices[0]?.message?.content;
+        if (!text) throw new Error(`No text returned for page ${pageNum}`);
+
+        return {
+          pageNumber: pageNum,
+          extractedText: text,
+          pageImageBase64: base64Data
+        };
+      })());
+    }
+
+    // Await the batch to finish before proceeding to the next chunk
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults);
+
+    // 3. Memory safety: Opportunistic Garbage Collection hint & wait
+    console.log(`[MULTIMODAL_SLICER] Batch completed. Clearing memory context...`);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause to cool off LLM rate limits
+    if (global.gc) global.gc(); // Force GC if exposed (requires node --expose-gc)
+  }
+
+  console.log(`[MULTIMODAL_SLICER] Extraction fully complete for ${pageCount} pages.`);
+  return results.sort((a, b) => a.pageNumber - b.pageNumber); // Ensure sequential integrity
 }
