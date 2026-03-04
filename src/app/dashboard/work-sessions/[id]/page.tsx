@@ -1,94 +1,121 @@
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
-import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable";
-import { WorkSessionControls } from "@/components/dashboard/WorkSessionControls";
-import { getWorkSessionDetails } from "./actions";
-import { getSubmissionsForSession } from "@/app/actions/teacher"; // Corrected import path
+import prisma from "@/lib/db/prisma";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default async function WorkSessionDetailsPage({ params }: { params: { id: string } }) {
-  const supabase = createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { userId } = auth();
 
-  const session = await getWorkSessionDetails(params.id);
-  if (!session) notFound();
-  
-  if (session.lecturerId !== user.id && !user.user_metadata.isAdmin) {
-      redirect("/dashboard");
+  if (!userId) {
+    redirect("/login");
   }
 
-  // Fetch submissions using the new server action
-  const submissions = await getSubmissionsForSession(params.id);
+  const session = await prisma.workSession.findUnique({
+    where: { id: params.id },
+    include: {
+      class: true,
+      submissions: {
+        include: {
+          student: true,
+          score: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      rubric: true,
+    },
+  });
 
-  // Serialize Date objects to strings for Client Components
-  const serializedSession = {
-    ...session,
-    appealDeadline: session.appealDeadline ? session.appealDeadline.toISOString() : null,
-  };
-
-  const serializedSubmissions = submissions.map(s => ({
-      ...s,
-      submittedAt: s.submittedAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString(),
-      // Ensure nested objects with dates are also serialized
-      user: s.student ? {
-          ...s.student,
-          createdAt: s.student.createdAt.toISOString(),
-          updatedAt: s.student.updatedAt.toISOString(),
-      } : null,
-      score: s.score ? {
-          ...s.score,
-          createdAt: s.score.createdAt.toISOString(),
-          updatedAt: s.score.updatedAt.toISOString(),
-      } : null,
-      appeals: s.appeals.map(a => ({
-          ...a,
-          createdAt: a.createdAt.toISOString(),
-          updatedAt: a.updatedAt.toISOString(),
-      }))
-  }));
+  if (!session) {
+    redirect("/dashboard");
+  }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between border-b pb-6">
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
         <div>
-            <div className="flex items-center gap-2 mb-1">
-                <Link prefetch={true} href={`/dashboard/classes/${session.classId}`} className="text-sm text-muted-foreground hover:underline">
-                    {session.class?.code}
-                </Link>
-                <span className="text-muted-foreground">/</span>
-                <span className="text-sm font-medium">{session.title}</span>
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight">{session.title}</h1>
-            <div className="flex items-center gap-4 mt-2">
-                <Badge variant="outline" className="font-mono">{session.workCode}</Badge>
-                <span className="text-sm text-muted-foreground">
-                    {submissions.length} Submissions
-                </span>
-            </div>
+          <h2 className="text-3xl font-bold tracking-tight">{session.title}</h2>
+          <p className="text-slate-500">Class: {session.class.name}</p>
         </div>
-        <div className="flex gap-2">
-             {session.rubricId && (
-                 <a href={`/api/rubrics/${session.rubricId}`} target="_blank" rel="noopener noreferrer">
-                     <Button variant="outline">
-                         <FileText className="mr-2 h-4 w-4" />
-                         View Rubric
-                     </Button>
-                 </a>
-             )}
+        <div className="text-right">
+          <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Work Code
+          </p>
+          <div className="text-2xl font-mono font-bold bg-slate-100 px-4 py-2 rounded-lg inline-block border text-slate-900 tracking-widest shadow-sm">
+            {session.workCode}
+          </div>
         </div>
       </div>
 
-      {/* V2.0 Controls */}
-      <WorkSessionControls session={serializedSession} />
-
-      <div className="rounded-md border bg-card">
-         {/* Live Client Component for "Magic" Updates */}
-         <LiveSubmissionTable initialSubmissions={serializedSubmissions} workSession={serializedSession} />
+      <div className="space-y-4">
+        <h3 className="text-xl font-semibold">Submissions</h3>
+        {session.submissions.length === 0 ? (
+          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-md border border-dashed p-8 text-center bg-white shadow-sm">
+            <h3 className="mt-4 text-lg font-semibold">No submissions yet</h3>
+            <p className="mb-4 mt-2 text-sm text-slate-500">
+              Share the Work Code <strong>{session.workCode}</strong> with your students to receive submissions.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-md border bg-white shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student Email</TableHead>
+                  <TableHead>Submitted At</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Score</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {session.submissions.map((sub) => (
+                  <TableRow key={sub.id}>
+                    <TableCell className="font-medium">{sub.student.email}</TableCell>
+                    <TableCell>{new Date(sub.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={`
+                          ${sub.status === "PROCESSING" ? "bg-amber-100 text-amber-700" : ""}
+                          ${sub.status === "GRADED" ? "bg-green-100 text-green-700" : ""}
+                          ${sub.status === "FAILED" ? "bg-red-100 text-red-700" : ""}
+                        `}
+                      >
+                        {sub.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {sub.score ? (
+                        <span className="font-bold">{sub.score.totalScore.toFixed(1)}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {sub.status === "GRADED" && (
+                        <Link
+                          href={`/dashboard/submissions/${sub.id}`}
+                          className="text-sm text-blue-600 hover:underline font-medium"
+                        >
+                          View Audit Trail
+                        </Link>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,34 +1,43 @@
+import { UserButton } from "@clerk/nextjs";
+import Link from "next/link";
+import { BookOpen, Home, Layers } from "lucide-react";
 
-import { DashboardShell } from "@/components/layout/DashboardShell";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { UserAccountNav } from "@/components/layout/UserAccountNav";
-import { MainNav } from "@/components/layout/MainNav";
-
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createServerClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const userProfile = {
-      name: user.user_metadata.full_name || user.email,
-      email: user.email,
-      image: user.user_metadata.avatar_url
-  }
-
   return (
-    <DashboardShell 
-      nav={<MainNav />} 
-      userNav={<UserAccountNav user={userProfile} />}>
-      {children}
-    </DashboardShell>
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <header className="sticky top-0 z-50 w-full border-b bg-white">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="flex gap-6 md:gap-10">
+            <Link href="/dashboard" className="flex items-center space-x-2">
+              <span className="inline-block font-bold">Playbook</span>
+            </Link>
+            <nav className="flex gap-6">
+              <Link
+                href="/dashboard"
+                className="flex items-center text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/dashboard/classes"
+                className="flex items-center text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+              >
+                Classes
+              </Link>
+            </nav>
+          </div>
+          <div className="flex flex-1 items-center justify-end space-x-4">
+            <nav className="flex items-center space-x-1">
+              <UserButton afterSignOutUrl="/" />
+            </nav>
+          </div>
+        </div>
+      </header>
+      <main className="flex-1 container py-8">{children}</main>
+    </div>
   );
 }

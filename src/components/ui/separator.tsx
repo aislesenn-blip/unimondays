@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import * as SeparatorPrimitive from "@radix-ui/react-separator"
 
@@ -8,12 +10,12 @@ const Separator = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>
 >(
   (
-    { className, orientation = "horizontal", ...props },
+    { className, orientation = "horizontal", decorative = true, ...props },
     ref
   ) => (
     <SeparatorPrimitive.Root
       ref={ref}
-      // decorative={decorative} // Radix Primitive defaults are fine, but decorative is often passed
+      decorative={decorative}
       orientation={orientation}
       className={cn(
         "shrink-0 bg-border",

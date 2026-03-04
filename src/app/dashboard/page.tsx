@@ -1,66 +1,91 @@
-
-import { createClient as createServerClient } from "@/lib/supabase/server";
+import prisma from "@/lib/db/prisma";
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { CreateClassSheet } from "@/components/dashboard/CreateClassSheet";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Folder } from "lucide-react";
-import { getClasses } from "./actions";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Plus } from "lucide-react";
 
 export default async function DashboardPage() {
-  const supabase = createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { userId } = auth();
 
-  if (!user) {
-      redirect("/login");
+  if (!userId) {
+    redirect("/login");
   }
 
-  const classes = await getClasses(user.id);
+  // Ensure user exists in db
+  const user = await prisma.user.upsert({
+    where: { id: userId },
+    update: {},
+    create: {
+      id: userId,
+      email: `${userId}@example.com`, // We will need Clerk webhook in production
+      role: "LECTURER",
+    },
+  });
+
+  const classes = await prisma.class.findMany({
+    where: { lecturerId: userId },
+    include: {
+      _count: {
+        select: { sessions: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-            <h1 className="text-3xl font-bold tracking-tight">My Classes</h1>
-            <p className="text-muted-foreground mt-1">Manage your cohorts and assignments.</p>
+          <h2 className="text-3xl font-bold tracking-tight">Classes</h2>
+          <p className="text-slate-500">Manage your courses and work sessions.</p>
         </div>
-        <CreateClassSheet />
+        <Link href="/dashboard/classes/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" /> New Class
+          </Button>
+        </Link>
       </div>
 
       {classes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center bg-card/50">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Folder className="h-6 w-6 text-primary" />
-            </div>
+        <div className="flex min-h-[400px] flex-col items-center justify-center rounded-md border border-dashed p-8 text-center animate-in fade-in-50">
+          <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center">
             <h3 className="mt-4 text-lg font-semibold">No classes created</h3>
-            <p className="mb-4 mt-2 text-sm text-muted-foreground max-w-sm">
-                Get started by creating your first class to organize work sessions and students.
+            <p className="mb-4 mt-2 text-sm text-slate-500">
+              You haven't created any classes yet. Create one to start managing
+              work sessions and rubrics.
             </p>
-            <CreateClassSheet />
+            <Link href="/dashboard/classes/new">
+              <Button size="sm" className="relative">
+                Create Class
+              </Button>
+            </Link>
+          </div>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {classes.map((cls) => (
-                <Link prefetch={true} key={cls.id} href={`/dashboard/classes/${cls.id}`}>
-                    <Card className="hover:bg-accent/50 transition-colors cursor-pointer h-full border-l-4 border-l-primary group">
-                        <CardHeader>
-                            <div className="flex justify-between items-start">
-                                <CardTitle className="text-xl">{cls.code}</CardTitle>
-                            </div>
-                            <CardDescription className="line-clamp-1 text-base">{cls.name}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex justify-between text-sm text-muted-foreground pt-4 border-t group-hover:border-primary/20 transition-colors">
-                                <span>{(cls as any).semester || 'No Semester'}</span>
-                                <span className="flex items-center gap-1 font-medium text-foreground">
-                                    <Folder className="h-4 w-4" />
-                                    {cls._count.workSessions} Sessions
-                                </span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </Link>
-            ))}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {classes.map((c) => (
+            <Link key={c.id} href={`/dashboard/classes/${c.id}`}>
+              <Card className="hover:bg-slate-50 hover:shadow-sm transition-all shadow-none">
+                <CardHeader>
+                  <CardTitle>{c.name}</CardTitle>
+                  <CardDescription>Code: {c.code}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-slate-500">
+                    {c._count.sessions} Work Sessions
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
         </div>
       )}
     </div>
