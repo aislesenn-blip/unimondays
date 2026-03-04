@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '20mb',
     },
   },
+  serverExternalPackages: [
+    '@napi-rs/canvas',
+    'pdf-to-img'
+  ],
 };
 
 export default nextConfig;
