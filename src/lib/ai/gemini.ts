@@ -72,6 +72,115 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
   }
 }
 
+export interface PageData {
+  pageNumber: number;
+  extractedText: string;
+  pageImageBase64: string;
+}
+
+export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageData[]> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not set. Extraction service unavailable.");
+  }
+
+  console.log(`[MULTIMODAL_EXTRACT] Starting extraction. Buffer size: ${pdfBuffer.length} bytes`);
+
+  const results: PageData[] = [];
+  const BATCH_SIZE = 3;
+
+  try {
+    // pdf-to-img returns an async iterator, loading pages lazily to prevent OOM
+    const document = await pdf(pdfBuffer, { scale: 1.5 }); // scale 1.5 for good OCR balance
+
+    let pageNum = 1;
+    let currentBatch: Promise<PageData>[] = [];
+
+    // Define the extraction task logic
+    const createExtractionTask = async (currentPage: number, imageBuffer: Buffer): Promise<PageData> => {
+      console.log(`[MULTIMODAL_EXTRACT] Processing Page ${currentPage}...`);
+      const base64Image = imageBuffer.toString('base64');
+      const dataUrl = `data:image/jpeg;base64,${base64Image}`;
+      let pageText = "";
+
+      try {
+        const response = await openai.chat.completions.create({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Extract all handwritten and printed text, as well as descriptions of any diagrams or sketches from this page. Return it as clean markdown. If the page is blank, return 'BLANK_PAGE'." },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: dataUrl,
+                    detail: "high"
+                  }
+                }
+              ],
+            },
+          ],
+          max_tokens: 2000,
+          temperature: 0.0, // Enforce determinism
+        });
+
+        pageText = response.choices[0]?.message?.content || "BLANK_PAGE";
+      } catch (error: any) {
+         console.error(`[MULTIMODAL_EXTRACT] Gemini Error on Page ${currentPage}:`, error.message);
+         pageText = "EXTRACTION_FAILED";
+      }
+
+      return {
+        pageNumber: currentPage,
+        extractedText: pageText,
+        pageImageBase64: base64Image
+      };
+    };
+
+    for await (const imageBuffer of document) {
+      const currentPage = pageNum++;
+
+      // Add the task to the current batch
+      currentBatch.push(createExtractionTask(currentPage, imageBuffer));
+
+      // If the batch reaches the maximum size, wait for it to finish before pulling more pages
+      if (currentBatch.length >= BATCH_SIZE) {
+        const resolvedBatch = await Promise.all(currentBatch);
+        results.push(...resolvedBatch);
+
+        // Clear the batch
+        currentBatch = [];
+
+        // Opportunistic Garbage Collection to free memory holding the 3 base64 strings
+        if (global.gc) {
+          global.gc();
+        }
+      }
+    }
+
+    // Process any remaining pages in the final batch
+    if (currentBatch.length > 0) {
+      const resolvedBatch = await Promise.all(currentBatch);
+      results.push(...resolvedBatch);
+
+      if (global.gc) {
+          global.gc();
+      }
+    }
+
+    // Ensure sequential ordering
+    results.sort((a, b) => a.pageNumber - b.pageNumber);
+
+    console.log(`[MULTIMODAL_EXTRACT] Successfully extracted ${results.length} pages.`);
+
+    return results;
+
+  } catch (error: any) {
+    console.error(`[MULTIMODAL_EXTRACT_FATAL] PDF Parsing Failed:`, error);
+    throw new Error(`Failed to parse PDF pages: ${error.message}`);
+  }
+}
+
 export interface PdfSplit {
   regNo: string;
   name?: string;
