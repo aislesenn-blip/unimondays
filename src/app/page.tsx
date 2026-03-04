@@ -8,318 +8,217 @@ import {
   BarChart2,
   ShieldCheck,
   Download,
-  MessageSquare,
   CheckCircle2,
   ArrowRight,
   BrainCircuit,
   Upload,
-  Zap
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans text-foreground">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-slate-900 selection:text-white">
       <Navbar />
 
-      <main className="flex-1 pt-20">
+      <main className="flex-1 pt-24 md:pt-32">
         {/* Hero Section */}
-        <section className="relative overflow-hidden py-20 md:py-32 lg:py-40 px-6 md:px-12 max-w-7xl mx-auto text-center md:text-left">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
-                Empower Your Teaching with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400">Intelligent Grading Assistance.</span>
-              </h1>
-              <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-                Gain unmatched accuracy and reclaim valuable time. Our AI assistant handles the routine grading against your gold standard, letting you focus on mentoring and curriculum.
-              </p>
+        <section className="relative px-6 md:px-12 max-w-6xl mx-auto text-center md:text-left pb-24 md:pb-32">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+              <div className="space-y-4">
+                <h1 className="text-5xl md:text-6xl lg:text-7xl font-light tracking-tight text-slate-900 leading-[1.1]">
+                  Grade with <br />
+                  <span className="font-semibold text-slate-900">Precision.</span>
+                </h1>
+                <p className="text-xl md:text-2xl text-slate-500 max-w-xl font-light leading-relaxed">
+                  The enterprise AI grading engine built for modern institutions. Clinical accuracy, complete transparency, zero friction.
+                </p>
+              </div>
+
               <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center md:justify-start">
-                <Link href="/login" className={cn(buttonVariants({ size: "lg" }), "h-12 px-8 text-base rounded-full")}>
+                <Link
+                  href="/login"
+                  className={cn(
+                    buttonVariants({ size: "lg" }),
+                    "h-14 px-8 text-base rounded-full bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
+                  )}
+                >
                   Start Grading Now <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
-                <Link href="/student/login" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-12 px-8 text-base rounded-full")}>
+                <Link
+                  href="/student/login"
+                  className={cn(
+                    buttonVariants({ size: "lg", variant: "outline" }),
+                    "h-14 px-8 text-base rounded-full border-slate-200 text-slate-900 hover:bg-slate-100 transition-colors"
+                  )}
+                >
                   Student Portal
                 </Link>
               </div>
             </div>
 
-            <div className="relative lg:h-[500px] w-full rounded-2xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-right-8 duration-1000 delay-200 border bg-muted/50 flex items-center justify-center group">
+            <div className="relative lg:h-[600px] w-full rounded-3xl overflow-hidden animate-in fade-in slide-in-from-right-8 duration-1000 delay-200">
                <img
                  src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1600&auto=format&fit=crop"
-                 alt="Diverse students collaborating in a modern workspace"
-                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                 alt="Students in modern workspace"
+                 className="absolute inset-0 w-full h-full object-cover grayscale-[20%] transition-transform duration-1000 hover:scale-105 hover:grayscale-0"
                />
-               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent"></div>
 
-               <div className="absolute bottom-8 left-8 right-8 text-white text-left z-10">
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
-                      <div className="flex items-center gap-3 mb-2">
-                          <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-xs">AI</div>
-                          <div>
-                              <div className="font-semibold text-sm">Grading Complete</div>
-                              <div className="text-xs text-white/70">Just now • Accuracy 99.8%</div>
-                          </div>
+               {/* Minimalist overlay */}
+               <div className="absolute bottom-8 left-8 right-8 z-10 flex justify-end">
+                  <div className="bg-white/95 backdrop-blur-md rounded-2xl p-5 border border-slate-100 shadow-sm max-w-sm">
+                      <div className="flex items-center gap-3 mb-3">
+                          <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                          <div className="font-medium text-sm text-slate-900">Analysis Complete</div>
                       </div>
-                      <p className="text-sm font-light">"Consistent, fair, and incredibly fast. The vault provides total transparency."</p>
+                      <p className="text-sm font-light text-slate-600">"Exceptional reasoning shown in Question 4. Full marks awarded."</p>
                   </div>
                </div>
             </div>
           </div>
         </section>
 
-        {/* Deep Explanation Section: Cloud Marking */}
-        <section className="py-24 bg-background">
-            <div className="max-w-7xl mx-auto px-6 md:px-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                    <div className="space-y-8">
-                        <h2 className="text-3xl font-bold tracking-tight">Cloud Marking: The Ultimate Bulk Grading Engine</h2>
-                        <p className="text-lg text-muted-foreground leading-relaxed">
-                            Stop grading papers one by one. With Cloud Marking, you upload a single PDF containing hundreds of exam scripts. Our AI engine automatically slices, indexes, and grades every student in minutes.
-                        </p>
-                        <div className="space-y-6">
-                            <div className="flex gap-4">
-                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                                    <Upload className="h-5 w-5" />
+        <div className="w-full h-[1px] bg-slate-200 max-w-6xl mx-auto"></div>
+
+        {/* The Engine Section */}
+        <section className="py-24 md:py-32 bg-slate-50">
+            <div className="max-w-6xl mx-auto px-6 md:px-12">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+                    <div className="space-y-10">
+                        <div className="space-y-4">
+                            <h2 className="text-3xl md:text-4xl font-light tracking-tight text-slate-900">The Grading Engine</h2>
+                            <p className="text-lg text-slate-500 font-light leading-relaxed">
+                                Upload a massive PDF of student scripts. Our infrastructure automatically slices, reads, and precisely maps answers to your exact standardized rubric.
+                            </p>
+                        </div>
+
+                        <div className="space-y-12">
+                            <div className="flex gap-6 group">
+                                <div className="text-slate-300 group-hover:text-slate-900 transition-colors">
+                                    <Upload strokeWidth={1} className="h-8 w-8" />
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-lg">1. Upload Bulk PDF</h3>
-                                    <p className="text-muted-foreground text-sm">Drag and drop your scanned exam packet. We support huge files up to 500 pages.</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-4">
-                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                                    <Zap className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-lg">2. Auto-Slice & Grade</h3>
-                                    <p className="text-muted-foreground text-sm">We detect student IDs, split the PDF into individual submissions, and apply your rubric.</p>
+                                <div className="space-y-1 pt-1">
+                                    <h3 className="font-medium text-lg text-slate-900">Direct Upload</h3>
+                                    <p className="text-slate-500 text-base font-light">Secure, fast ingest of raw documents directly to isolated enterprise buckets.</p>
                                 </div>
                             </div>
-                            <div className="flex gap-4">
-                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                                    <BarChart2 className="h-5 w-5" />
+
+                            <div className="flex gap-6 group">
+                                <div className="text-slate-300 group-hover:text-slate-900 transition-colors">
+                                    <Zap strokeWidth={1} className="h-8 w-8" />
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-lg">3. Instant Analytics</h3>
-                                    <p className="text-muted-foreground text-sm">Get a master gradebook and per-question breakdown instantly. Export to Excel with one click.</p>
+                                <div className="space-y-1 pt-1">
+                                    <h3 className="font-medium text-lg text-slate-900">Deterministic Extraction</h3>
+                                    <p className="text-slate-500 text-base font-light">Answers are parsed and evaluated strictly according to the tier-based rules you define.</p>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-6 group">
+                                <div className="text-slate-300 group-hover:text-slate-900 transition-colors">
+                                    <FileText strokeWidth={1} className="h-8 w-8" />
+                                </div>
+                                <div className="space-y-1 pt-1">
+                                    <h3 className="font-medium text-lg text-slate-900">Granular Audit Trail</h3>
+                                    <p className="text-slate-500 text-base font-light">Every mark awarded is linked to a specific quote from the student's submission.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div className="relative h-[500px] rounded-2xl overflow-hidden shadow-2xl border bg-muted/50 flex items-center justify-center">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-violet-500/10"></div>
-                        <img
-                            src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1600&auto=format&fit=crop"
-                            alt="Cloud Marking Dashboard"
-                            className="absolute inset-0 w-full h-full object-cover opacity-80"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="bg-background/90 backdrop-blur border rounded-xl p-6 shadow-xl max-w-sm">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                                        <CheckCircle2 className="h-6 w-6" />
-                                    </div>
-                                    <div>
-                                        <div className="font-bold">Processing Complete</div>
-                                        <div className="text-xs text-muted-foreground">142 Scripts Graded • 4m 12s</div>
-                                    </div>
+
+                    <div className="relative h-[600px] rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-sm flex items-center justify-center p-8">
+                        {/* Abstract representation of the engine */}
+                        <div className="w-full max-w-md space-y-6">
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs text-slate-400 font-medium tracking-wider uppercase">
+                                    <span>Processing Queue</span>
+                                    <span className="text-emerald-500">Active</span>
                                 </div>
-                                <div className="space-y-2">
-                                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                        <div className="h-full bg-green-500 w-full animate-pulse"></div>
-                                    </div>
-                                    <div className="flex justify-between text-xs text-muted-foreground">
-                                        <span>upload_final_exam.pdf</span>
-                                        <span>100%</span>
-                                    </div>
-                                </div>
+                                <div className="h-[1px] w-full bg-slate-100"></div>
                             </div>
+
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="flex items-center gap-4 py-3">
+                                    <div className="h-10 w-10 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 shrink-0">
+                                        <FileText strokeWidth={1} className="h-4 w-4 text-slate-400" />
+                                    </div>
+                                    <div className="flex-1 space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <div className="h-2 w-24 bg-slate-200 rounded-full"></div>
+                                            <div className="h-2 w-8 bg-slate-200 rounded-full"></div>
+                                        </div>
+                                        <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                            {i === 1 && <div className="h-full bg-slate-900 w-full"></div>}
+                                            {i === 2 && <div className="h-full bg-slate-900 w-3/4 animate-pulse"></div>}
+                                            {i === 3 && <div className="h-full bg-emerald-500 w-1/4 animate-pulse"></div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        {/* Feature Section */}
-        <section id="how-it-works" className="py-24 bg-secondary/30">
-          <div className="max-w-7xl mx-auto px-6 md:px-12">
-            <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-              <h2 className="text-3xl font-bold tracking-tight">Precision at Scale</h2>
-              <p className="text-muted-foreground text-lg">
-                A streamlined workflow designed for high-volume academic environments.
-              </p>
-            </div>
+        <div className="w-full h-[1px] bg-slate-200 max-w-6xl mx-auto"></div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                <div className="bg-card border rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="mx-auto h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center mb-6 text-blue-600">
-                        <Upload className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-xl font-bold mb-3">1. Define Standards</h3>
-                    <p className="text-muted-foreground">Upload your exact marking scheme. The system adheres strictly to your criteria, ensuring fairness across hundreds of scripts.</p>
+        {/* Features Section */}
+        <section className="py-24 md:py-32 bg-slate-50">
+             <div className="max-w-6xl mx-auto px-6 md:px-12">
+                <div className="mb-20">
+                    <h2 className="text-3xl md:text-4xl font-light tracking-tight text-slate-900 mb-4">Uncompromising Architecture</h2>
+                    <p className="text-xl text-slate-500 font-light max-w-2xl">
+                        Designed for scale, built for trust.
+                    </p>
                 </div>
-                <div className="bg-card border rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="mx-auto h-16 w-16 rounded-full bg-violet-100 flex items-center justify-center mb-6 text-violet-600">
-                        <Zap className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-xl font-bold mb-3">2. Frictionless Input</h3>
-                    <p className="text-muted-foreground">Students submit work via a simple code. No complex enrollments, just instant, secure digital hand-in.</p>
-                </div>
-                <div className="bg-card border rounded-2xl p-8 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="mx-auto h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mb-6 text-green-600">
-                        <CheckCircle2 className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-xl font-bold mb-3">3. Instant Feedback</h3>
-                    <p className="text-muted-foreground">Detailed, constructive feedback is generated alongside the score, providing students with actionable insights immediately.</p>
-                </div>
-            </div>
-          </div>
-        </section>
 
-        {/* Feature Grid */}
-        <section id="features" className="py-24">
-             <div className="max-w-7xl mx-auto px-6 md:px-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                    <div className="order-2 lg:order-1 relative h-[600px] rounded-2xl overflow-hidden shadow-2xl border">
-                        <img
-                            src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=1600&auto=format&fit=crop"
-                            alt="Data analytics on a screen in a modern office"
-                            className="absolute inset-0 w-full h-full object-cover"
-                        />
-                         <div className="absolute inset-0 bg-black/20"></div>
-                    </div>
-
-                    <div className="order-1 lg:order-2 space-y-8">
-                        <h2 className="text-3xl font-bold tracking-tight">Built for the Modern Campus</h2>
-                        <div className="grid grid-cols-1 gap-6">
-                          {[
-                            {
-                              icon: BrainCircuit,
-                              title: "DeepSeek AI Engine",
-                              desc: "Powered by advanced LLMs to understand nuance, handwriting, and complex reasoning in student answers."
-                            },
-                            {
-                              icon: FileText,
-                              title: "Transparent Vault",
-                              desc: "Students can access their graded work instantly. A clear, auditable trail for every mark awarded."
-                            },
-                            {
-                              icon: ShieldCheck,
-                              title: "Academic Integrity",
-                              desc: "Built-in plagiarism detection and pattern recognition to ensure the validity of every assessment."
-                            },
-                            {
-                              icon: BarChart2,
-                              title: "Continuous Assessment",
-                              desc: "Real-time analytics aggregating student performance across all work sessions in a semester."
-                            },
-                            {
-                              icon: Code,
-                              title: "Zero-Friction Access",
-                              desc: "No barriers to entry. Students connect via Work Codes, eliminating administrative overhead."
-                            },
-                            {
-                              icon: Download,
-                              title: "Administrative Export",
-                              desc: "One-click generation of master gradebooks and annotated script archives for departmental filing."
-                            },
-                            {
-                              icon: Upload,
-                              title: "Cloud Marking (Bulk PDF)",
-                              desc: "Upload a single PDF containing hundreds of exam scripts. We automatically slice, index, and grade them all."
-                            }
-                          ].map((feature, idx) => (
-                            <div key={idx} className="flex gap-4 items-start p-4 hover:bg-secondary/50 rounded-xl transition-colors">
-                              <div className="mt-1 bg-primary/10 p-2 rounded-lg shrink-0">
-                                <feature.icon className="h-5 w-5 text-primary" />
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-lg">{feature.title}</h3>
-                                <p className="text-muted-foreground text-sm leading-relaxed mt-1">{feature.desc}</p>
-                              </div>
-                            </div>
-                          ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-16">
+                    {[
+                    {
+                        icon: BrainCircuit,
+                        title: "Multi-Model Orchestration",
+                        desc: "Flash for extraction, Haiku for parsing, DeepSeek for deterministic reasoning. The right tool for the right job."
+                    },
+                    {
+                        icon: ShieldCheck,
+                        title: "Strict Hierarchical Logic",
+                        desc: "Grades strictly via exact match, equivalent concept, or partial match. Zero hallucinated leniency."
+                    },
+                    {
+                        icon: BarChart2,
+                        title: "Asynchronous Scale",
+                        desc: "Powered by enterprise job queues. Submit thousands of scripts without UI timeouts or hanging states."
+                    },
+                    {
+                        icon: Code,
+                        title: "WorkCode Distribution",
+                        desc: "Frictionless student access. Generate a WorkSession code and distribute it instantly."
+                    },
+                    {
+                        icon: CheckCircle2,
+                        title: "Instant Verification",
+                        desc: "Low-confidence grades trigger automatic review flags for manual lecturer calibration."
+                    },
+                    {
+                        icon: Download,
+                        title: "Departmental Export",
+                        desc: "Single-click extraction of formatted Excel sheets containing complete score breakdowns and evidence."
+                    }
+                    ].map((feature, idx) => (
+                    <div key={idx} className="group">
+                        <div className="mb-5 text-slate-400 group-hover:text-slate-900 transition-colors duration-300">
+                            <feature.icon strokeWidth={1} className="h-8 w-8" />
                         </div>
+                        <h3 className="font-medium text-lg text-slate-900 mb-2">{feature.title}</h3>
+                        <p className="text-slate-500 font-light leading-relaxed">{feature.desc}</p>
                     </div>
+                    ))}
                 </div>
              </div>
         </section>
 
-        {/* Outcomes Section */}
-        <section id="outcomes" className="py-24 bg-muted/30">
-          <div className="max-w-7xl mx-auto px-6 md:px-12 text-center">
-             <h2 className="text-3xl font-bold tracking-tight mb-8">Measurable Outcomes</h2>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="p-6 bg-background rounded-xl border shadow-sm">
-                   <div className="text-4xl font-extrabold text-blue-600 mb-2">90%</div>
-                   <p className="text-muted-foreground">Reduction in grading time</p>
-                </div>
-                <div className="p-6 bg-background rounded-xl border shadow-sm">
-                   <div className="text-4xl font-extrabold text-violet-600 mb-2">24/7</div>
-                   <p className="text-muted-foreground">Instant feedback availability</p>
-                </div>
-                <div className="p-6 bg-background rounded-xl border shadow-sm">
-                   <div className="text-4xl font-extrabold text-green-600 mb-2">100%</div>
-                   <p className="text-muted-foreground">Audit trail transparency</p>
-                </div>
-             </div>
-          </div>
-        </section>
-
-        {/* Partnerships Section */}
-        <section id="partnerships" className="py-24">
-          <div className="max-w-7xl mx-auto px-6 md:px-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight mb-12">Trusted By Leading Institutions</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-               {/* Placeholders as per memory */}
-               <div className="flex items-center justify-center p-4 border rounded-lg">
-                  <span className="font-bold text-xl">School of Engineering</span>
-               </div>
-               <div className="flex items-center justify-center p-4 border rounded-lg">
-                  <span className="font-bold text-xl">College of Business</span>
-               </div>
-               <div className="flex items-center justify-center p-4 border rounded-lg">
-                   <span className="font-bold text-xl">Institute of Technology</span>
-               </div>
-               <div className="flex items-center justify-center p-4 border rounded-lg">
-                   <span className="font-bold text-xl">Faculty of Sciences</span>
-               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* FAQs Section */}
-        <section id="faqs" className="py-24 bg-secondary/20">
-           <div className="max-w-3xl mx-auto px-6 md:px-12">
-              <h2 className="text-3xl font-bold tracking-tight text-center mb-12">Frequently Asked Questions</h2>
-              <div className="space-y-6">
-                 <div className="bg-background p-6 rounded-xl border shadow-sm">
-                    <h3 className="font-bold text-lg mb-2">Is the grading really automated?</h3>
-                    <p className="text-muted-foreground">Yes, our AI engine analyzes student submissions against your specific rubric to generate grades and feedback, which you can then review and approve.</p>
-                 </div>
-                 <div className="bg-background p-6 rounded-xl border shadow-sm">
-                    <h3 className="font-bold text-lg mb-2">How secure is student data?</h3>
-                    <p className="text-muted-foreground">We adhere to strict data protection standards. All data is encrypted in transit and at rest, and we provide a full audit trail for every action.</p>
-                 </div>
-                 <div className="bg-background p-6 rounded-xl border shadow-sm">
-                    <h3 className="font-bold text-lg mb-2">Can I customize the grading strictness?</h3>
-                    <p className="text-muted-foreground">Absolutely. You can configure the AI to be Lenient, Moderate, or Strict depending on the nature of the assessment.</p>
-                 </div>
-                 <div className="bg-background p-6 rounded-xl border shadow-sm">
-                    <h3 className="font-bold text-lg mb-2">What is Cloud Marking?</h3>
-                    <p className="text-muted-foreground">Cloud Marking is our bulk processing engine. You upload a single PDF containing all student scripts (e.g., 500 pages), and our system automatically splits them, identifies the student, and grades each one individually.</p>
-                 </div>
-                 <div className="bg-background p-6 rounded-xl border shadow-sm">
-                    <h3 className="font-bold text-lg mb-2">How many exam papers can I grade at once?</h3>
-                    <p className="text-muted-foreground">There is no hard limit. We regularly process bulk PDFs with hundreds of pages. The system queues them and processes them in parallel for maximum speed.</p>
-                 </div>
-                 <div className="bg-background p-6 rounded-xl border shadow-sm">
-                    <h3 className="font-bold text-lg mb-2">What file formats are supported?</h3>
-                    <p className="text-muted-foreground">We strictly support <strong>PDF</strong> for Cloud Marking to ensure maximum security and formatting preservation. For individual submissions, we also accept images (PNG, JPG).</p>
-                 </div>
-              </div>
-           </div>
-        </section>
       </main>
 
       <Footer />
