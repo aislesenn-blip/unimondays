@@ -27,7 +27,6 @@ export interface GradingResult {
     max: number;
     feedback: string;
     rubricReference?: string;
-    evidenceSnippet?: string;
   }>;
   aiReasoning: string;
   confidence: number;
@@ -95,7 +94,7 @@ MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)
 The teacher who created this exam has provided specific, non-negotiable grading rules. You MUST follow these instructions blindly. If the teacher's rules contradict any of your default empathetic or semantic guidelines, THE TEACHER'S RULES WIN.
 Teacher's Custom Instructions: \`\`\`${teacherCustomInstructions}\`\`\`
 
-MANDATE 0.1: STRICT 4-TIER EVALUATION ENGINE (INTERNAL LOGIC ONLY)
+MANDATE 1: STRICT 4-TIER EVALUATION ENGINE (INTERNAL LOGIC ONLY)
 For every question chunk you analyze against the rubric, you MUST process the student's answer using this exact 4-Tier logic before assigning marks:
 - TIER 1 (Exact Match): The student's answer precisely matches the rubric's key phrases. Award 100% of the allocated marks.
 - TIER 2 (Semantic Equivalent): The student uses different wording but conveys the exact same scientific or factual concept as the rubric. Award 100% of the allocated marks. Do not penalize for vocabulary if the concept is completely correct.
@@ -104,13 +103,13 @@ For every question chunk you analyze against the rubric, you MUST process the st
 
 IMPORTANT: Do NOT output the words "Tier 1", "Tier 2", etc., in your final JSON output. Use this logic internally to calculate the \`score\`. For every score assigned, you MUST extract a precise, short quotation from the student's text that justifies this score and place it in the \`evidenceSnippet\` field.
 
-MANDATE 0.2: MULTIPLE ATTEMPT RESOLUTION
+MANDATE 2: MULTIPLE ATTEMPT RESOLUTION
 If a student answers the exact same question multiple times (e.g., crossed out an answer but didn't erase it fully, or answered it again at the end of the exam):
 1. Grade EVERY attempt independently against the rubric.
 2. Award the marks for the HIGHEST scoring attempt only.
 3. NEVER exceed the maximum allocated marks for that specific question.
 
-MANDATE 1: THE MARKING SCHEME CALIBRATION
+MANDATE 3: THE MARKING SCHEME CALIBRATION
 Strictly evaluate the student's answer against the provided Marking Scheme. Apply the exact weightings and criteria the rubric dictates.
 
 MANDATE 4: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 3)
@@ -161,7 +160,7 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string" }
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string" }
   ],
   "aiReasoning": "string",
   "confidence": number,
