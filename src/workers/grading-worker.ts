@@ -182,8 +182,23 @@ export async function handleAiGrade(job: Job) {
       // Instead of raw OCR text, fetch the structured JSON representation.
       const fetchStandardizedRubricTask = async () => {
           if (!submission.workSession.standardizedRubricId) {
-               throw new Error("No Standardized Rubric linked to this WorkSession. Grading aborted in Phase 2 Atomic Mode.");
+               // Fallback: If no structured rubric is linked, OCR the raw marking scheme PDF
+               const schemeUrl = submission.workSession.markingScheme;
+               if (!schemeUrl) {
+                   throw new Error("No Standardized Rubric AND no Marking Scheme linked to this WorkSession. Grading aborted.");
+               }
+               console.log(`[LEGACY_RUBRIC] Standardized Rubric missing for ${submission.workSessionId}. Falling back to raw Marking Scheme OCR.`);
+
+               const buffer = await readFile(schemeUrl, 'exam_pdfs');
+               const mimeType = schemeUrl.toLowerCase().endsWith('.png') ? 'image/png' :
+                                schemeUrl.toLowerCase().endsWith('.jpg') || schemeUrl.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+                                'application/pdf';
+               const text = await ocrDocument(buffer, mimeType);
+
+               // Wrap it in a JSON structure to satisfy the deterministic math engine parser
+               return JSON.stringify({ isLegacyText: true, text: text }, null, 2);
           }
+
           const rubric = await prisma.standardizedRubric.findUnique({
               where: { id: submission.workSession.standardizedRubricId },
               include: {
@@ -422,14 +437,26 @@ Student Identifier: ${studentId}.
       let validQuestionsCount = 0;
 
       // Ensure we have a valid parsed rubric to match against for limits
-      const standardRubric = JSON.parse(rubricContent);
+      let standardRubric;
+      try {
+          standardRubric = JSON.parse(rubricContent);
+      } catch (e) {
+          standardRubric = { isLegacyText: true };
+      }
+      const isLegacy = standardRubric?.isLegacyText === true;
 
       const formattedBreakdown = result.results?.map((qResult) => {
           let questionScore = 0;
+          let maxMarksForQuestion = 0;
 
-          // Match the question in the DB rubric to find limits
-          const dbQuestion = standardRubric.questions.find((q: any) => q.questionId === qResult.question_id);
-          const maxMarksForQuestion = dbQuestion ? dbQuestion.marksAllocated : 0;
+          if (!isLegacy && standardRubric.questions) {
+              // Match the question in the DB rubric to find limits
+              const dbQuestion = standardRubric.questions.find((q: any) => q.questionId === qResult.question_id);
+              maxMarksForQuestion = dbQuestion ? dbQuestion.marksAllocated : 0;
+          } else {
+              // For legacy text rubrics, we don't have exact per-question limits. We fallback to session total.
+              maxMarksForQuestion = submission.workSession.totalMarks || 100;
+          }
 
           // L10 Hardening: Deterministic Math Sandbox. Prevent AI Hallucinations.
           // 1. Sum up concepts strictly
@@ -444,8 +471,11 @@ Student Identifier: ${studentId}.
               questionScore += awarded;
           }
 
-          // 2. Cap at Max Marks strictly to prevent 150/100 hallucinations
-          if (questionScore > maxMarksForQuestion) {
+          // 2. Cap at Max Marks strictly to prevent 150/100 hallucinations (only strict if not legacy)
+          if (!isLegacy && questionScore > maxMarksForQuestion) {
+              questionScore = maxMarksForQuestion;
+          } else if (isLegacy && questionScore > maxMarksForQuestion) {
+              // Cap legacy questions at total exam marks to prevent absurd hallucinations
               questionScore = maxMarksForQuestion;
           }
 
