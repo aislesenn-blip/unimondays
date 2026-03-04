@@ -94,19 +94,34 @@ MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)
 The teacher who created this exam has provided specific, non-negotiable grading rules. You MUST follow these instructions blindly. If the teacher's rules contradict any of your default empathetic or semantic guidelines, THE TEACHER'S RULES WIN.
 Teacher's Custom Instructions: \`\`\`${teacherCustomInstructions}\`\`\`
 
-MANDATE 1: THE MARKING SCHEME CALIBRATION
+MANDATE 1: STRICT 4-TIER EVALUATION ENGINE (INTERNAL LOGIC ONLY)
+For every question chunk you analyze against the rubric, you MUST process the student's answer using this exact 4-Tier logic before assigning marks:
+- TIER 1 (Exact Match): The student's answer precisely matches the rubric's key phrases. Award 100% of the allocated marks.
+- TIER 2 (Semantic Equivalent): The student uses different wording but conveys the exact same scientific or factual concept as the rubric. Award 100% of the allocated marks. Do not penalize for vocabulary if the concept is completely correct.
+- TIER 3 (Partial Concept): The answer contains some correct elements from the rubric but is incomplete or partially flawed. Award partial marks strictly proportional to the correct elements.
+- TIER 4 (Out of Scope / Wrong): The answer is factually incorrect or irrelevant to the rubric. Award 0 marks.
+
+IMPORTANT: Do NOT output the words "Tier 1", "Tier 2", etc., in your final JSON output. Use this logic internally to calculate the \`score\`. For every score assigned, you MUST extract a precise, short quotation from the student's text that justifies this score and place it in the \`evidenceSnippet\` field.
+
+MANDATE 2: MULTIPLE ATTEMPT RESOLUTION
+If a student answers the exact same question multiple times (e.g., crossed out an answer but didn't erase it fully, or answered it again at the end of the exam):
+1. Grade EVERY attempt independently against the rubric.
+2. Award the marks for the HIGHEST scoring attempt only.
+3. NEVER exceed the maximum allocated marks for that specific question.
+
+MANDATE 3: THE MARKING SCHEME CALIBRATION
 Strictly evaluate the student's answer against the provided Marking Scheme. Apply the exact weightings and criteria the rubric dictates.
 
-MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)
+MANDATE 4: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 3)
 If the teacher has NOT explicitly restricted synonyms or exact phrasing in their custom instructions, grade based on Conceptual Understanding. Do not punish students for using different words if the scientific/academic meaning is 100% correct.
 
-MANDATE 3: EMPATHY & OCR FORGIVENESS
+MANDATE 5: EMPATHY & OCR FORGIVENESS
 Ignore minor spelling mistakes, grammatical errors, or poor handwriting (e.g., reading 'Vontricle' instead of 'Ventricle') AS LONG AS the academic intent is mathematically or scientifically correct.
 
-MANDATE 4: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS
+MANDATE 6: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS
 When evaluating drawn sketches, graphs, or diagrams, analyze the visual geometry, spatial arrangement, and line connections. Grade the visual logic, not just the OCR text labels.
 
-MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT
+MANDATE 7: CHAIN OF THOUGHT REASONING & JSON OUTPUT
 Briefly reason through your grading decision internally before outputting the final score. Return the result STRICTLY in the requested JSON format.
 
 SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING
@@ -200,7 +215,9 @@ export async function gradeSubmission(
                 }
             ],
             response_format: { type: "json_object" },
-            temperature: 0.1,
+            temperature: 0.0,
+            top_p: 0.1,
+            seed: 12345,
             max_tokens: 4000,
         });
 
@@ -221,7 +238,9 @@ Student Submission:
 ${ocrText}` }
             ],
             response_format: { type: "json_object" },
-            temperature: 0.1,
+            temperature: 0.0,
+            top_p: 0.1,
+            seed: 12345,
             max_tokens: 4000, // Prevent infinite loops
         });
     }
