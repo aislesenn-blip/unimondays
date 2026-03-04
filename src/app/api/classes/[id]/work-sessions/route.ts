@@ -67,6 +67,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         workCode = `WK-${Date.now().toString().slice(-4)}`;
     }
 
+    // MANDATE: Normal Marking Rubric Linkage.
+    // Extract standardizedRubricId from the calibration JSON payload to properly wire the grading engine.
+    let parsedRubricId = null;
+    if (calibration) {
+        try {
+            const parsedCal = JSON.parse(calibration);
+            if (parsedCal.rubricId) {
+                parsedRubricId = parsedCal.rubricId;
+            }
+        } catch (e) {
+            console.warn("[WorkSession Creation] Failed to parse calibration JSON for rubricId extraction:", e);
+        }
+    }
+
     const session = await prisma.workSession.create({
       data: {
         title,
@@ -81,6 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         questionPaperUrl: questionPaperUrl || null,
         instructions: instructions || '',
         calibration: calibration || null, // Stored as JSON string
+        standardizedRubricId: parsedRubricId, // FIX: Wire the WorkSession to the StandardizedRubric!
         strictness: strictness || 'MODERATE',
         totalMarks: totalMarks ? parseInt(totalMarks) : 100,
         releaseMode: releaseMode || 'MANUAL',
