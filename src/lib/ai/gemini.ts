@@ -9,6 +9,12 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
   globalThis.DOMRect = DOMRect as any;
 }
 import { pdf } from 'pdf-to-img';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+
+// Vercel Serverless Build Fix: Force CDN for worker to bypass NFT stripping
+if (typeof process !== 'undefined' && process.env.VERCEL) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`;
+}
 
 // Ensure we don't crash at build time if env var is missing,
 // but validation logic inside functions will handle runtime checks.
