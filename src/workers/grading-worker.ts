@@ -2,10 +2,8 @@ import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readFile } from '@/lib/storage';
 import { ocrDocument, extractPagesMultimodal, PageData } from '@/lib/ai/gemini';
-import { detectAndChunkQuestions, QuestionChunk } from '@/lib/ai/chunker';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
-import pLimit from 'p-limit';
 
 export async function handleAiGrade(job: Job) {
   let data: any;
@@ -44,8 +42,8 @@ export async function handleAiGrade(job: Job) {
   console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}`);
 
   try {
-      // PARALLEL TASK 1: Submission Extraction & Chunking (Context Isolation)
-      const submissionExtractionTask = async (): Promise<{ chunks: QuestionChunk[], rawText: string }> => {
+      // STAGE 1: PARALLEL MULTIMODAL EXTRACTION (TRANSCRIPTION ONLY)
+      const submissionExtractionTask = async (): Promise<{ rawText: string }> => {
           if (!submission.filePath) throw new Error("No file path for submission.");
 
           console.log(`[SUPABASE_FETCH] Submission File: ${submission.filePath}`);
@@ -55,12 +53,7 @@ export async function handleAiGrade(job: Job) {
           console.log(`[MULTIMODAL_START] Extracting pages from PDF buffer...`);
           const pages: PageData[] = await extractPagesMultimodal(buffer);
 
-          // 2. Chunker Wiring
-          console.log(`[CHUNKER_START] Isolating questions from ${pages.length} pages...`);
-          const chunks = detectAndChunkQuestions(pages);
-          console.log(`[CHUNKER_SUCCESS] Detected ${chunks.length} isolated question chunks.`);
-
-          // We concatenate the raw text just to save to the ocrText DB field for debugging
+          // 2. Holistic Context Assembly (Stage 2 Prep)
           const rawText = pages.map(p => p.extractedText).join('\n\n--- PAGE BREAK ---\n\n');
 
           // Cache the extraction
@@ -69,7 +62,7 @@ export async function handleAiGrade(job: Job) {
               data: { ocrText: rawText, status: 'PROCESSING' }
           });
 
-          return { chunks, rawText };
+          return { rawText };
       };
 
       // PARALLEL TASK 2: Rubric OCR (with Caching)
@@ -121,7 +114,7 @@ export async function handleAiGrade(job: Job) {
       };
 
       // EXECUTE INITIAL PARALLEL TASKS
-      let extractedData: { chunks: QuestionChunk[], rawText: string };
+      let extractedData: { rawText: string };
       let rubricContent: string;
       let markingSchemeText: string | undefined;
 
@@ -135,7 +128,7 @@ export async function handleAiGrade(job: Job) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
-      const { chunks, rawText } = extractedData;
+      const { rawText } = extractedData;
 
       // Identity Extraction: Scavenge the raw text for a registration number
       const idMatch = rawText.match(/(?:REGISTRATION NUMBER|REG NO|STUDENT ID)[\s:]*([A-Za-z0-9\-]+)/i);
@@ -181,107 +174,59 @@ Student Identifier: ${studentId}.
         context: contextString
       };
 
-      // 3. FAULT-TOLERANT PARALLEL GRADING
+      // STAGE 2: COMBINED TEXT GRADING (HOLISTIC CONTEXT)
       const totalMarks = submission.workSession.totalMarks || 100;
-      console.log(`[AI_GRADE] Starting Parallel Grading for ${chunks.length} chunks. Limit: 5`);
+      console.log(`[AI_GRADE] Starting Holistic Text-Only Grading for Submission ${submissionId}.`);
 
-      const limit = pLimit(5);
-      const chunkPromises = chunks.map((chunk) => {
-          return limit(async (): Promise<GradingResult['breakdown'][0] | null> => {
-              if (chunk.questionId === "GLOBAL_METADATA" && chunk.combinedText.trim() === "") {
-                  return null; // Skip empty metadata chunks
-              }
+      let result: GradingResult;
 
-              console.log(`[AI_CHUNK] Grading chunk: ${chunk.questionId}`);
+      try {
+          if (!process.env.DEEPSEEK_API_KEY) {
+              console.log(`[Simulator] Using DeepSeek Simulator`);
+              const sim = await simulateDeepSeekCall(rawText);
+              result = {
+                  totalScore: sim.score,
+                  breakdown: sim.breakdown.map((b: any) => ({
+                      ...b,
+                      isRelevant: true,
+                      mappedRubricQuestion: b.question,
+                      evidenceSnippet: "SIMULATED_SNIPPET"
+                  })),
+                  aiReasoning: sim.reasoning,
+                  confidence: sim.confidence,
+                  detectedIdentity: extractedStudentId || "SIMULATED_ID"
+              };
+          } else {
+              result = await gradeSubmission(
+                  rawText,
+                  rubricContent,
+                  totalMarks,
+                  config,
+                  undefined, // Force text-only to avoid context overflow with images
+                  undefined
+              );
+              console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
+          }
+      } catch (gradingError: any) {
+          console.error(`[AI_GRADING_ERROR] Failed to grade holistic text:`, gradingError.message);
+          throw new Error(`Holistic Grading Failed: ${gradingError.message}`);
+      }
 
-              try {
-                  // If we are using the simulator
-                  if (!process.env.DEEPSEEK_API_KEY) {
-                      const sim = await simulateDeepSeekCall(chunk.combinedText);
-                      return {
-                          question: chunk.questionId,
-                          score: sim.score,
-                          max: 10, // Mock max
-                          feedback: sim.reasoning,
-                          evidenceSnippet: "SIMULATED_SNIPPET",
-                          rubricReference: "SIMULATED_REFERENCE",
-                          isRelevant: true,
-                          mappedRubricQuestion: "Q1"
-                      };
-                  }
-
-                  // Note: gradeSubmission currently accepts a single image buffer.
-                  // If chunks have multiple images, we'll pass the first one for now,
-                  // or pass undefined if none exist.
-                  const imageBuffer = chunk.associatedImagesBase64.length > 0
-                      ? Buffer.from(chunk.associatedImagesBase64[0], 'base64')
-                      : undefined;
-                  const mimeType = imageBuffer ? "image/jpeg" : undefined;
-
-                  const chunkResult = await gradeSubmission(
-                      chunk.combinedText,
-                      rubricContent,
-                      totalMarks, // Will be overridden by the engine per question based on rubric
-                      config,
-                      imageBuffer,
-                      mimeType
-                  );
-
-                  // DeepSeek returns a breakdown array, but since we fed it ONE chunk,
-                  // it should return an array with 1 item. We extract that item.
-                  const resultItem = chunkResult.breakdown && chunkResult.breakdown.length > 0
-                    ? chunkResult.breakdown[0]
-                    : {
-                        question: chunk.questionId,
-                        score: chunkResult.totalScore || 0,
-                        max: 0,
-                        feedback: chunkResult.aiReasoning || "No feedback generated.",
-                        evidenceSnippet: "AI_SKIPPED",
-                        isRelevant: false,
-                        mappedRubricQuestion: "Unmapped"
-                    };
-
-                  // Enforce the question ID matches our chunk ID
-                  resultItem.question = chunk.questionId;
-
-                  return resultItem;
-
-              } catch (chunkError: any) {
-                  console.error(`[AI_CHUNK_ERROR] Failed to grade chunk ${chunk.questionId}:`, chunkError.message);
-
-                  // FAULT TOLERANCE: Do not fail the whole Promise.all
-                  return {
-                      question: chunk.questionId,
-                      score: 0,
-                      max: 0, // Prevent messing up total max marks calculations if we track it later
-                      feedback: `SYSTEM ERROR: Failed to grade this section due to an AI timeout or API error. (${chunkError.message})`,
-                      evidenceSnippet: "GRADING_FAILED_API_ERROR",
-                      isRelevant: true, // Keep true so it isn't silently filtered out and can be tracked by the failure check
-                      mappedRubricQuestion: "Error"
-                  };
-              }
-          });
-      });
-
-      // Aggregate Results
-      const rawResults = await Promise.all(chunkPromises);
-      let validBreakdowns = rawResults.filter(Boolean) as NonNullable<typeof rawResults[0]>[];
+      if (!result.breakdown || !Array.isArray(result.breakdown)) {
+          throw new Error("Invalid AI Result: Missing or malformed breakdown array");
+      }
 
       // SILENT FILTERING: Remove irrelevant metadata/noise chunks before saving to DB
-      validBreakdowns = validBreakdowns.filter(item => item.isRelevant !== false);
+      let validBreakdowns = result.breakdown.filter(item => item.isRelevant !== false);
 
       let aggregatedScore = 0;
       validBreakdowns.forEach(item => {
           aggregatedScore += item.score;
       });
 
-      // Since we chunked, the concept of "confidence" per exam is tricky.
-      // We will default to a standard high confidence unless chunks failed.
-      const hasFailures = validBreakdowns.some(item => item.evidenceSnippet === "GRADING_FAILED_API_ERROR");
-      const aggregatedConfidence = hasFailures ? 50 : 95; // Rough average proxy for now
-
-      const aggregatedReasoning = "Graded in parallel isolation. See specific question feedback.";
-      const aggregatedIdentity = extractedStudentId || "UNKNOWN_IN_CHUNKS";
+      const aggregatedConfidence = result.confidence ?? 95;
+      const aggregatedReasoning = result.aiReasoning || "Holistic grading completed.";
+      const aggregatedIdentity = extractedStudentId || result.detectedIdentity || "UNIDENTIFIED_IDENTITY";
 
       // 4. Save Score & Feedback
       const breakdownStr = JSON.stringify(validBreakdowns);
@@ -320,9 +265,9 @@ Student Identifier: ${studentId}.
       console.log(`[AI_CONFIDENCE] Score: ${aggregatedConfidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
-        strengths: ["Parallel processing completed."],
-        weaknesses: hasFailures ? ["Some sections failed to grade due to network errors."] : [],
-        improvement: "Review chunk feedback for details."
+        strengths: result.strengths || [],
+        weaknesses: result.weaknesses || [],
+        improvement: result.improvement || "Review holistic feedback for details."
       });
 
       await prisma.submission.update({
