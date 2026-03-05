@@ -115,6 +115,11 @@ You are FORBIDDEN from dropping questions. Count the total number of questions a
 6. MANDATE 6: SKIPPED QUESTIONS
 If, and ONLY if, you have exhaustively searched all provided pages and cannot find any attempt at a specific rubric question, you must still include it in your JSON array. Give it a score of 0, and in the \`evidenceSnippet\`, explicitly write: "Student completely skipped this question." Do not ignore skipped questions in your output.
 
+7. MANDATE 7: OCR ARTIFACT TOLERANCE & LOGICAL MATH REASONING
+You are evaluating text that was extracted from scanned images via OCR. Expect typographical errors, corrupted formatting, and broken symbols in both the Marking Scheme and the Student Submission (e.g., commas misread as periods, missing brackets, corrupted percentages like '%o').
+- DO NOT discard or ignore any rubric question due to formatting errors.
+- For math and calculations, rely on your internal mathematical reasoning to deduce the true intent of the equations. Re-calculate the logic implicitly. If the student's mathematical intent matches the rubric's intended logic, award full marks despite any OCR-induced typos.
+
 TEACHER'S CUSTOM INSTRUCTIONS:
 \`\`\`${teacherCustomInstructions}\`\`\`
 
