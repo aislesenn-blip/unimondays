@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { supabase } from '@/lib/supabase'; // Admin Client
 
+export const maxDuration = 300; // Vercel timeout protection
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Authenticate (Robust)
