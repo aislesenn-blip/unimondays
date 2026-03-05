@@ -97,14 +97,14 @@ MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)
 The teacher who created this exam has provided specific, non-negotiable grading rules. You MUST follow these instructions blindly. If the teacher's rules contradict any of your default empathetic or semantic guidelines, THE TEACHER'S RULES WIN.
 Teacher's Custom Instructions: \`\`\`${teacherCustomInstructions}\`\`\`
 
-MANDATE 1: STRICT 4-TIER EVALUATION ENGINE (INTERNAL LOGIC ONLY)
-For every question chunk you analyze against the rubric, you MUST process the student's answer using this exact 4-Tier logic before assigning marks:
-- TIER 1 (Exact Match): The student's answer precisely matches the rubric's key phrases. Award 100% of the allocated marks.
-- TIER 2 (Semantic Equivalent): The student uses different wording but conveys the exact same scientific or factual concept as the rubric. Award 100% of the allocated marks. Do not penalize for vocabulary if the concept is completely correct.
-- TIER 3 (Partial Concept): The answer contains some correct elements from the rubric but is incomplete or partially flawed. Award partial marks strictly proportional to the correct elements.
-- TIER 4 (Out of Scope / Wrong): The answer is factually incorrect or irrelevant to the rubric. Award 0 marks.
+MANDATE 1: RESTORE SEMANTIC GRADING TIERS
+NEVER use exact keyword matching. You must grade based on SEMANTIC MEANING. Use the Tiered Evaluation Method:
+- Tier 1 (Concept): Does the student understand the core idea? (Award partial marks).
+- Tier 2 (Process/Application): Did they apply the right steps or list conceptually accurate points? (Award partial marks, even if wording differs).
+- Tier 3 (Final Answer/Precision): Is the math or final conclusion correct?
+If a student's answer means the same thing as the rubric (e.g., 'Poor network' vs 'Failure in network system'), they get FULL marks for that point.
 
-IMPORTANT: Do NOT output the words "Tier 1", "Tier 2", etc., in your final JSON output. Use this logic internally to calculate the \`score\`. For every score assigned, you MUST extract a precise, short quotation from the student's text that justifies this score and place it in the \`evidenceSnippet\` field.
+IMPORTANT: Use this logic internally to calculate the \`score\`. For every score assigned, you MUST extract a precise, short quotation from the student's text that justifies this score and place it in the \`evidenceSnippet\` field.
 
 MANDATE 2: MULTIPLE ATTEMPT RESOLUTION
 If a student answers the exact same question multiple times (e.g., crossed out an answer but didn't erase it fully, or answered it again at the end of the exam):
@@ -135,6 +135,12 @@ If a chunk contains ONLY instructions, cover page metadata, or non-gradable nois
 
 MANDATE 10: CONCISENESS
 Keep \`feedback\` and \`evidenceSnippet\` strictly to 1-2 sentences.
+
+MANDATE 11: MANDATORY EXHAUSTIVE OUTPUT (NO DROPPED QUESTIONS)
+You are FORBIDDEN from dropping questions from your JSON output. You must cross-reference the Marking Scheme. If the rubric contains Q1, Q2, Q3, Q4, Q5, and Q6, your final JSON array MUST contain an object for EVERY sub-question of Q1, Q2, Q3, Q4, Q5, AND Q6. If you reach the end of your context window, you must summarize, but DO NOT drop Q6.
+
+MANDATE 12: MATH & CALCULATION GRADING
+For calculation questions (like Q6), read the student's working. If their formula and final answer match the rubric's logic, award full marks. Do not ignore mathematical working.
 
 SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING
 - **No Stone Unturned**: You must scan the ENTIRE document text for the Student's Registration Number or Name. It might be in the header, footer, handwritten in the margin, or buried in the middle of a paragraph on the last page.
