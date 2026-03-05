@@ -164,6 +164,18 @@ export async function handleAiGrade(job: Job) {
 
       const { chunks, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
 
+      // Identity Extraction: Scavenge the raw text for a registration number
+      const idMatch = rawText.match(/(?:REGISTRATION NUMBER|REG NO|STUDENT ID)[\s:]*([A-Za-z0-9\-]+)/i);
+      let extractedStudentId = idMatch ? idMatch[1] : undefined;
+
+      if (extractedStudentId && !submission.studentRegNo) {
+          await prisma.submission.update({
+              where: { id: submissionId },
+              data: { studentRegNo: extractedStudentId }
+          });
+          submission.studentRegNo = extractedStudentId; // Update local state to prevent false GHOST flagging later
+      }
+
       // Prepare Config
       const strictnessMap: Record<string, number> = {
         'LENIENT': 0.8, 'MODERATE': 1.0, 'STRICT': 1.2
@@ -229,11 +241,20 @@ Student Identifier: ${studentId}.
       } else {
           const chunkPromises = chunks.map(chunk => limit(async () => {
               try {
-                  console.log(`[GRADING_CHUNK] Evaluating Chunk: ${chunk.questionId}`);
-
-                  // Reconstruct buffer from the first associated image if multimodal is needed.
-                  let chunkBuffer: Buffer | undefined;
-                  let chunkMime: string | undefined;
+                  // If we are using the simulator
+                  if (!process.env.DEEPSEEK_API_KEY) {
+                      const sim = await simulateDeepSeekCall(chunk.combinedText);
+                      return {
+                          question: chunk.questionId,
+                          score: sim.score,
+                          max: 10, // Mock max
+                          feedback: sim.reasoning,
+                          evidenceSnippet: "SIMULATED_SNIPPET",
+                          rubricReference: "SIMULATED_REFERENCE",
+                          isRelevant: true,
+                          mappedRubricQuestion: "Q1"
+                      };
+                  }
 
                   if (chunk.associatedImagesBase64 && chunk.associatedImagesBase64.length > 0) {
                       chunkBuffer = Buffer.from(chunk.associatedImagesBase64[0], 'base64');
@@ -248,28 +269,48 @@ Student Identifier: ${studentId}.
                       chunkBuffer,
                       chunkMime
                   );
-                  return chunkResult;
-              } catch (e: any) {
-                  console.error(`[CHUNK_FAILED] Chunk ${chunk.questionId} failed:`, e.message);
+
+                  // DeepSeek returns a breakdown array, but since we fed it ONE chunk,
+                  // it should return an array with 1 item. We extract that item.
+                  const resultItem = chunkResult.breakdown && chunkResult.breakdown.length > 0
+                    ? chunkResult.breakdown[0]
+                    : {
+                        question: chunk.questionId,
+                        score: chunkResult.totalScore || 0,
+                        max: 0,
+                        feedback: chunkResult.aiReasoning || "No feedback generated.",
+                        evidenceSnippet: "AI_SKIPPED",
+                        isRelevant: false,
+                        mappedRubricQuestion: "Unmapped"
+                    };
+
+                  // Enforce the question ID matches our chunk ID
+                  resultItem.question = chunk.questionId;
+
+                  return resultItem;
+
+              } catch (chunkError: any) {
+                  console.error(`[AI_CHUNK_ERROR] Failed to grade chunk ${chunk.questionId}:`, chunkError.message);
+
+                  // FAULT TOLERANCE: Do not fail the whole Promise.all
                   return {
-                      totalScore: 0,
-                      breakdown: [{
-                          question: chunk.questionId,
-                          score: 0,
-                          max: 0,
-                          feedback: "GRADING_FAILED_API_ERROR",
-                          rubricReference: "Error",
-                          isRelevant: false,
-                          mappedRubricQuestion: "Error",
-                          evidenceSnippet: "N/A"
-                      }],
-                      confidence: 0,
-                      aiReasoning: `API Failure for chunk ${chunk.questionId}.`
-                  } as GradingResult;
+                      question: chunk.questionId,
+                      score: 0,
+                      max: 0, // Prevent messing up total max marks calculations if we track it later
+                      feedback: `SYSTEM ERROR: Failed to grade this section due to an AI timeout or API error. (${chunkError.message})`,
+                      evidenceSnippet: "GRADING_FAILED_API_ERROR",
+                      isRelevant: true, // Keep true so it isn't silently filtered out and can be tracked by the failure check
+                      mappedRubricQuestion: "Error"
+                  };
               }
           }));
 
-          const results = await Promise.all(chunkPromises);
+      // Aggregate Results
+      const rawResults = await Promise.all(chunkPromises);
+      let validBreakdowns = rawResults.filter(Boolean) as NonNullable<typeof rawResults[0]>[];
+
+      // SILENT FILTERING: Remove irrelevant metadata/noise chunks before saving to DB
+      validBreakdowns = validBreakdowns.filter(item => item.isRelevant !== false);
 
           for (const res of results) {
               aggregatedScore += res.totalScore;
@@ -293,8 +334,8 @@ Student Identifier: ${studentId}.
               improvement: "Review breakdown for specifics."
           };
 
-          console.log(`[AI_SUCCESS] Graded ${chunks.length} chunks. Score: ${result.totalScore}/${totalMarks}`);
-      }
+      const aggregatedReasoning = "Graded in parallel isolation. See specific question feedback.";
+      const aggregatedIdentity = extractedStudentId || "UNKNOWN_IN_CHUNKS";
 
       // 4. Save Score & Feedback
       if (typeof result.totalScore !== 'number') {
