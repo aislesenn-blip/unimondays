@@ -27,9 +27,6 @@ export interface GradingResult {
     max: number;
     feedback: string;
     rubricReference?: string;
-    evidenceSnippet?: string;
-    isRelevant: boolean;
-    mappedRubricQuestion: string;
   }>;
   aiReasoning: string;
   confidence: number;
@@ -97,7 +94,7 @@ MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)
 The teacher who created this exam has provided specific, non-negotiable grading rules. You MUST follow these instructions blindly. If the teacher's rules contradict any of your default empathetic or semantic guidelines, THE TEACHER'S RULES WIN.
 Teacher's Custom Instructions: \`\`\`${teacherCustomInstructions}\`\`\`
 
-MANDATE 0.1: STRICT 4-TIER EVALUATION ENGINE (INTERNAL LOGIC ONLY)
+MANDATE 1: STRICT 4-TIER EVALUATION ENGINE (INTERNAL LOGIC ONLY)
 For every question chunk you analyze against the rubric, you MUST process the student's answer using this exact 4-Tier logic before assigning marks:
 - TIER 1 (Exact Match): The student's answer precisely matches the rubric's key phrases. Award 100% of the allocated marks.
 - TIER 2 (Semantic Equivalent): The student uses different wording but conveys the exact same scientific or factual concept as the rubric. Award 100% of the allocated marks. Do not penalize for vocabulary if the concept is completely correct.
@@ -106,13 +103,13 @@ For every question chunk you analyze against the rubric, you MUST process the st
 
 IMPORTANT: Do NOT output the words "Tier 1", "Tier 2", etc., in your final JSON output. Use this logic internally to calculate the \`score\`. For every score assigned, you MUST extract a precise, short quotation from the student's text that justifies this score and place it in the \`evidenceSnippet\` field.
 
-MANDATE 0.2: MULTIPLE ATTEMPT RESOLUTION
+MANDATE 2: MULTIPLE ATTEMPT RESOLUTION
 If a student answers the exact same question multiple times (e.g., crossed out an answer but didn't erase it fully, or answered it again at the end of the exam):
 1. Grade EVERY attempt independently against the rubric.
 2. Award the marks for the HIGHEST scoring attempt only.
 3. NEVER exceed the maximum allocated marks for that specific question.
 
-MANDATE 1: THE MARKING SCHEME CALIBRATION
+MANDATE 3: THE MARKING SCHEME CALIBRATION
 Strictly evaluate the student's answer against the provided Marking Scheme. Apply the exact weightings and criteria the rubric dictates.
 
 MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)
@@ -127,14 +124,8 @@ When evaluating drawn sketches, graphs, or diagrams, analyze the visual geometry
 MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT
 Briefly reason through your grading decision internally before outputting the final score. Return the result STRICTLY in the requested JSON format.
 
-MANDATE 8: SEMANTIC MAPPING
-Analyze the student's answer and identify which specific question from the Marking Scheme it addresses. Assign that value to \`mappedRubricQuestion\` (e.g., 'Question 1').
-
-MANDATE 9: RELEVANCE FILTERING
-If a chunk contains ONLY instructions, cover page metadata, or non-gradable noise, set \`isRelevant: false\`. Otherwise, set it to \`true\`.
-
-MANDATE 10: CONCISENESS
-Keep \`feedback\` and \`evidenceSnippet\` strictly to 1-2 sentences.
+MANDATE 8: EXTREME CONCISENESS
+Keep \`feedback\` and \`evidenceSnippet\` extremely brief. Extract only 1-2 sentences for the snippet. Do NOT rewrite the entire student's answer or the rubric.
 
 SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING
 - **No Stone Unturned**: You must scan the ENTIRE document text for the Student's Registration Number or Name. It might be in the header, footer, handwritten in the margin, or buried in the middle of a paragraph on the last page.
@@ -172,7 +163,7 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string", "isRelevant": boolean, "mappedRubricQuestion": "string" }
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string" }
   ],
   "aiReasoning": "string",
   "confidence": number,
@@ -253,7 +244,7 @@ ${ocrText}` }
             temperature: 0.0,
             top_p: 0.1,
             seed: 12345,
-            max_tokens: 8192, // Prevent infinite loops
+            max_tokens: 8192, // Prevent infinite loops and JSON truncation
         });
     }
 
