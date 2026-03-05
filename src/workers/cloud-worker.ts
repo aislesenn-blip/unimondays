@@ -3,17 +3,6 @@ import { supabase } from '@/lib/supabase'; // Using the server-side admin client
 import { PDFDocument } from 'pdf-lib';
 import { v4 as uuidv4 } from 'uuid';
 
-// We need a lightweight Vision model to heuristically find cover pages
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-
-interface CloudMarkingPayload {
-    bulkSessionId: string;
-    bulkFilePath: string;
-    lecturerId: string;
-}
-
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-
 // Polyfill for Next.js Serverless execution
 if (typeof Promise.withResolvers === 'undefined') {
   (Promise as any).withResolvers = function <T>() {
@@ -25,6 +14,12 @@ if (typeof Promise.withResolvers === 'undefined') {
     });
     return { promise, resolve, reject };
   };
+}
+
+interface CloudMarkingPayload {
+    bulkSessionId: string;
+    bulkFilePath: string;
+    lecturerId: string;
 }
 
 export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
@@ -42,7 +37,7 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
     let workSessionId: string | null = null;
 
     try {
-        console.log(`[CLOUD_WORKER] Initiating pipeline for BulkSession: ${bulkSessionId}`);
+        console.log(`[CLOUD_WORKER] Initiating Mechanical Pipeline for BulkSession: ${bulkSessionId}`);
 
         // 1. Fetch the massive PDF directly from Supabase Storage (Internal Network)
         const { data: fileData, error: downloadError } = await supabase.storage
@@ -54,7 +49,7 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
         }
 
         fileBuffer = Buffer.from(await fileData.arrayBuffer());
-        console.log(`[CLOUD_WORKER] Downloaded massive PDF (${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
+        console.log(`[CLOUD_WORKER] Downloaded monolithic PDF (${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
 
         // Update status to Slicing
         await prisma.bulkSession.update({
@@ -100,58 +95,66 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
         });
         workSessionId = workSession.id;
 
-        // 4. The AI Heuristic Router (Cover Page Detection via Fast Text Extraction)
-        console.log(`[CLOUD_WORKER] Initiating Heuristic Boundary Scan via pdfjs-dist...`);
-        const splitBoundaries: number[] = [0]; // Page 0 is always a boundary
+        // 4. THE MECHANICAL SPLIT (Blank Page Detection Heuristic)
+        console.log(`[CLOUD_WORKER] Initiating Mechanical Blank Page Detection...`);
+        const blankPageIndices: number[] = []; // 0-indexed pages that are blank separators
+        const pageSizes: number[] = [];
 
-        // To prevent token exhaustion and rate limits, we use pdfjs-dist to rapidly extract text
-        // from each page. We scan for the Registration Number Regex boundary to determine where
-        // a new student's script begins.
-        const regNoRegex = /(?:REGISTRATION NUMBER|REG NO|STUDENT ID)[\s:]*([A-Za-z0-9\-]+)/i;
-
-        try {
-            // Load a lightweight text-only instance of the PDF for rapid scanning
-            const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) });
-            const textPdf = await loadingTask.promise;
-
-            // Start from page 2 (index 1) since page 1 is inherently the start of the first script
-            for (let i = 1; i < totalPages; i++) {
-                try {
-                    const page = await textPdf.getPage(i + 1); // pdfjs is 1-indexed
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map((item: any) => item.str).join(' ');
-
-                    if (regNoRegex.test(pageText)) {
-                        console.log(`[CLOUD_WORKER] Boundary detected at page ${i} (Regex Match).`);
-                        splitBoundaries.push(i);
-                    }
-                } catch (pageErr) {
-                    console.warn(`[CLOUD_WORKER] Failed to extract text from page ${i + 1}, skipping heuristic check.`);
-                }
+        // First Pass: Measure the approximate byte size of each page stream
+        // Scanned blank pages (even with noise) are significantly smaller than pages dense with handwritten text/diagrams.
+        for (let i = 0; i < totalPages; i++) {
+            try {
+                // A fast way to measure a single page's weight without re-saving the entire PDF:
+                // We create a tiny temp document, copy just this page, and save it to memory.
+                const tempDoc = await PDFDocument.create();
+                const [copiedPage] = await tempDoc.copyPages(pdfDoc, [i]);
+                tempDoc.addPage(copiedPage);
+                const bytes = await tempDoc.save({ useObjectStreams: false });
+                pageSizes.push(bytes.length);
+            } catch (err) {
+                console.warn(`[CLOUD_WORKER] Failed to measure page ${i}, assuming average weight.`, err);
+                pageSizes.push(500000); // Assume large if error to prevent false positive blank
             }
-
-            // Clean up the text extraction instance
-            await textPdf.destroy();
-            global.gc?.();
-        } catch (textExtractErr) {
-            console.error(`[CLOUD_WORKER] Text extraction heuristic failed. Proceeding with fallback behavior.`, textExtractErr);
         }
 
-        // Fallback or Safety Caps
-        if (splitBoundaries.length === 1) {
-             console.log(`[CLOUD_WORKER] No internal boundaries detected. Assuming monolithic single script or fallback standard size.`);
-             // If we found nothing, we either slice into standard chunks or assume it's one script.
-             // Given the context of a "Massive Bulk Drop", assuming it's one script is risky.
-             // We fallback to standard chunking if no explicit reg numbers found.
-             const ESTIMATED_SCRIPT_LENGTH = 5;
-             for (let i = ESTIMATED_SCRIPT_LENGTH; i < totalPages; i += ESTIMATED_SCRIPT_LENGTH) {
-                  splitBoundaries.push(i);
-             }
+        // Calculate a dynamic threshold.
+        // If a page is less than 35% of the average page size, we consider it a blank separator.
+        // We use a minimum threshold (e.g., 50KB) as a floor because very compressed scans might all be small.
+        const avgSize = pageSizes.reduce((a, b) => a + b, 0) / (pageSizes.length || 1);
+        const dynamicThreshold = Math.max(avgSize * 0.35, 50000); // Floor at 50KB
+
+        for (let i = 0; i < pageSizes.length; i++) {
+            if (pageSizes[i] < dynamicThreshold) {
+                console.log(`[CLOUD_WORKER] Blank Separator detected at page index ${i} (Size: ${(pageSizes[i]/1024).toFixed(1)}KB, Threshold: ${(dynamicThreshold/1024).toFixed(1)}KB)`);
+                blankPageIndices.push(i);
+            }
         }
 
-        splitBoundaries.push(totalPages); // Cap the end
+        // If no blank pages were inserted by the teacher, we must fail safely rather than grading a 1000-page Frankenstein exam.
+        if (blankPageIndices.length === 0 && totalPages > 30) {
+            throw new Error(`CRITICAL ALARM: No mechanical blank separator pages detected. To protect data integrity, we will not slice this ${totalPages}-page monolithic document. Please ensure blank separator sheets are inserted between each student script and re-upload.`);
+        }
 
-        console.log(`[CLOUD_WORKER] Final determined boundaries at pages:`, splitBoundaries);
+        // Generate the grouping maps for individual scripts (excluding the blank pages)
+        const scripts: { start: number, end: number }[] = [];
+        let currentScriptStart = 0;
+
+        for (let i = 0; i < totalPages; i++) {
+            if (blankPageIndices.includes(i)) {
+                // A blank page marks the END of the current script (if it has pages)
+                if (currentScriptStart < i) {
+                    scripts.push({ start: currentScriptStart, end: i - 1 });
+                }
+                // The next script will start AFTER this blank page
+                currentScriptStart = i + 1;
+            }
+        }
+        // Catch the final script if the PDF didn't end on a blank page
+        if (currentScriptStart < totalPages) {
+            scripts.push({ start: currentScriptStart, end: totalPages - 1 });
+        }
+
+        console.log(`[CLOUD_WORKER] Successfully mapped ${scripts.length} isolated student scripts.`);
 
         // Update status to Injecting
         await prisma.bulkSession.update({
@@ -159,27 +162,24 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
             data: { status: 'INJECTING' }
         });
 
-        // 5. The Slicer & Injection Loop
+        // 5. THE TROJAN HORSE INJECTION (Slicing & Queueing)
         console.log(`[CLOUD_WORKER] Commencing PDF Slicing and Queue Injection...`);
         let scriptsProcessed = 0;
 
-        for (let i = 0; i < splitBoundaries.length - 1; i++) {
-            const startPage = splitBoundaries[i];
-            const endPage = splitBoundaries[i+1] - 1;
-
-            if (startPage > endPage) continue;
+        for (let i = 0; i < scripts.length; i++) {
+            const script = scripts[i];
 
             try {
-                // Slice the PDF
+                // Slice the PDF using exact boundaries, discarding the blank page entirely
                 const sliceDoc = await PDFDocument.create();
-                const pageIndices = Array.from({ length: endPage - startPage + 1 }, (_, k) => startPage + k);
+                const pageIndices = Array.from({ length: script.end - script.start + 1 }, (_, k) => script.start + k);
                 const copiedPages = await sliceDoc.copyPages(pdfDoc, pageIndices);
                 copiedPages.forEach((page) => sliceDoc.addPage(page));
 
                 const sliceBytes = await sliceDoc.save();
                 const sliceBuffer = Buffer.from(sliceBytes);
 
-                // Upload slice back to Supabase
+                // Upload clean, isolated slice back to Supabase
                 const sliceFilename = `submissions/bulk_${bulkSessionId}/script_${i}_${uuidv4().substring(0,8)}.pdf`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
                     .from('exam_pdfs')
@@ -190,19 +190,19 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
 
                 if (uploadError) throw new Error(`Slice Upload Error: ${uploadError.message}`);
 
-                // Insert Standard Submission
+                // Insert Standard Submission (Registration Number is explicitly NULL, the grading OCR will find it later)
                 const submission = await prisma.submission.create({
                     data: {
                         workSessionId: workSessionId,
                         userId: null,
-                        studentRegNo: null, // Let the grading Map-Reduce worker extract this
+                        studentRegNo: null,
                         filePath: uploadData.path,
                         status: 'PENDING',
                         submittedAt: new Date()
                     }
                 });
 
-                // Insert Job (The Trojan Horse)
+                // Insert standard Job (The Trojan Horse: AI_GRADE_SUBMISSION)
                 await prisma.job.create({
                     data: {
                         type: 'AI_GRADE_SUBMISSION',
@@ -213,11 +213,11 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
 
                 scriptsProcessed++;
 
-                // Opportunistic Garbage Collection to prevent V8 heap bloat
+                // Opportunistic Garbage Collection to prevent V8 heap bloat during massive monolithic slicing
                 global.gc?.();
 
             } catch (sliceError) {
-                console.error(`[CLOUD_WORKER] Failed to slice script at index ${i}:`, sliceError);
+                console.error(`[CLOUD_WORKER] Failed to slice and inject script at index ${i}:`, sliceError);
                 // We continue slicing the rest even if one fails
             }
 
@@ -225,13 +225,13 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
             if (scriptsProcessed % 5 === 0) {
                  await prisma.bulkSession.update({
                     where: { id: bulkSessionId },
-                    // Safely approximate progress if chunk size isn't static
-                    data: { processedFiles: Math.min(scriptsProcessed * 5, totalPages) }
+                    // Safely approximate progress based on the number of scripts processed vs total pages
+                    data: { processedFiles: Math.min(Math.round((scriptsProcessed / scripts.length) * totalPages), totalPages) }
                 });
             }
         }
 
-        // 6. Wake the Beast
+        // 6. Wake the Beast (Ping the existing Queue Processor)
         console.log(`[CLOUD_WORKER] Successfully injected ${scriptsProcessed} jobs. Waking the queue...`);
         fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/queue/process`, {
             method: 'POST',
@@ -248,7 +248,7 @@ export async function handleCloudMarking(payload: CloudMarkingPayload | any) {
             }
         });
 
-        console.log(`[CLOUD_WORKER] Pipeline complete for ${bulkSessionId}.`);
+        console.log(`[CLOUD_WORKER] Mechanical Pipeline complete for ${bulkSessionId}. Sliced ${scriptsProcessed} individual student scripts.`);
 
     } catch (fatalError: any) {
         console.error(`[CLOUD_WORKER] FATAL ERROR for BulkSession ${bulkSessionId}:`, fatalError);
