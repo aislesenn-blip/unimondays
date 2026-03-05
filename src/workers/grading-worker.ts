@@ -219,7 +219,12 @@ Student Identifier: ${studentId}.
 
           result = {
               totalScore: sim.score,
-              breakdown: sim.breakdown as any,
+              breakdown: Array.isArray(sim.breakdown) ? sim.breakdown.map((b: any) => ({
+                  ...b,
+                  isRelevant: true,
+                  mappedRubricQuestion: "Q1",
+                  evidenceSnippet: "SIMULATED_SNIPPET"
+              })) : [],
               aiReasoning: sim.reasoning,
               confidence: sim.confidence,
               strengths: ["Consistency", "Clarity"],
