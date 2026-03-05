@@ -5,11 +5,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Lock, Unlock, HelpCircle, Upload, RotateCw, BookOpen, CheckCircle2 } from "lucide-react";
+import { Loader2, Lock, Unlock, HelpCircle, Upload, RotateCw, BookOpen, CheckCircle2, FileBarChart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@supabase/supabase-js";
 
 // Client-side Supabase instance for direct browser uploads
@@ -147,26 +148,171 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                             Playbook Marking Guide
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                        <DialogHeader>
-                            <DialogTitle className="text-2xl font-light tracking-tight">How Playbook Lite AI Grades</DialogTitle>
-                            <DialogDescription className="text-base mt-2">
-                                Empower the AI by providing the perfect Marking Scheme. The AI relies entirely on the document you upload.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-6 mt-4 text-sm text-foreground/80 leading-relaxed">
+                    <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-0 border-none shadow-2xl">
+                        <div className="bg-muted/30 px-8 py-6 border-b">
+                            <DialogHeader>
+                                <DialogTitle className="text-3xl font-light tracking-tight text-foreground">Playbook AI Marking Scheme Documentation</DialogTitle>
+                                <DialogDescription className="text-base mt-2 max-w-2xl leading-relaxed">
+                                    This documentation guides teachers on how to create and structure marking schemes so that Playbook AI can grade accurately, fairly, and deterministically. Every rubric point, mark allocation, and tier logic must be clear for the AI to function correctly.
+                                </DialogDescription>
+                            </DialogHeader>
+                        </div>
+
+                        <div className="p-8 space-y-10">
+                            {/* Core Principles Section */}
                             <section>
-                                <h3 className="text-lg font-medium text-foreground flex items-center gap-2 mb-2"><CheckCircle2 className="w-4 h-4 text-green-500"/> 1. Use Typed PDFs, Not Scans</h3>
-                                <p>For the Marking Scheme, always upload a digitally typed PDF (Word export). While the AI reads handwritten student exams easily, a crystal-clear typed rubric guarantees 100% accuracy in the rules it follows.</p>
+                                <h3 className="text-xl font-medium tracking-tight mb-4 flex items-center gap-2">
+                                    <BookOpen className="w-5 h-5 text-primary" />
+                                    1. Core Principles
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Card className="p-4 bg-background shadow-sm border-border/50">
+                                        <h4 className="font-semibold text-sm mb-1">Deterministic Scoring</h4>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">AI always grades the same answer with the same score. No improvisation or guessing beyond the rubric.</p>
+                                    </Card>
+                                    <Card className="p-4 bg-background shadow-sm border-border/50">
+                                        <h4 className="font-semibold text-sm mb-1">Tiered Evaluation</h4>
+                                        <ul className="text-sm text-muted-foreground leading-relaxed space-y-1">
+                                            <li><span className="font-medium text-foreground">Tier 1: Direct Match</span> – Exactly matches rubric point.</li>
+                                            <li><span className="font-medium text-foreground">Tier 2: Equivalent</span> – Uses synonyms (Flagged as Valid).</li>
+                                            <li><span className="font-medium text-foreground">Tier 3: Incorrect</span> – Out-of-Scope (Score = 0).</li>
+                                        </ul>
+                                    </Card>
+                                    <Card className="p-4 bg-background shadow-sm border-border/50">
+                                        <h4 className="font-semibold text-sm mb-1">Atomic Rubric Points</h4>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">Each point is scored individually. Marks are pre-allocated per point and never exceed total marks.</p>
+                                    </Card>
+                                    <Card className="p-4 bg-background shadow-sm border-border/50">
+                                        <h4 className="font-semibold text-sm mb-1">Consistency</h4>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">AI ignores extra knowledge not in rubric. Output = structured breakdown with points scored and exact quotes.</p>
+                                    </Card>
+                                </div>
                             </section>
+
+                            {/* Example Templates Section */}
                             <section>
-                                <h3 className="text-lg font-medium text-foreground flex items-center gap-2 mb-2"><CheckCircle2 className="w-4 h-4 text-green-500"/> 2. Explicit Point Allocations</h3>
-                                <p>Do not be vague. Format your rubric strictly: <code className="bg-muted px-1.5 py-0.5 rounded">Q1(a): 2 marks for defining X. 1 mark for the formula.</code> The AI treats your rubric as a strict checklist.</p>
+                                <h3 className="text-xl font-medium tracking-tight mb-4 flex items-center gap-2">
+                                    <FileBarChart className="w-5 h-5 text-primary" />
+                                    2. Example Marking Scheme Templates
+                                </h3>
+                                <Tabs defaultValue="essay" className="w-full">
+                                    <TabsList className="grid w-full grid-cols-4 mb-4 bg-muted/50">
+                                        <TabsTrigger value="essay">Essay / Short Answer</TabsTrigger>
+                                        <TabsTrigger value="calc">Calculations</TabsTrigger>
+                                        <TabsTrigger value="diagram">Diagrams</TabsTrigger>
+                                        <TabsTrigger value="mcq">MCQs</TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="essay" className="bg-muted/20 p-5 rounded-lg border">
+                                        <div className="font-medium text-sm mb-2 text-primary">Question: Explain the process of photosynthesis in green plants.</div>
+                                        <div className="text-sm space-y-3">
+                                            <div>
+                                                <p className="font-semibold mb-1">Rubric Points:</p>
+                                                <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">
+                                                    <li>Plants use sunlight <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Chlorophyll absorbs light energy <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>CO₂ and H₂O converted to glucose <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Oxygen released as by-product <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Energy stored in chemical bonds of glucose <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 2)</span></li>
+                                                </ol>
+                                            </div>
+                                            <div className="bg-background p-3 rounded text-xs text-muted-foreground border-l-2 border-primary">
+                                                <strong>Notes:</strong> Each point is atomic. Tier 2 allows synonym recognition like "synthesize carbohydrates" instead of "produce glucose." Tier 3: Mentioning plant growth without photosynthesis concept → 0 marks.
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="calc" className="bg-muted/20 p-5 rounded-lg border">
+                                        <div className="font-medium text-sm mb-2 text-primary">Question: Calculate the area of a triangle with base = 8 cm and height = 5 cm.</div>
+                                        <div className="text-sm space-y-3">
+                                            <div>
+                                                <p className="font-semibold mb-1">Rubric Points:</p>
+                                                <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">
+                                                    <li>Correct formula Area = 1/2 * base * height <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Substitutes numbers correctly <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Correct calculation Area = 20 cm² <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(2 Marks, Tier 1)</span></li>
+                                                </ol>
+                                            </div>
+                                            <div className="bg-background p-3 rounded text-xs text-muted-foreground border-l-2 border-primary">
+                                                <strong>Notes:</strong> Tier 2: If calculation logic is correct but arithmetic error → partial credit. Tier 3: Wrong formula → 0 marks.
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="diagram" className="bg-muted/20 p-5 rounded-lg border">
+                                        <div className="font-medium text-sm mb-2 text-primary">Question: Draw and label the structure of a leaf showing parts involved in photosynthesis.</div>
+                                        <div className="text-sm space-y-3">
+                                            <div>
+                                                <p className="font-semibold mb-1">Rubric Points:</p>
+                                                <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">
+                                                    <li>Correct outline of leaf <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Labels chloroplast <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Indicates stomata <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                    <li>Arrows showing sunlight/CO₂/H₂O → glucose <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(2 Marks, Tier 1)</span></li>
+                                                </ol>
+                                            </div>
+                                            <div className="bg-background p-3 rounded text-xs text-muted-foreground border-l-2 border-primary">
+                                                <strong>Notes:</strong> Tier 2: Slightly different diagram style but conveys same concept. Tier 3: Diagram unrelated to photosynthesis → 0 marks.
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="mcq" className="bg-muted/20 p-5 rounded-lg border">
+                                        <div className="font-medium text-sm mb-2 text-primary">Question: Which gas is released during photosynthesis? A) CO₂ B) O₂ C) N₂ D) H₂O</div>
+                                        <div className="text-sm space-y-3">
+                                            <div>
+                                                <p className="font-semibold mb-1">Rubric Points:</p>
+                                                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                                                    <li>Correct choice = B <span className="text-xs font-mono bg-background px-1 border rounded ml-1">(1 Mark, Tier 1)</span></li>
+                                                </ul>
+                                            </div>
+                                            <div className="bg-background p-3 rounded text-xs text-muted-foreground border-l-2 border-primary">
+                                                <strong>Notes:</strong> Tier 2: N/A. Tier 3: Any other selection → 0 marks.
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
                             </section>
-                            <section>
-                                <h3 className="text-lg font-medium text-foreground flex items-center gap-2 mb-2"><CheckCircle2 className="w-4 h-4 text-green-500"/> 3. Provide Semantic Alternatives</h3>
-                                <p>The AI grades on conceptual meaning, not just exact keywords. However, if there are specific acceptable alternative answers, list them in the rubric: <code className="bg-muted px-1.5 py-0.5 rounded">(Accept: Network failure OR Poor connection)</code>.</p>
-                            </section>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Guidelines */}
+                                <section>
+                                    <h3 className="text-xl font-medium tracking-tight mb-4">3. Upload Guidelines</h3>
+                                    <ul className="space-y-3 text-sm text-muted-foreground">
+                                        <li className="flex items-start gap-2">
+                                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
+                                            <span><strong>File Type:</strong> PDF preferred (OCR-friendly typed text).</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
+                                            <span><strong>Structure:</strong> Each question must include Question Text, Rubric Points, Marks Allocation, and Tier Assignment.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
+                                            <span><strong>AI Handling:</strong> AI reads holistically. Student answers are mapped to rubric points. Tiered evaluation is applied per point.</span>
+                                        </li>
+                                    </ul>
+                                </section>
+
+                                {/* Key Takeaways */}
+                                <section>
+                                    <h3 className="text-xl font-medium tracking-tight mb-4">4. Key Takeaways</h3>
+                                    <ul className="space-y-3 text-sm text-muted-foreground">
+                                        <li className="flex items-start gap-2">
+                                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
+                                            <span>Be explicit with each concept you want scored.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
+                                            <span>The Tier system ensures synonyms are recognized, but AI will not invent marks.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
+                                            <span>Atomic rubric points = consistency and repeatability.</span>
+                                        </li>
+                                    </ul>
+                                </section>
+                            </div>
                         </div>
                     </DialogContent>
                 </Dialog>
