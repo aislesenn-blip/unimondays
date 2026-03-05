@@ -27,6 +27,9 @@ export interface GradingResult {
     max: number;
     feedback: string;
     rubricReference?: string;
+    isRelevant: boolean;
+    mappedRubricQuestion: string;
+    evidenceSnippet?: string;
   }>;
   aiReasoning: string;
   confidence: number;
@@ -112,20 +115,26 @@ If a student answers the exact same question multiple times (e.g., crossed out a
 MANDATE 3: THE MARKING SCHEME CALIBRATION
 Strictly evaluate the student's answer against the provided Marking Scheme. Apply the exact weightings and criteria the rubric dictates.
 
-MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)
+MANDATE 4: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 3)
 If the teacher has NOT explicitly restricted synonyms or exact phrasing in their custom instructions, grade based on Conceptual Understanding. Do not punish students for using different words if the scientific/academic meaning is 100% correct.
 
-MANDATE 3: EMPATHY & OCR FORGIVENESS
+MANDATE 5: EMPATHY & OCR FORGIVENESS
 Ignore minor spelling mistakes, grammatical errors, or poor handwriting (e.g., reading 'Vontricle' instead of 'Ventricle') AS LONG AS the academic intent is mathematically or scientifically correct.
 
-MANDATE 4: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS
+MANDATE 6: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS
 When evaluating drawn sketches, graphs, or diagrams, analyze the visual geometry, spatial arrangement, and line connections. Grade the visual logic, not just the OCR text labels.
 
-MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT
+MANDATE 7: CHAIN OF THOUGHT REASONING & JSON OUTPUT
 Briefly reason through your grading decision internally before outputting the final score. Return the result STRICTLY in the requested JSON format.
 
-MANDATE 8: EXTREME CONCISENESS
-Keep \`feedback\` and \`evidenceSnippet\` extremely brief. Extract only 1-2 sentences for the snippet. Do NOT rewrite the entire student's answer or the rubric.
+MANDATE 8: SEMANTIC MAPPING
+Analyze the student's answer and identify which specific question from the Marking Scheme it addresses. Assign that value to \`mappedRubricQuestion\` (e.g., 'Question 1').
+
+MANDATE 9: RELEVANCE FILTERING
+If a chunk contains ONLY instructions, cover page metadata, or non-gradable noise, set \`isRelevant: false\`. Otherwise, set it to \`true\`.
+
+MANDATE 10: CONCISENESS
+Keep \`feedback\` and \`evidenceSnippet\` strictly to 1-2 sentences.
 
 SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING
 - **No Stone Unturned**: You must scan the ENTIRE document text for the Student's Registration Number or Name. It might be in the header, footer, handwritten in the margin, or buried in the middle of a paragraph on the last page.
@@ -163,7 +172,7 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string" }
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "isRelevant": true, "mappedRubricQuestion": "string", "evidenceSnippet": "string" }
   ],
   "aiReasoning": "string",
   "confidence": number,

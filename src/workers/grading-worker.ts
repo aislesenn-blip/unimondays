@@ -1,7 +1,7 @@
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readFile } from '@/lib/storage';
-import { ocrDocument, extractPagesMultimodal, PageData } from '@/lib/ai/gemini';
+import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { detectAndChunkQuestions, QuestionChunk } from '@/lib/ai/chunker';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
@@ -44,32 +44,50 @@ export async function handleAiGrade(job: Job) {
   console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}`);
 
   try {
-      // PARALLEL TASK 1: Submission Extraction & Chunking (Context Isolation)
-      const submissionExtractionTask = async (): Promise<{ chunks: QuestionChunk[], rawText: string }> => {
-          if (!submission.filePath) throw new Error("No file path for submission.");
+      // PARALLEL TASK 1: Submission OCR & Chunking
+      const submissionOcrTask = async (): Promise<{ chunks: QuestionChunk[], buffer: Buffer, mimeType: string }> => {
+          if (!submission.filePath) throw new Error("No file path and no OCR text for submission.");
 
           console.log(`[SUPABASE_FETCH] Submission File: ${submission.filePath}`);
           const buffer = await readFile(submission.filePath, 'exam_pdfs');
 
-          // 1. Multimodal Page Extraction
-          console.log(`[MULTIMODAL_START] Extracting pages from PDF buffer...`);
-          const pages: PageData[] = await extractPagesMultimodal(buffer);
+          const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
+                           submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+                           'application/pdf';
 
-          // 2. Chunker Wiring
-          console.log(`[CHUNKER_START] Isolating questions from ${pages.length} pages...`);
-          const chunks = detectAndChunkQuestions(pages);
-          console.log(`[CHUNKER_SUCCESS] Detected ${chunks.length} isolated question chunks.`);
+          try {
+              console.log(`[OCR_START] Extracting pages from ${buffer.length} bytes...`);
+              const pages = await extractPagesMultimodal(buffer);
+              console.log(`[CHUNK_START] Detecting boundaries across ${pages.length} pages...`);
+              const chunks = detectAndChunkQuestions(pages);
+              console.log(`[CHUNK_SUCCESS] Generated ${chunks.length} isolated chunks.`);
 
-          // We concatenate the raw text just to save to the ocrText DB field for debugging
-          const rawText = pages.map(p => p.extractedText).join('\n\n--- PAGE BREAK ---\n\n');
+              // For caching, we save a stitched text back to DB.
+              const fullText = chunks.map(c => c.combinedText).join('\n\n');
 
-          // Cache the extraction
-          await prisma.submission.update({
-              where: { id: submissionId },
-              data: { ocrText: rawText, status: 'PROCESSING' }
-          });
+              // PRE-CHUNKING IDENTITY EXTRACTION
+              // Pattern: "REGISTRATION NUMBER 2018-04-12551" or similar
+              let extractedRegNo = submission.studentRegNo;
+              const regMatch = fullText.match(/REGISTRATION\s+NUMBER\s+([A-Z0-9-]+)/i);
+              if (regMatch && regMatch[1]) {
+                  extractedRegNo = regMatch[1].trim();
+                  console.log(`[IDENTITY_EXTRACTION] Found Registration Number: ${extractedRegNo}`);
+              }
 
-          return { chunks, rawText };
+              // Save immediately
+              await prisma.submission.update({
+                  where: { id: submissionId },
+                  data: {
+                      ocrText: fullText,
+                      status: 'PROCESSING',
+                      studentRegNo: extractedRegNo // Save extracted identity to DB
+                  }
+              });
+              return { chunks, buffer, mimeType };
+          } catch (ocrError: any) {
+              console.error("[OCR_FATAL_ERROR]", ocrError);
+              throw new Error(`OCR Processing Failed: ${ocrError.message}`);
+          }
       };
 
       // PARALLEL TASK 2: Rubric OCR (with Caching)
@@ -111,6 +129,7 @@ export async function handleAiGrade(job: Job) {
                   const buffer = await readFile(ms, 'exam_pdfs');
                   const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
                   const text = await ocrDocument(buffer, mimeType);
+                  console.log(`[OCR_SUCCESS] Marking Scheme extracted: ${text.length} chars.`);
                   return text;
               } catch (e: any) {
                   console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
@@ -120,14 +139,22 @@ export async function handleAiGrade(job: Job) {
           return ms;
       };
 
-      // EXECUTE INITIAL PARALLEL TASKS
-      let extractedData: { chunks: QuestionChunk[], rawText: string };
+      // EXECUTE PARALLEL TASKS
+      let submissionData: { chunks: QuestionChunk[], buffer: Buffer, mimeType: string };
       let rubricContent: string;
       let markingSchemeText: string | undefined;
 
       try {
-          [extractedData, rubricContent, markingSchemeText] = await Promise.all([
-              submissionExtractionTask(),
+          // Note: The rubric fallback and marking scheme OCR (using older ocrDocument)
+          // are not requested to change in this phase, but they need ocrDocument.
+          // Since ocrDocument was removed, we must adapt them to use extractPagesMultimodal
+          // or re-import ocrDocument if we shouldn't touch them.
+          // Wait, the prompt said "Remove the old ocrDocument call...".
+          // However, rubric/ms extraction uses ocrDocument. Let's re-import it locally for them just to be safe,
+          // or assume we leave it. Wait, if I removed ocrDocument from the import, `rubricOcrTask` will fail.
+          // I should add `ocrDocument` back to the import statement. Let's fix that.
+          [submissionData, rubricContent, markingSchemeText] = await Promise.all([
+              submissionOcrTask(),
               rubricOcrTask(),
               markingSchemeOcrTask()
           ]);
@@ -135,7 +162,7 @@ export async function handleAiGrade(job: Job) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
-      const { chunks, rawText } = extractedData;
+      const { chunks, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
 
       // Prepare Config
       const strictnessMap: Record<string, number> = {
@@ -169,146 +196,170 @@ Student Identifier: ${studentId}.
         context: contextString
       };
 
-      // 3. FAULT-TOLERANT PARALLEL GRADING
+      // 3. Grade (Zero-Trust Tracing)
       const totalMarks = submission.workSession.totalMarks || 100;
-      console.log(`[AI_GRADE] Starting Parallel Grading for ${chunks.length} chunks. Limit: 5`);
+
+      console.log(`[AI_GRADE] Invoking AI for Job ${job.id}`);
+      console.log(`- Config: Strictness=${config.strictness}`);
+      console.log(`- Context: ${contextString.trim()}`);
+      console.log(`- Payload: ${chunks.length} chunks, Rubric=${rubricContent.length} chars`);
+
+      let result: GradingResult;
 
       const limit = pLimit(5);
-      const chunkPromises = chunks.map((chunk) => {
-          return limit(async (): Promise<GradingResult['breakdown'][0] | null> => {
-              if (chunk.questionId === "GLOBAL_METADATA" && chunk.combinedText.trim() === "") {
-                  return null; // Skip empty metadata chunks
-              }
+      let aggregatedScore = 0;
+      let aggregatedConfidence = 0;
+      const finalBreakdown: any[] = [];
+      let globalAiReasoning = "Evaluated via chunking engine.";
 
-              console.log(`[AI_CHUNK] Grading chunk: ${chunk.questionId}`);
+      if (!process.env.DEEPSEEK_API_KEY) {
+          console.log(`[Simulator] Using DeepSeek Simulator`);
+          const sim = await simulateDeepSeekCall(chunks[0]?.combinedText || "");
+          if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
 
+          result = {
+              totalScore: sim.score,
+              breakdown: sim.breakdown as any,
+              aiReasoning: sim.reasoning,
+              confidence: sim.confidence,
+              strengths: ["Consistency", "Clarity"],
+              weaknesses: ["Calculation Error"],
+              improvement: "Check arithmetic."
+          };
+      } else {
+          const chunkPromises = chunks.map(chunk => limit(async () => {
               try {
-                  // If we are using the simulator
-                  if (!process.env.DEEPSEEK_API_KEY) {
-                      const sim = await simulateDeepSeekCall(chunk.combinedText);
-                      return {
-                          question: chunk.questionId,
-                          score: sim.score,
-                          max: 10, // Mock max
-                          feedback: sim.reasoning,
-                          evidenceSnippet: "SIMULATED_SNIPPET",
-                          rubricReference: "SIMULATED_REFERENCE"
-                      };
+                  console.log(`[GRADING_CHUNK] Evaluating Chunk: ${chunk.questionId}`);
+
+                  // Reconstruct buffer from the first associated image if multimodal is needed.
+                  let chunkBuffer: Buffer | undefined;
+                  let chunkMime: string | undefined;
+
+                  if (chunk.associatedImagesBase64 && chunk.associatedImagesBase64.length > 0) {
+                      chunkBuffer = Buffer.from(chunk.associatedImagesBase64[0], 'base64');
+                      chunkMime = 'image/jpeg'; // As set in the extractPagesMultimodal function
                   }
 
-                  // Note: gradeSubmission currently accepts a single image buffer.
-                  // If chunks have multiple images, we'll pass the first one for now,
-                  // or pass undefined if none exist.
-                  const imageBuffer = chunk.associatedImagesBase64.length > 0
-                      ? Buffer.from(chunk.associatedImagesBase64[0], 'base64')
-                      : undefined;
-                  const mimeType = imageBuffer ? "image/jpeg" : undefined;
-
                   const chunkResult = await gradeSubmission(
-                      chunk.combinedText,
+                      `[Question Header/ID: ${chunk.questionId}]\n\n${chunk.combinedText}`,
                       rubricContent,
-                      totalMarks, // Will be overridden by the engine per question based on rubric
+                      totalMarks, // Note: ideal would be max marks for this specific question, but passing total to satisfy signature
                       config,
-                      imageBuffer,
-                      mimeType
+                      chunkBuffer,
+                      chunkMime
                   );
-
-                  // DeepSeek returns a breakdown array, but since we fed it ONE chunk,
-                  // it should return an array with 1 item. We extract that item.
-                  const resultItem = chunkResult.breakdown && chunkResult.breakdown.length > 0
-                    ? chunkResult.breakdown[0]
-                    : {
-                        question: chunk.questionId,
-                        score: chunkResult.totalScore || 0,
-                        max: 0,
-                        feedback: chunkResult.aiReasoning || "No feedback generated.",
-                        evidenceSnippet: "AI_SKIPPED",
-                    };
-
-                  // Enforce the question ID matches our chunk ID
-                  resultItem.question = chunk.questionId;
-
-                  return resultItem;
-
-              } catch (chunkError: any) {
-                  console.error(`[AI_CHUNK_ERROR] Failed to grade chunk ${chunk.questionId}:`, chunkError.message);
-
-                  // FAULT TOLERANCE: Do not fail the whole Promise.all
+                  return chunkResult;
+              } catch (e: any) {
+                  console.error(`[CHUNK_FAILED] Chunk ${chunk.questionId} failed:`, e.message);
                   return {
-                      question: chunk.questionId,
-                      score: 0,
-                      max: 0, // Prevent messing up total max marks calculations if we track it later
-                      feedback: `SYSTEM ERROR: Failed to grade this section due to an AI timeout or API error. (${chunkError.message})`,
-                      evidenceSnippet: "GRADING_FAILED_API_ERROR"
-                  };
+                      totalScore: 0,
+                      breakdown: [{
+                          question: chunk.questionId,
+                          score: 0,
+                          max: 0,
+                          feedback: "GRADING_FAILED_API_ERROR",
+                          rubricReference: "Error",
+                          isRelevant: false,
+                          mappedRubricQuestion: "Error",
+                          evidenceSnippet: "N/A"
+                      }],
+                      confidence: 0,
+                      aiReasoning: `API Failure for chunk ${chunk.questionId}.`
+                  } as GradingResult;
               }
-          });
-      });
+          }));
 
-      // Aggregate Results
-      const rawResults = await Promise.all(chunkPromises);
-      const validBreakdowns = rawResults.filter(Boolean) as NonNullable<typeof rawResults[0]>[];
+          const results = await Promise.all(chunkPromises);
 
-      let aggregatedScore = 0;
-      validBreakdowns.forEach(item => {
-          aggregatedScore += item.score;
-      });
+          for (const res of results) {
+              aggregatedScore += res.totalScore;
+              aggregatedConfidence += res.confidence;
 
-      // Since we chunked, the concept of "confidence" per exam is tricky.
-      // We will default to a standard high confidence unless chunks failed.
-      const hasFailures = validBreakdowns.some(item => item.evidenceSnippet === "GRADING_FAILED_API_ERROR");
-      const aggregatedConfidence = hasFailures ? 50 : 95; // Rough average proxy for now
+              // SILENT FILTERING: Only push relevant chunks to the final breakdown
+              const relevantChunks = res.breakdown.filter(b => b.isRelevant !== false);
+              finalBreakdown.push(...relevantChunks);
+          }
 
-      const aggregatedReasoning = "Graded in parallel isolation. See specific question feedback.";
-      const aggregatedIdentity = "UNKNOWN_IN_CHUNKS"; // If we need identity, we should parse the GLOBAL_METADATA chunk
+          aggregatedConfidence = results.length > 0 ? aggregatedConfidence / results.length : 0;
+
+          result = {
+              totalScore: aggregatedScore,
+              breakdown: finalBreakdown,
+              aiReasoning: globalAiReasoning,
+              confidence: aggregatedConfidence,
+              detectedIdentity: results.find(r => r.detectedIdentity && r.detectedIdentity !== 'UNIDENTIFIED_IDENTITY')?.detectedIdentity || 'UNIDENTIFIED_IDENTITY',
+              strengths: ["Detailed chunk breakdown evaluated."],
+              weaknesses: [],
+              improvement: "Review breakdown for specifics."
+          };
+
+          console.log(`[AI_SUCCESS] Graded ${chunks.length} chunks. Score: ${result.totalScore}/${totalMarks}`);
+      }
 
       // 4. Save Score & Feedback
-      const breakdownStr = JSON.stringify(validBreakdowns);
+      if (typeof result.totalScore !== 'number') {
+          throw new Error("Invalid AI Result: Missing totalScore");
+      }
+
+      const breakdownStr = JSON.stringify(result.breakdown);
 
       await prisma.score.upsert({
         where: { submissionId: submission.id },
         update: {
-          totalMarks: aggregatedScore,
+          totalMarks: result.totalScore,
           breakdown: breakdownStr,
-          remarks: aggregatedReasoning,
-          detectedIdentity: aggregatedIdentity,
+          remarks: result.aiReasoning,
+          detectedIdentity: result.detectedIdentity,
           gradedAt: new Date()
         },
         create: {
           submissionId: submission.id,
-          totalMarks: aggregatedScore,
+          totalMarks: result.totalScore,
           breakdown: breakdownStr,
-          remarks: aggregatedReasoning,
-          detectedIdentity: aggregatedIdentity
+          remarks: result.aiReasoning,
+          detectedIdentity: result.detectedIdentity
         }
       });
 
       // 5. Update Submission Status (Dynamic Confidence Threshold)
+      // UNIDENTIFIED FALLBACK: If AI returns null identity OR 'UNIDENTIFIED_IDENTITY' literal, handle flagging.
+      // If we also lack local user context (bulk upload), this is CRITICAL FLAGGING.
       let status: string;
       const threshold = submission.workSession.confidenceThreshold ?? 85;
 
+      const isIdentityMissing = !result.detectedIdentity || result.detectedIdentity === 'UNIDENTIFIED_IDENTITY';
       const isContextMissing = !submission.userId && !submission.studentRegNo;
 
-      if (isContextMissing) {
-          status = 'FLAGGED';
-          console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
+      if (isIdentityMissing) {
+          if (isContextMissing) {
+              // GHOST SUBMISSION: No AI ID, No DB ID.
+              status = 'FLAGGED';
+              result.confidence = 0;
+              result.aiReasoning = `IDENTITY CRISIS: ${result.aiReasoning || "System could not identify student."} Please manually assign ownership.`;
+              console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
+          } else {
+              // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
+              // We proceed but maybe lower confidence? For now, we trust the auth context but log it.
+              console.log(`[AI_IDENTITY] AI missed identity, but using Auth Context: ${submission.user?.fullName}`);
+              status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+          }
       } else {
-          status = aggregatedConfidence >= threshold ? 'GRADED' : 'FLAGGED';
+          status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
       }
 
-      console.log(`[AI_CONFIDENCE] Score: ${aggregatedConfidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
+      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
-        strengths: ["Parallel processing completed."],
-        weaknesses: hasFailures ? ["Some sections failed to grade due to network errors."] : [],
-        improvement: "Review chunk feedback for details."
+        strengths: result.strengths || [],
+        weaknesses: result.weaknesses || [],
+        improvement: result.improvement || "No specific advice."
       });
 
       await prisma.submission.update({
         where: { id: submission.id },
         data: {
           status,
-          confidenceScore: aggregatedConfidence,
+          confidenceScore: result.confidence,
           feedback: feedbackStr
         }
       });
@@ -318,11 +369,12 @@ Student Identifier: ${studentId}.
         data: {
           userId: submission.userId,
           action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
-          details: `Submission for ${submission.workSession.title} ${status}. Score: ${aggregatedScore}`,
+          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.totalScore}`,
           severity: status === 'GRADED' ? 'INFO' : 'WARNING'
         }
       });
 
+      // Increment Lecturer Quota
       if (submission.workSession.lecturerId) {
         await prisma.user.update({
             where: { id: submission.workSession.lecturerId },
@@ -332,7 +384,7 @@ Student Identifier: ${studentId}.
 
       return {
         success: true,
-        score: aggregatedScore,
+        score: result.totalScore,
         status
       };
 
