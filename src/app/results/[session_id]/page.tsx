@@ -9,8 +9,7 @@ import {
     ArrowRight,
     CheckCircle2,
     ShieldCheck,
-    Lock,
-    ExternalLink
+    Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,11 +26,12 @@ import { Label } from "@/components/ui/label";
 
 export default function StudentMagicPortal({ params }: { params: Promise<{ session_id: string }> }) {
     const router = useRouter();
+    // Verification State
     const [regNo, setRegNo] = useState("");
     const [loading, setLoading] = useState(false);
     const [resultData, setResultData] = useState<any>(null);
 
-    // Auth State
+    // Auth State (PLG Hook)
     const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('SIGNUP');
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -41,13 +41,14 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
     const handleVerify = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!regNo.trim()) {
-            toast.error("Please enter your Registration Number");
+            toast.error("Please enter your Registration Number.");
             return;
         }
 
         setLoading(true);
         try {
             const resolvedParams = await params;
+            // Execute the Verification API
             const res = await fetch(`/api/results/${resolvedParams.session_id}/verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -57,11 +58,11 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
             const data = await res.json();
 
             if (!res.ok) {
-                throw new Error(data.error || "Failed to find results.");
+                throw new Error(data.error || "Failed to find academic results.");
             }
 
             setResultData(data);
-            toast.success("Identity verified.");
+            toast.success("Identity verified securely.");
         } catch (err: any) {
             toast.error(err.message);
         } finally {
@@ -72,13 +73,13 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
     const handleAuthAndClaim = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!email || !password || (authMode === 'SIGNUP' && !fullName)) {
-            toast.error("Please fill in all required fields.");
+            toast.error("Please fill in all standard required fields.");
             return;
         }
 
         setAuthLoading(true);
         try {
-            // 1. Authenticate (using our existing student auth routes)
+            // 1. Authenticate using existing internal system routes
             const endpoint = authMode === 'SIGNUP' ? '/api/auth/student/signup' : '/api/auth/login';
             const authPayload = authMode === 'SIGNUP' ? { email, password, fullName } : { email, password };
 
@@ -90,10 +91,10 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
 
             if (!authRes.ok) {
                 const err = await authRes.json();
-                throw new Error(err.error || "Authentication failed.");
+                throw new Error(err.error || "Authentication procedure failed.");
             }
 
-            // 2. Claim the Result
+            // 2. Execute the Claim API (Permanent Link to Account)
             const resolvedParams = await params;
             const claimRes = await fetch(`/api/results/${resolvedParams.session_id}/claim`, {
                 method: 'POST',
@@ -103,11 +104,12 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
 
             if (!claimRes.ok) {
                  const err = await claimRes.json();
-                 throw new Error(err.error || "Failed to link result to your account.");
+                 throw new Error(err.error || "Failed to link result to your academic account.");
             }
 
-            toast.success("Account created and results saved successfully!");
-            // Redirect to the real student dashboard
+            toast.success("Account created and results permanently saved!");
+
+            // 3. The Redirect to their Standard Hub
             router.push('/student');
 
         } catch (err: any) {
@@ -123,7 +125,7 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
         window.open(`/api/download?path=${encodedPath}`, '_blank');
     };
 
-    // STATE 1: THE GATE (Verification)
+    // STEP 1: THE GATE (Minimalist Mobile-First Verification)
     if (!resultData) {
         return (
             <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 animate-in fade-in duration-500">
@@ -134,7 +136,7 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
                         </div>
                         <h1 className="text-3xl font-bold tracking-tight text-foreground">Secure Results</h1>
                         <p className="text-muted-foreground text-sm px-4 leading-relaxed">
-                            Enter your Registration Number to view your graded script and feedback.
+                            Enter your Registration Number below to access your academic results.
                         </p>
                     </div>
 
@@ -177,10 +179,10 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
         );
     }
 
-    // STATE 2 & 3: THE REVEAL & THE PLG HOOK
+    // STEP 2 & 3: THE REVEAL & THE PLG HOOK
     return (
         <div className="min-h-[100dvh] bg-background pb-24 animate-in slide-in-from-bottom-8 duration-700">
-            {/* Header */}
+            {/* Header Sticky */}
             <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-4 sm:px-6 py-4">
                 <div className="max-w-3xl mx-auto flex items-center justify-between">
                     <div>
@@ -194,7 +196,7 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
             </header>
 
             <main className="max-w-3xl mx-auto px-4 sm:px-6 mt-8 space-y-10">
-                {/* Score Hero */}
+                {/* Score Hero (Apple/Uber-Black Styling) */}
                 <section className="text-center space-y-6">
                     <div className="inline-flex flex-col items-center justify-center w-40 h-40 sm:w-48 sm:h-48 rounded-full border-[6px] border-foreground/5 bg-background shadow-2xl shadow-foreground/5 relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/5 to-transparent"></div>
@@ -267,17 +269,17 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
                     </Accordion>
                 </section>
 
-                {/* THE PLG HOOK (Account Claiming) */}
+                {/* THE PLG HOOK (Account Claiming Form) */}
                 {!resultData.isClaimed && (
                     <section className="pt-8 pb-12">
                         <Card className="border-border shadow-2xl shadow-foreground/5 bg-foreground text-background overflow-hidden relative">
-                            {/* Decorative background element */}
+                            {/* Decorative minimalist element */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[80px] rounded-full translate-x-1/2 -translate-y-1/2"></div>
 
                             <CardHeader className="relative z-10 pb-4">
                                 <CardTitle className="text-2xl font-semibold">Save your results.</CardTitle>
                                 <CardDescription className="text-background/70 text-base leading-relaxed">
-                                    Create an account to save these results permanently and track your academic progress across all modules.
+                                    Create an account or Log in to save these results permanently and track your academic progress.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="relative z-10 pt-2">
@@ -339,6 +341,7 @@ export default function StudentMagicPortal({ params }: { params: Promise<{ sessi
                     </section>
                 )}
 
+                {/* State if already claimed by an account */}
                 {resultData.isClaimed && (
                     <section className="pt-4 pb-8 text-center">
                         <div className="inline-flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 px-4 py-2 rounded-full border border-border/50">
