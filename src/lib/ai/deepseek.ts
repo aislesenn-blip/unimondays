@@ -100,14 +100,21 @@ Students rarely answer questions in order. A student might start with Question 6
 2. MANDATE 2: MULTI-PAGE SPILLOVER (CONTEXT BLEED)
 Answers often start on one page and finish on another. You have all the images. Read seamlessly across page boundaries to grade the complete thought.
 
-3. MANDATE 3: MULTIMODAL DIAGRAMS & CALCULATIONS
-Do not just read text. Actively look at, interpret, and grade handwritten sketches, diagrams, graphs, and mathematical formulas. If a rubric question requires a diagram or calculation, you must visually verify it in the images.
+3. MANDATE 3: RESTORE SEMANTIC GRADING TIERS
+NEVER use exact keyword matching. You must grade based on SEMANTIC MEANING. Use the Tiered Evaluation Method:
+- Tier 1 (Concept): Does the student understand the core idea? (Award partial marks).
+- Tier 2 (Process/Application): Did they apply the right steps or list conceptually accurate points? (Award partial marks, even if wording differs).
+- Tier 3 (Final Answer/Precision): Is the math or final conclusion correct?
+If a student's answer means the same thing as the rubric (e.g., 'Poor network' vs 'Failure in network system'), they get FULL marks for that point.
 
-4. MANDATE 4: THE STRICT SUB-QUESTION CHECKLIST
-Treat the Marking Scheme as an exhaustive checklist. If the rubric has Q1(a)(i), Q1(a)(ii), and Q1(b), you must find and grade each of those sub-questions individually. Do NOT group them into a single generic score. Every item in the rubric must have a corresponding entry in your final JSON output. AWARD MARKS WITH STRICT REFERENCE TO THE RUBRIC, NEVER EXCEEDING THE MAXIMUM ALLOCATED MARKS PER QUESTION.
+4. MANDATE 4: MATH & CALCULATION GRADING
+For calculation questions (like Q6), read the student's working. If their formula and final answer match the rubric's logic, award full marks. Do not ignore mathematical working. Actively interpret formulas, visual graphs, and handwritten diagrams.
 
-5. MANDATE 5: SKIPPED QUESTIONS
-If, and ONLY if, you have exhaustively searched all provided pages and cannot find any attempt at a specific rubric question, you must still include it in your JSON output. Give it a score of 0, and in the \`evidenceSnippet\`, explicitly write: "Student completely skipped this question." Do not ignore skipped questions in your output.
+5. MANDATE 5: MANDATORY EXHAUSTIVE OUTPUT (NO DROPPED QUESTIONS)
+You are FORBIDDEN from dropping questions from your JSON output. You must cross-reference the Marking Scheme. If the rubric contains Q1, Q2, Q3, Q4, Q5, and Q6, your final JSON array MUST contain an object for EVERY sub-question of Q1, Q2, Q3, Q4, Q5, AND Q6. If you reach the end of your context window, you must summarize, but DO NOT drop Q6. AWARD MARKS WITH STRICT REFERENCE TO THE RUBRIC, NEVER EXCEEDING THE MAXIMUM ALLOCATED MARKS PER QUESTION.
+
+6. MANDATE 6: SKIPPED QUESTIONS
+If, and ONLY if, you have exhaustively searched all provided pages and cannot find any attempt at a specific rubric question, you must still include it in your JSON array. Give it a score of 0, and in the \`evidenceSnippet\`, explicitly write: "Student completely skipped this question." Do not ignore skipped questions in your output.
 
 TEACHER'S CUSTOM INSTRUCTIONS:
 \`\`\`${teacherCustomInstructions}\`\`\`
