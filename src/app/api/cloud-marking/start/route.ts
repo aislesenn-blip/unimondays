@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { after } from "next/server"; // Next.js 15+ background execution
+
+export const maxDuration = 300; // 5 minutes max for Vercel
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,49 +13,62 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, cloudLink, totalMarks, markingScheme, strictness, calibration } = body;
+    // Replaced cloudLink with bulkFilePath per the new frontend Phase 1 integration
+    const { title, bulkFilePath, totalMarks, markingScheme, strictness, calibration } = body;
 
-    if (!title || !cloudLink) {
-        return NextResponse.json({ error: "Title and Cloud Link are required" }, { status: 400 });
+    if (!title || !bulkFilePath) {
+        return NextResponse.json({ error: "Title and massive PDF bulk file path are required." }, { status: 400 });
     }
 
-    // 1. Create Bulk Session
+    // 1. Create Bulk Session (This acts as our Session container)
+    // We repurpose the `cloudLink` column to store our internal `bulkFilePath`
     const bulkSession = await prisma.bulkSession.create({
       data: {
         title,
-        cloudLink,
+        cloudLink: bulkFilePath,
         lecturerId: user.id,
-        status: "PENDING",
+        status: "PENDING", // Initiating the Slicing/Extraction phase
         totalMarks: totalMarks || 100,
         markingScheme: markingScheme || "",
         calibration: JSON.stringify(calibration || {}),
       }
     });
 
-    // 2. Create Job to process the link
-    await prisma.job.create({
-        data: {
-            type: "CLOUD_MARKING",
-            payload: JSON.stringify({ bulkSessionId: bulkSession.id, lecturerId: user.id }),
-            status: "PENDING"
+    // 2. We use Next.js `after()` to process the heavy PDF slicing in the background
+    // This allows us to instantly return a 200 OK to the frontend, fulfilling the "Fire and Forget" promise.
+    after(async () => {
+        try {
+            console.log(`[CLOUD_MARKING_INIT] Starting background worker for BulkSession: ${bulkSession.id}`);
+
+            // Lazy load the heavy worker module only when executed
+            // This prevents Vercel serverless function size bloat on the main route
+            const { handleCloudMarking } = await import('@/workers/cloud-worker');
+
+            await handleCloudMarking({
+                bulkSessionId: bulkSession.id,
+                bulkFilePath: bulkFilePath,
+                lecturerId: user.id
+            });
+
+        } catch (backgroundError) {
+            console.error(`[CLOUD_MARKING_FATAL] Background worker crashed for ${bulkSession.id}:`, backgroundError);
+
+            // Update session status to FAILED so the UI can reflect the crash
+            await prisma.bulkSession.update({
+                where: { id: bulkSession.id },
+                data: {
+                    status: 'FAILED',
+                    errorMessage: backgroundError instanceof Error ? backgroundError.message : 'Unknown Slicing Error'
+                }
+            });
         }
     });
 
-    // 3. Trigger Queue (Assuming we use the same queue endpoint)
-    // In a real serverless env, we might hit the queue endpoint, but here we just create the job
-    // and let the worker pick it up or trigger it explicitly if needed.
-    // For now, let's assume the queue worker is polling or triggered via cron/webhook.
-    // But to be responsive, we can fire-and-forget the process endpoint.
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/queue/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'CLOUD_MARKING' }) // Signal to process
-    }).catch(e => console.error("Failed to trigger queue", e));
-
-    return NextResponse.json(bulkSession);
+    // 3. Immediately return the session ID to redirect the frontend to the progress dashboard
+    return NextResponse.json({ id: bulkSession.id, message: "Ingestion pipeline initialized." }, { status: 200 });
 
   } catch (error: any) {
-    console.error("Cloud Marking Start Error:", error);
+    console.error("[CLOUD_MARKING_START] Route Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
