@@ -111,7 +111,7 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageDat
             {
               role: "user",
               content: [
-                { type: "text", text: "Extract and transcribe all handwritten text on this page exactly as it appears. Do not grade." },
+                { type: "text", text: "Carefully analyze this exam page. 1) Transcribe all handwritten text. 2) Provide a detailed visual description of any diagrams, sketches, or graphs present, including labels and what they represent. Do not grade." },
                 {
                   type: "image_url",
                   image_url: {
