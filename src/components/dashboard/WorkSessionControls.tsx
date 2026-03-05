@@ -116,28 +116,6 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
             )}
         </div>
 
-        {/* AI Confidence Threshold */}
-        <div className="flex items-center gap-3 border-l pl-6">
-             <div className="flex flex-col gap-1">
-                 <Label htmlFor="confidence" className="text-xs font-semibold flex items-center gap-1 text-muted-foreground">
-                    <ShieldAlert className="h-3 w-3" />
-                    AI Flagging Threshold
-                 </Label>
-                 <div className="flex items-center gap-2">
-                    <input
-                        id="confidence"
-                        type="number"
-                        min="50" max="100"
-                        value={confidenceThreshold}
-                        onChange={(e) => setConfidenceThreshold(parseInt(e.target.value))}
-                        onBlur={(e) => updateSetting('confidenceThreshold', parseInt(e.target.value))}
-                        className="w-14 h-8 text-sm border rounded px-2"
-                    />
-                    <span className="text-xs text-muted-foreground">%</span>
-                 </div>
-             </div>
-        </div>
-
         {/* Manual Release Toggle */}
         {session.releaseMode === 'MANUAL' && (
              <div className="ml-auto flex items-center gap-4">
