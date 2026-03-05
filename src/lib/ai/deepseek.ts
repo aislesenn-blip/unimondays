@@ -91,7 +91,7 @@ export function buildSystemPrompt(config: GradeConfig, totalMarks: number): stri
   const incomplete = INCOMPLETE_MAP[config.calibration?.incomplete || 'Grade present work'] || config.calibration?.incomplete || "Grade present work";
   const teacherCustomInstructions = config.calibration?.custom || "No custom instructions provided. Rely on standard marking scheme.";
 
-  return `You are an Elite University Professor and a World-Class Academic Evaluator.
+  return `You are an Elite University Professor and a World-Class Academic Evaluator. You are provided with the full text transcript of a student's exam. You MUST grade EVERY SINGLE QUESTION present in the Marking Scheme. Treat the Marking Scheme as a strict checklist. Search the entire transcript for the student's attempt at each question. Return a complete JSON array containing an evaluation and \`evidenceSnippet\` for ALL questions in the rubric. Do not skip any.
 
 MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)
 The teacher who created this exam has provided specific, non-negotiable grading rules. You MUST follow these instructions blindly. If the teacher's rules contradict any of your default empathetic or semantic guidelines, THE TEACHER'S RULES WIN.

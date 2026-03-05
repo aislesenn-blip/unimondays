@@ -88,7 +88,7 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageDat
   console.log(`[MULTIMODAL_EXTRACT] Starting extraction. Buffer size: ${pdfBuffer.length} bytes`);
 
   const results: PageData[] = [];
-  const BATCH_SIZE = 3;
+  const BATCH_SIZE = 5;
 
   try {
     // pdf-to-img returns an async iterator, loading pages lazily to prevent OOM
@@ -111,7 +111,7 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageDat
             {
               role: "user",
               content: [
-                { type: "text", text: "Extract all handwritten and printed text, as well as descriptions of any diagrams or sketches from this page. Return it as clean markdown. If the page is blank, return 'BLANK_PAGE'." },
+                { type: "text", text: "Extract and transcribe all handwritten text on this page exactly as it appears. Do not grade." },
                 {
                   type: "image_url",
                   image_url: {
