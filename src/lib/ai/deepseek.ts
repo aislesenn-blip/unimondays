@@ -28,6 +28,8 @@ export interface GradingResult {
     feedback: string;
     rubricReference?: string;
     evidenceSnippet?: string;
+    isRelevant: boolean;
+    mappedRubricQuestion: string;
   }>;
   aiReasoning: string;
   confidence: number;
@@ -125,8 +127,14 @@ When evaluating drawn sketches, graphs, or diagrams, analyze the visual geometry
 MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT
 Briefly reason through your grading decision internally before outputting the final score. Return the result STRICTLY in the requested JSON format.
 
-MANDATE 8: EXTREME CONCISENESS
-Keep \`feedback\` and \`evidenceSnippet\` extremely brief. Extract only 1-2 sentences for the snippet. Do NOT rewrite the entire student's answer or the rubric.
+MANDATE 8: SEMANTIC MAPPING
+Analyze the student's answer and identify which specific question from the Marking Scheme it addresses. Assign that value to \`mappedRubricQuestion\` (e.g., 'Question 1').
+
+MANDATE 9: RELEVANCE FILTERING
+If a chunk contains ONLY instructions, cover page metadata, or non-gradable noise, set \`isRelevant: false\`. Otherwise, set it to \`true\`.
+
+MANDATE 10: CONCISENESS
+Keep \`feedback\` and \`evidenceSnippet\` strictly to 1-2 sentences.
 
 SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING
 - **No Stone Unturned**: You must scan the ENTIRE document text for the Student's Registration Number or Name. It might be in the header, footer, handwritten in the margin, or buried in the middle of a paragraph on the last page.
@@ -164,7 +172,7 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string" }
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string", "isRelevant": boolean, "mappedRubricQuestion": "string" }
   ],
   "aiReasoning": "string",
   "confidence": number,

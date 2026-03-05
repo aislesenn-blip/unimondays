@@ -137,6 +137,18 @@ export async function handleAiGrade(job: Job) {
 
       const { chunks, rawText } = extractedData;
 
+      // Identity Extraction: Scavenge the raw text for a registration number
+      const idMatch = rawText.match(/(?:REGISTRATION NUMBER|REG NO|STUDENT ID)[\s:]*([A-Za-z0-9\-]+)/i);
+      let extractedStudentId = idMatch ? idMatch[1] : undefined;
+
+      if (extractedStudentId && !submission.studentRegNo) {
+          await prisma.submission.update({
+              where: { id: submissionId },
+              data: { studentRegNo: extractedStudentId }
+          });
+          submission.studentRegNo = extractedStudentId; // Update local state to prevent false GHOST flagging later
+      }
+
       // Prepare Config
       const strictnessMap: Record<string, number> = {
         'LENIENT': 0.8, 'MODERATE': 1.0, 'STRICT': 1.2
@@ -192,7 +204,9 @@ Student Identifier: ${studentId}.
                           max: 10, // Mock max
                           feedback: sim.reasoning,
                           evidenceSnippet: "SIMULATED_SNIPPET",
-                          rubricReference: "SIMULATED_REFERENCE"
+                          rubricReference: "SIMULATED_REFERENCE",
+                          isRelevant: true,
+                          mappedRubricQuestion: "Q1"
                       };
                   }
 
@@ -223,6 +237,8 @@ Student Identifier: ${studentId}.
                         max: 0,
                         feedback: chunkResult.aiReasoning || "No feedback generated.",
                         evidenceSnippet: "AI_SKIPPED",
+                        isRelevant: false,
+                        mappedRubricQuestion: "Unmapped"
                     };
 
                   // Enforce the question ID matches our chunk ID
@@ -239,7 +255,9 @@ Student Identifier: ${studentId}.
                       score: 0,
                       max: 0, // Prevent messing up total max marks calculations if we track it later
                       feedback: `SYSTEM ERROR: Failed to grade this section due to an AI timeout or API error. (${chunkError.message})`,
-                      evidenceSnippet: "GRADING_FAILED_API_ERROR"
+                      evidenceSnippet: "GRADING_FAILED_API_ERROR",
+                      isRelevant: true, // Keep true so it isn't silently filtered out and can be tracked by the failure check
+                      mappedRubricQuestion: "Error"
                   };
               }
           });
@@ -247,7 +265,10 @@ Student Identifier: ${studentId}.
 
       // Aggregate Results
       const rawResults = await Promise.all(chunkPromises);
-      const validBreakdowns = rawResults.filter(Boolean) as NonNullable<typeof rawResults[0]>[];
+      let validBreakdowns = rawResults.filter(Boolean) as NonNullable<typeof rawResults[0]>[];
+
+      // SILENT FILTERING: Remove irrelevant metadata/noise chunks before saving to DB
+      validBreakdowns = validBreakdowns.filter(item => item.isRelevant !== false);
 
       let aggregatedScore = 0;
       validBreakdowns.forEach(item => {
@@ -260,7 +281,7 @@ Student Identifier: ${studentId}.
       const aggregatedConfidence = hasFailures ? 50 : 95; // Rough average proxy for now
 
       const aggregatedReasoning = "Graded in parallel isolation. See specific question feedback.";
-      const aggregatedIdentity = "UNKNOWN_IN_CHUNKS"; // If we need identity, we should parse the GLOBAL_METADATA chunk
+      const aggregatedIdentity = extractedStudentId || "UNKNOWN_IN_CHUNKS";
 
       // 4. Save Score & Feedback
       const breakdownStr = JSON.stringify(validBreakdowns);
