@@ -2,57 +2,56 @@ import { PageData } from './gemini';
 
 export interface QuestionChunk {
   questionId: string; // e.g., "Q1", "Q6", or "GLOBAL_METADATA"
-  combinedText: string; // All text for this question concatenated across all pages
-  associatedImagesBase64: string[]; // Array of unique Base64 images where this question appeared
+  combinedText: string;
+  associatedImagesBase64: string[];
 }
 
-/**
- * Parses OCR markdown from multiple pages, detecting question boundaries
- * and stitching scattered answers together into isolated QuestionChunks.
- */
 export function detectAndChunkQuestions(pages: PageData[]): QuestionChunk[] {
+  // Use a Map to easily retrieve and update existing chunks by questionId
   const chunkMap = new Map<string, QuestionChunk>();
 
-  // Initialize the catch-all metadata chunk
+  // Ensure GLOBAL_METADATA exists from the start
   chunkMap.set("GLOBAL_METADATA", {
     questionId: "GLOBAL_METADATA",
     combinedText: "",
     associatedImagesBase64: []
   });
 
+  // State Machine Tracker
   let activeQuestionId = "GLOBAL_METADATA";
 
-  // Robust Regex to catch OCR variations of question headers at the start of a line
-  // Matches: "Question 1", "Q1.", "1.", "Qn 2", "**Question 6**", "Q1 (continued)"
-  // Breakdown:
-  // ^\s*                     : Start of line, optional whitespace
-  // (\*\*|__)?               : Optional markdown bolding
-  // (Question|Qn|Q)?         : Optional word prefix (case-insensitive)
-  // \s*                      : Optional space
-  // (\d+[a-zA-Z]?)           : The actual Question Number/Letter (e.g., 1, 1a, 2B)
-  // \s*                      : Optional space
-  // [.):-]?                  : Optional punctuation separator
-  // (\s*\(continued\))?      : Optional continuation marker
-  // (\*\*|__)?               : Optional closing markdown bolding
-  // \s*                      : Trailing whitespace
-  const questionHeaderRegex = /^\s*(\*\*|__)?(?:Question|Qn|Q)?\s*(\d+[a-zA-Z]?)\s*[.):-]?\s*(?:\(continued\))?(\*\*|__)?\s*/i;
+  /**
+   * ROBUST REGEX EXPLANATION:
+   * - ^\s*(?:\*\*)? : Allows leading whitespace and optional bold markdown (**)
+   * - (?:Q(?:uestion|n)?\.?\s*|(\d+)\.\s*) : Non-capturing group matching variants like "Question 1", "Q1", "Qn 2.", or just "1."
+   * - (\d+[A-Za-z]?) : The core capture group grabbing the number and optional sub-part (e.g., "1", "1A", "6b")
+   * - \s*(?:\(continued\))? : Allows optional "(continued)" text
+   * - (?:\*\*)?\s*(?:[:\-\.)])? : Optional closing bold markdown and trailing punctuation/spacing
+   */
+  const questionHeaderRegex = /^\s*(?:\*\*)?(?:Q(?:uestion|n)?\.?\s*|(\d+)\.\s*)?(\d+[A-Za-z]?)\s*(?:\(continued\))?(?:\*\*)?\s*(?:[:\-\.)])?/i;
 
   for (const page of pages) {
+    if (!page.extractedText || page.extractedText === "BLANK_PAGE" || page.extractedText === "EXTRACTION_FAILED") {
+      continue;
+    }
+
     const lines = page.extractedText.split('\n');
+    let currentImageAddedToActiveChunk = false;
 
     for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) continue;
-
-      const match = trimmedLine.match(questionHeaderRegex);
+      const match = line.match(questionHeaderRegex);
 
       if (match) {
-        // match[2] captures the strict alphanumeric ID (e.g., "1", "1a", "6")
-        // We normalize it to "Q" + ID (e.g., "Q1", "Q6") to ensure standard stitching
-        const rawId = match[2].toUpperCase();
-        activeQuestionId = `Q${rawId}`;
+        // match[1] is the number from the "1. " format, match[2] is the core number from the "Q1" format.
+        // We normalize the ID to a standard "Q#" format.
+        const rawNumber = match[2] || match[1];
+        const newQuestionId = `Q${rawNumber.toUpperCase()}`;
 
-        // If this question doesn't exist yet, initialize it
+        // State Transition
+        activeQuestionId = newQuestionId;
+        currentImageAddedToActiveChunk = false; // Reset for the new chunk on this page
+
+        // Stitching Logic: Create if missing, otherwise we append to existing
         if (!chunkMap.has(activeQuestionId)) {
           chunkMap.set(activeQuestionId, {
             questionId: activeQuestionId,
@@ -60,32 +59,32 @@ export function detectAndChunkQuestions(pages: PageData[]): QuestionChunk[] {
             associatedImagesBase64: []
           });
         }
+      }
 
-        // Append the header line itself to the new/existing chunk for context
-        const chunk = chunkMap.get(activeQuestionId)!;
-        chunk.combinedText += (chunk.combinedText ? "\n" : "") + trimmedLine;
+      // Append text to the currently active chunk
+      const activeChunk = chunkMap.get(activeQuestionId)!;
+      // Only append non-empty lines to keep it clean, or append all to preserve formatting
+      if (line.trim() !== "") {
+          activeChunk.combinedText += (activeChunk.combinedText ? "\n" : "") + line.trim();
+      }
 
-        // Deduplicate image base64 injection
-        if (!chunk.associatedImagesBase64.includes(page.pageImageBase64)) {
-          chunk.associatedImagesBase64.push(page.pageImageBase64);
+      // Image Association & Deduplication
+      if (!currentImageAddedToActiveChunk && page.pageImageBase64) {
+        // Prevent duplicate images in the same chunk
+        if (!activeChunk.associatedImagesBase64.includes(page.pageImageBase64)) {
+          activeChunk.associatedImagesBase64.push(page.pageImageBase64);
         }
-      } else {
-        // No new header detected. Append this line to the currently active question chunk.
-        const chunk = chunkMap.get(activeQuestionId)!;
-        chunk.combinedText += (chunk.combinedText ? "\n" : "") + trimmedLine;
-
-        // Ensure the current page's image is associated with this active chunk
-        if (!chunk.associatedImagesBase64.includes(page.pageImageBase64)) {
-          chunk.associatedImagesBase64.push(page.pageImageBase64);
-        }
+        currentImageAddedToActiveChunk = true;
       }
     }
   }
 
+  // Cleanup: Remove GLOBAL_METADATA if it ended up completely empty
+  const globalMeta = chunkMap.get("GLOBAL_METADATA");
+  if (globalMeta && globalMeta.combinedText.trim() === "" && globalMeta.associatedImagesBase64.length === 0) {
+    chunkMap.delete("GLOBAL_METADATA");
+  }
+
   // Convert the Map back to an array
-  return Array.from(chunkMap.values()).map(chunk => ({
-    ...chunk,
-    // Clean up excessive newlines
-    combinedText: chunk.combinedText.trim()
-  }));
+  return Array.from(chunkMap.values());
 }
