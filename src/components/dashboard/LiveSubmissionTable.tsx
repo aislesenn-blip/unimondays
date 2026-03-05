@@ -80,46 +80,6 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
       }
   };
 
-  // Helper for Confidence Badge
-  const getConfidenceBadge = (confidence: number | null) => {
-      if (confidence === null || confidence === undefined) return null;
-
-      let colorClass = "";
-      let icon = <Shield className="h-3 w-3" />;
-      let label = "";
-
-      if (confidence >= 80) {
-          colorClass = "bg-green-100 text-green-700 border-green-200 hover:bg-green-200";
-          icon = <ShieldCheck className="h-3 w-3" />;
-          label = "High Trust";
-      } else if (confidence >= 50) {
-          colorClass = "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200";
-          icon = <ShieldAlert className="h-3 w-3" />;
-          label = "Medium Trust";
-      } else {
-          colorClass = "bg-red-100 text-red-700 border-red-200 hover:bg-red-200";
-          icon = <ShieldAlert className="h-3 w-3" />;
-          label = "Low Trust";
-      }
-
-      return (
-          <TooltipProvider>
-              <Tooltip>
-                  <TooltipTrigger>
-                      <Badge variant="outline" className={`flex items-center gap-1 cursor-help ${colorClass}`}>
-                          {icon}
-                          {Math.round(confidence)}%
-                      </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                      <p className="font-semibold">AI Confidence: {label}</p>
-                      <p className="text-xs">Based on OCR clarity and reasoning.</p>
-                  </TooltipContent>
-              </Tooltip>
-          </TooltipProvider>
-      );
-  };
-
   return (
     <div className="overflow-x-auto rounded-md border">
       <Table className="whitespace-nowrap">
@@ -128,7 +88,6 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
             <TableHead className="min-w-[180px] font-bold">Student Name</TableHead>
             <TableHead className="min-w-[120px] font-bold">Reg No</TableHead>
             <TableHead className="min-w-[140px]">Status</TableHead>
-            <TableHead className="min-w-[100px]">Confidence</TableHead>
             <TableHead className="min-w-[140px]">Submitted At</TableHead>
             <TableHead className="text-right font-bold min-w-[80px]">Score</TableHead>
             <TableHead className="text-right min-w-[100px]">Actions</TableHead>
@@ -188,32 +147,14 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                         </Tooltip>
                     </TooltipProvider>
                   ) : (sub.status === 'FLAGGED') ? (
-                     <div className="flex items-center gap-2">
-                         <TooltipProvider>
-                           <Tooltip>
-                             <TooltipTrigger>
-                               <Badge variant="outline" className="flex items-center gap-1.5 w-fit cursor-help bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  Flagged
-                               </Badge>
-                             </TooltipTrigger>
-                             <TooltipContent className="max-w-xs border-amber-200 bg-amber-50 text-amber-900">
-                               <p className="font-semibold mb-1">Manual Review Advised</p>
-                               <p className="text-xs">AI Confidence Low. Please review manually.</p>
-                             </TooltipContent>
-                           </Tooltip>
-                         </TooltipProvider>
-
-                         <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 rounded-full hover:bg-muted"
-                            onClick={() => handleRetry(sub.id)}
-                            disabled={retrying === sub.id}
-                         >
-                            <RotateCw className={`h-3 w-3 ${retrying === sub.id ? 'animate-spin' : ''}`} />
-                         </Button>
-                     </div>
+                    <Badge
+                      variant="default"
+                      className="bg-green-50 text-green-700 hover:bg-green-50 border-green-200 flex items-center gap-1.5 w-fit shadow-sm cursor-pointer"
+                      onDoubleClick={() => handleRetry(sub.id)}
+                    >
+                        <CheckCircle2 className="h-3 w-3" />
+                        Graded {retrying === sub.id && <RotateCw className="h-3 w-3 animate-spin ml-1" />}
+                    </Badge>
                   ) : (sub.status === 'FAILED') ? (
                      <div className="flex items-center gap-2">
                          <TooltipProvider>
@@ -244,9 +185,6 @@ export function LiveSubmissionTable({ initialSubmissions, workSession }: { initi
                   ) : (
                     <Badge variant="outline">{sub.status}</Badge>
                   )}
-                </TableCell>
-                <TableCell>
-                    {getConfidenceBadge(sub.confidenceScore)}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '-'}

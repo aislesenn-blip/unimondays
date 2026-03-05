@@ -255,14 +255,27 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                     <h3 className="text-sm font-medium mb-3">Grading Breakdown</h3>
                     <div className="border rounded-md">
                         {breakdown.map((item: any, i: number) => (
-                            <div key={i} className="flex justify-between p-3 text-sm border-b last:border-0">
-                                <div className="flex-1 pr-4">
-                                    <span className="font-medium text-foreground">{item.question}</span>
-                                    <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
+                            <div key={i} className="flex flex-col p-3 text-sm border-b last:border-0 gap-2">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1 pr-4">
+                                        <span className="font-medium text-foreground">{item.question}</span>
+                                        <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
+                                    </div>
+                                    <div className="font-mono font-medium text-right shrink-0 ml-4">
+                                        {item.score}/{item.max}
+                                    </div>
                                 </div>
-                                <div className="font-mono font-medium">
-                                    {item.score}/{item.max}
-                                </div>
+                                {item.evidenceSnippet && (
+                                    <details className="group">
+                                        <summary className="text-[11px] text-blue-600 hover:text-blue-800 cursor-pointer list-none flex items-center font-medium">
+                                            <span className="mr-1 group-open:rotate-90 transition-transform">▶</span>
+                                            Why this mark?
+                                        </summary>
+                                        <p className="text-[11px] text-muted-foreground bg-muted/30 p-2 mt-2 rounded border border-border/50 italic">
+                                            "{item.evidenceSnippet}"
+                                        </p>
+                                    </details>
+                                )}
                             </div>
                         ))}
                     </div>
