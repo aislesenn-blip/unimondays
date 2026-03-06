@@ -5,6 +5,9 @@ import { ocrDocument, extractPagesMultimodal, PageData } from '@/lib/ai/gemini';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 
+// Global cache to prevent duplicate OCR calls across concurrent grading tasks
+const ocrCache = new Map<string, Promise<string>>();
+
 export async function handleAiGrade(job: Job) {
   let data: any;
   try {
@@ -67,28 +70,51 @@ export async function handleAiGrade(job: Job) {
 
       // PARALLEL TASK 2: Rubric OCR (with Caching)
       const rubricOcrTask = async (): Promise<string> => {
-          if (submission.workSession.rubric) return submission.workSession.rubric;
+          // Check DB first
+          let ws = await prisma.workSession.findUnique({
+              where: { id: submission.workSession.id },
+              select: { rubric: true }
+          });
+          if (ws?.rubric) return ws.rubric;
           if (!submission.workSession.rubricUrl) return "Grade based on general academic standards and common sense.";
 
-          try {
-              console.log(`[SUPABASE_FETCH] Rubric File: ${submission.workSession.rubricUrl}`);
-              const buffer = await readFile(submission.workSession.rubricUrl, 'exam_pdfs');
-              const mimeType = submission.workSession.rubricUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+          const cacheKey = `rubric_${submission.workSession.id}`;
+          if (ocrCache.has(cacheKey)) {
+              console.log(`[OCR_CACHE] Waiting for concurrent Rubric OCR for ${submission.workSession.id}`);
+              return ocrCache.get(cacheKey)!;
+          }
 
-              console.log(`[OCR_START] Processing Rubric...`);
-              const text = await ocrDocument(buffer, mimeType);
-              console.log(`[OCR_SUCCESS] Rubric extracted: ${text.length} chars.`);
+          const promise = (async () => {
+              try {
+                  const rubricUrl = submission.workSession.rubricUrl!; // Guaranteed to exist by check above
+                  console.log(`[SUPABASE_FETCH] Rubric File: ${rubricUrl}`);
+                  const buffer = await readFile(rubricUrl, 'exam_pdfs');
+                  const mimeType = rubricUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
 
-              if (text && text.length > 50) {
-                  await prisma.workSession.update({
-                      where: { id: submission.workSession.id },
-                      data: { rubric: text }
-                  }).catch(e => console.warn("[DB_WARN] Failed to cache rubric", e));
+                  console.log(`[OCR_START] Processing Rubric...`);
+                  const text = await ocrDocument(buffer, mimeType);
+                  console.log(`[OCR_SUCCESS] Rubric extracted: ${text.length} chars.`);
+
+                  if (text && text.length > 50) {
+                      await prisma.workSession.update({
+                          where: { id: submission.workSession.id },
+                          data: { rubric: text }
+                      }).catch(e => console.warn("[DB_WARN] Failed to cache rubric", e));
+                  }
+                  return text;
+              } catch (e: any) {
+                  console.warn("[OCR_WARN] Rubric OCR failed, defaulting.", e.message);
+                  return "Grade based on general academic standards and common sense.";
               }
-              return text;
-          } catch (e: any) {
-              console.warn("[OCR_WARN] Rubric OCR failed, defaulting.", e.message);
-              return "Grade based on general academic standards and common sense.";
+          })();
+
+          ocrCache.set(cacheKey, promise);
+
+          try {
+              return await promise;
+          } finally {
+              // Optionally remove from in-memory cache after resolving since it's now in DB
+              // ocrCache.delete(cacheKey);
           }
       };
 
@@ -99,15 +125,33 @@ export async function handleAiGrade(job: Job) {
 
           // Check for URL-like paths (uploaded files) including 'rubrics/', 'bulk_uploads/', or pdf extensions
           if (ms.startsWith('rubrics/') || ms.startsWith('bulk_uploads/') || ms.includes('/') || ms.toLowerCase().endsWith('.pdf')) {
+              const cacheKey = `ms_${submission.workSession.id}`;
+              if (ocrCache.has(cacheKey)) {
+                  console.log(`[OCR_CACHE] Waiting for concurrent Marking Scheme OCR for ${submission.workSession.id}`);
+                  return ocrCache.get(cacheKey)!;
+              }
+
+              const promise = (async () => {
+                  try {
+                      console.log(`[SUPABASE_FETCH] Marking Scheme: ${ms}`);
+                      const buffer = await readFile(ms, 'exam_pdfs');
+                      const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+                      const text = await ocrDocument(buffer, mimeType);
+                      return text;
+                  } catch (e: any) {
+                      console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
+                      return "";
+                  }
+              })();
+
+              ocrCache.set(cacheKey, promise);
+
               try {
-                  console.log(`[SUPABASE_FETCH] Marking Scheme: ${ms}`);
-                  const buffer = await readFile(ms, 'exam_pdfs');
-                  const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-                  const text = await ocrDocument(buffer, mimeType);
-                  return text;
-              } catch (e: any) {
-                  console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
-                  return undefined;
+                  const result = await promise;
+                  return result || undefined;
+              } finally {
+                  // Keep it in cache since we aren't saving it to the DB in this flow,
+                  // or rely on the serverless lifecycle to wipe it out.
               }
           }
           return ms;

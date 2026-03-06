@@ -138,14 +138,10 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string", "isRelevant": boolean, "mappedRubricQuestion": "string" }
+    { "question_id": "Q1", "score": number, "short_evidence": "max 15 words" }
   ],
-  "aiReasoning": "string",
   "confidence": number,
-  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')",
-  "strengths": ["string"],
-  "weaknesses": ["string"],
-  "improvement": "string"
+  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')"
 }
 Total score max: ${totalMarks}.`;
 }
@@ -197,8 +193,31 @@ ${ocrText}` }
     // Sanitize JSON (Markdown Stripping)
     const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
 
-    const result = JSON.parse(cleanContent);
-    return result as GradingResult;
+    const parsedDietJson = JSON.parse(cleanContent);
+
+    // Map Diet JSON back to the legacy GradingResult structure expected by the app
+    const mappedBreakdown = (parsedDietJson.breakdown || []).map((b: any) => ({
+      question: b.question_id || 'Unknown',
+      score: b.score || 0,
+      max: 10, // Default fallback, true max is normally in the rubric but we save tokens
+      feedback: b.short_evidence || '',
+      evidenceSnippet: b.short_evidence || '',
+      isRelevant: true,
+      mappedRubricQuestion: b.question_id || 'Unknown'
+    }));
+
+    const result: GradingResult = {
+      totalScore: parsedDietJson.totalScore || 0,
+      breakdown: mappedBreakdown,
+      aiReasoning: "Holistic grading completed.",
+      confidence: parsedDietJson.confidence || 90,
+      detectedIdentity: parsedDietJson.detectedIdentity,
+      strengths: [],
+      weaknesses: [],
+      improvement: ""
+    };
+
+    return result;
 
   } catch (error: any) {
     console.error("AI Grading Error:", error);
