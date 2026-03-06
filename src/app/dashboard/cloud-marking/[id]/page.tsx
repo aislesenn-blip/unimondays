@@ -9,10 +9,12 @@ import {
   UserPlus,
   ArrowRight,
   GitMerge,
-  Cpu
+  Cpu,
+  Layers,
+  DatabaseZap,
+  Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -28,12 +30,12 @@ import {
 interface BulkSessionData {
   id: string;
   title: string;
-  status: string;
+  status: string; // 'PENDING' | 'SLICING' | 'INJECTING' | 'PROCESSING' | 'READY' | 'COMPLETED' | 'FAILED'
   processedFiles: number;
   totalFiles: number;
   unidentifiedCount: number;
   errorMessage?: string;
-  submissions: any[]; // In a real app, this might be paginated
+  submissions: any[];
 }
 
 export default function CloudMarkingSessionPage({ params }: { params: Promise<{ id: string }> }) {
@@ -54,9 +56,7 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
           const data = await res.json();
           setSession(data);
 
-          // Only stop main loader if session is technically "done" with the slicing/uploading phase.
-          // Grading might still be happening in the background.
-          if (data.status === 'READY' || data.status === 'COMPLETED' || data.status === 'FAILED') {
+          if (['READY', 'COMPLETED', 'FAILED'].includes(data.status)) {
              setLoading(false);
           }
         }
@@ -65,8 +65,10 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
       }
     };
 
+    // Initial fetch
     fetchStatus();
-    interval = setInterval(fetchStatus, 3000); // Poll every 3s
+    // Start polling
+    interval = setInterval(fetchStatus, 3000);
 
     return () => {
       isMounted = false;
@@ -74,38 +76,28 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
     };
   }, [params]);
 
-  // Derived Grading Progress
+  // Derived Progress & States
+  const isSlicing = session?.status === 'PENDING' || session?.status === 'SLICING';
+  const isInjecting = session?.status === 'INJECTING';
+  const isProcessing = session?.status === 'PROCESSING' || session?.status === 'READY';
+
+  const slicingProgress = session?.totalFiles ? (session.processedFiles / session.totalFiles) * 100 : 0;
   const gradingProgress = session?.submissions?.length
       ? (session.submissions.filter((s: any) => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status)).length / session.submissions.length) * 100
       : 0;
-
   const isGradingComplete = session?.submissions?.length
       ? session.submissions.every((s: any) => ['GRADED', 'FLAGGED', 'FAILED'].includes(s.status))
       : false;
-
-  const handleSyncToClass = async () => {
-    // Ideally this opens a modal to select a class.
-    // For this MVP/Sim, we will just simulate a "Create New Class" or "Sync to Default"
-    toast.info("Feature: Sync to existing class (Coming Soon)");
-  };
 
   const handleCreateNewClass = async () => {
       if (!session) return;
       setSyncing(true);
       try {
-          const res = await fetch(`/api/cloud-marking/${session.id}/convert`, {
-              method: 'POST'
-          });
-
-          if (!res.ok) {
-              const err = await res.json();
-              throw new Error(err.error || "Conversion failed");
-          }
+          const res = await fetch(`/api/cloud-marking/${session.id}/convert`, { method: 'POST' });
+          if (!res.ok) throw new Error((await res.json()).error || "Conversion failed");
 
           const data = await res.json();
           toast.success("Converted to Class successfully!");
-
-          // Redirect to the newly created Class/WorkSession
           router.push(`/dashboard/classes/${data.classId}`);
       } catch (error: any) {
           toast.error(error.message);
@@ -114,47 +106,52 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
       }
   };
 
-  if (!session) return <div className="flex justify-center p-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (!session) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+            <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground uppercase tracking-widest font-medium animate-pulse">Establishing Link</p>
+        </div>
+    );
+  }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between border-b pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{session.title}</h1>
-          <div className="flex items-center gap-3 mt-2">
-             <Badge variant={session.status === 'READY' ? 'default' : session.status === 'FAILED' ? 'destructive' : 'secondary'}>
-                {session.status === 'PROCESSING' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+    <div className="space-y-12 animate-in fade-in duration-500 max-w-6xl mx-auto pb-24">
+      {/* Premium Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-border/50 pb-8 gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 mb-4">
+             <Badge
+                variant="outline"
+                className={`uppercase tracking-widest text-[10px] font-bold px-3 py-1 rounded-full ${
+                    session.status === 'FAILED' ? 'border-red-500/50 text-red-500 bg-red-500/10' :
+                    session.status === 'COMPLETED' || session.status === 'READY' ? 'border-emerald-500/50 text-emerald-500 bg-emerald-500/10' :
+                    'border-primary/50 text-primary bg-primary/10'
+                }`}
+             >
+                {session.status === 'PROCESSING' && <Loader2 className="mr-2 h-3 w-3 animate-spin inline" />}
                 {session.status}
              </Badge>
-
-             {/* Slicing Progress */}
-             <span className="text-muted-foreground text-sm">
-                {session.processedFiles} / {session.totalFiles} Pages Processed
-             </span>
-
-             {/* Grading Progress Indicator */}
-             {session.status === 'READY' && !isGradingComplete && (
-                 <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 flex items-center gap-1">
-                     <Cpu className="h-3 w-3 animate-pulse" />
-                     Grading: {Math.round(gradingProgress)}%
-                 </Badge>
-             )}
           </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">{session.title}</h1>
+          <p className="text-muted-foreground text-sm flex items-center gap-2">
+             <Layers className="h-4 w-4" /> Massive Payload Session
+          </p>
         </div>
-        <div className="flex gap-2">
-           {session.status === 'READY' && (
+
+        <div className="flex items-center gap-4">
+           {(session.status === 'READY' || session.status === 'COMPLETED') && (
                <>
-                   <Button variant="outline" onClick={() => router.push('/dashboard/cloud-marking')}>
-                        Cancel
+                   <Button variant="ghost" onClick={() => router.push('/dashboard/cloud-marking')} className="text-muted-foreground hover:text-foreground">
+                        Dismiss
                    </Button>
                    <Button
                         onClick={handleCreateNewClass}
                         disabled={syncing || !isGradingComplete}
-                        className={!isGradingComplete ? "opacity-50 cursor-not-allowed" : ""}
-                        title={!isGradingComplete ? "Wait for grading to finish" : "Sync to Class"}
+                        className={`bg-foreground text-background hover:bg-foreground/90 transition-all ${!isGradingComplete ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                         {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GitMerge className="mr-2 h-4 w-4" />}
-                        Convert to Class
+                        Commit to System
                    </Button>
                </>
            )}
@@ -163,138 +160,187 @@ export default function CloudMarkingSessionPage({ params }: { params: Promise<{ 
 
       {/* FAILED STATE */}
       {session.status === 'FAILED' && (
-          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-6 flex flex-col items-center justify-center text-center space-y-3">
-              <div className="h-12 w-12 rounded-full bg-destructive/20 flex items-center justify-center text-destructive">
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-8 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="h-14 w-14 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500">
                   <AlertTriangle className="h-6 w-6" />
               </div>
-              <h3 className="text-lg font-semibold text-destructive">Processing Failed</h3>
-              <p className="text-sm text-destructive/80 max-w-lg">
-                  {session.errorMessage || "An unexpected error occurred during cloud processing. Please check the file link and try again."}
+              <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">Process Terminated</h3>
+              <p className="text-sm text-muted-foreground max-w-lg">
+                  {session.errorMessage || "A fatal error occurred during the slicing or ingestion phase. Please check the massive PDF format and retry."}
               </p>
-              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => router.push('/dashboard/cloud-marking')}>
-                  Return to Dashboard
+              <Button variant="outline" className="mt-4 border-red-500/20 text-red-600 hover:bg-red-500/10" onClick={() => router.push('/dashboard/cloud-marking')}>
+                  Acknowledge & Return
               </Button>
           </div>
       )}
 
-      {/* MANDATE 4: RECONCILIATION UI */}
-      {(session.status === 'PROCESSING' || session.status === 'PENDING') ? (
-          <Card className="border-dashed border-2">
-              <CardContent className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                  <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center animate-pulse">
-                      <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      {/* FIRE AND FORGET ASYNC STATE UI */}
+      {(!['READY', 'COMPLETED', 'FAILED'].includes(session.status)) ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center space-y-12">
+
+              <div className="relative">
+                  <div className="absolute inset-0 bg-primary/20 blur-[50px] rounded-full" />
+                  <div className="h-24 w-24 bg-background border border-border/50 rounded-3xl flex items-center justify-center relative shadow-2xl">
+                      <Cpu className="h-10 w-10 text-primary animate-pulse" />
                   </div>
-                  <h3 className="text-xl font-semibold">AI is Grading & Organizing...</h3>
-                  <p className="text-muted-foreground max-w-md">
-                      The system is autonomously fetching, slicing, and grading the submissions.
-                      Results will appear here shortly.
+              </div>
+
+              <div className="space-y-4 max-w-md mx-auto">
+                  <h3 className="text-2xl font-semibold tracking-tight text-foreground">
+                      {isSlicing ? "Slicing Massive Payload..." :
+                       isInjecting ? "Injecting into Queue..." :
+                       "Grading Engine Active..."}
+                  </h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                      This is a "fire and forget" background operation. You may safely close this tab or navigate away. The system is autonomously processing the data.
                   </p>
-                  {/* Progress Bar Simulation */}
-                   <div className="w-full max-w-xs h-2 bg-muted rounded-full overflow-hidden">
-                       <div
-                           className="h-full bg-primary transition-all duration-500 ease-out"
-                           style={{ width: `${session.totalFiles > 0 ? (session.processedFiles / session.totalFiles) * 100 : 5}%` }}
-                       />
-                   </div>
-                   <p className="text-xs text-muted-foreground">
-                       {Math.round(session.totalFiles > 0 ? (session.processedFiles / session.totalFiles) * 100 : 0)}% Complete
-                   </p>
-              </CardContent>
-          </Card>
-      ) : session.status === 'FAILED' ? null : (
-          <div className="grid gap-6 md:grid-cols-2">
-              {/* MATCHES */}
-              <Card className="border-green-100 bg-green-50/20">
-                  <CardHeader>
-                      <CardTitle className="text-green-700 flex items-center gap-2">
-                          <CheckCircle2 className="h-5 w-5" /> Matched Students
-                      </CardTitle>
-                      <CardDescription>Scripts matched to existing database records.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                      <div className="text-3xl font-bold text-green-800 mb-4">
-                          {session.submissions?.filter((s: any) => s.userId || s.studentRegNo)?.length || 0}
-                      </div>
-                      <div className="space-y-2">
-                          <p className="text-sm text-muted-foreground">
-                              These scripts have high-confidence identity matches.
-                          </p>
-                          <Button variant="outline" className="w-full border-green-200 hover:bg-green-50 text-green-700">
-                              <GitMerge className="mr-2 h-4 w-4" /> Sync to Roster
-                          </Button>
-                      </div>
-                  </CardContent>
-              </Card>
+              </div>
 
-              {/* UNIDENTIFIED */}
-              <Card className="border-amber-100 bg-amber-50/20">
-                  <CardHeader>
-                      <CardTitle className="text-amber-700 flex items-center gap-2">
-                          <AlertTriangle className="h-5 w-5" /> Unidentified / New
-                      </CardTitle>
-                      <CardDescription>Scripts that need manual assignment.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                       <div className="text-3xl font-bold text-amber-800 mb-4">
-                          {session.submissions?.filter((s: any) => !s.userId && !s.studentRegNo)?.length || 0}
-                      </div>
-                      <div className="space-y-2">
-                          <p className="text-sm text-muted-foreground">
-                              Students not found in the roster or ID illegible.
-                          </p>
-                           <Button variant="outline" className="w-full border-amber-200 hover:bg-amber-50 text-amber-700">
-                              <UserPlus className="mr-2 h-4 w-4" /> Add as New Students
-                          </Button>
-                      </div>
-                  </CardContent>
-              </Card>
-
-              {/* LIVE TABLE PREVIEW */}
-              <Card className="md:col-span-2">
-                  <CardHeader>
-                      <CardTitle className="flex justify-between items-center">
-                          <span>Submission Preview</span>
-                          <span className="text-sm font-normal text-muted-foreground">
-                              {session.submissions?.length} Submissions
+              {/* Minimalist Progress Indicators */}
+              <div className="w-full max-w-lg space-y-8 bg-muted/20 p-8 rounded-2xl border border-border/50">
+                  {/* Step 1: Slicing */}
+                  <div className="space-y-3">
+                      <div className="flex justify-between text-sm font-medium">
+                          <span className={isSlicing ? "text-foreground" : "text-muted-foreground"}>
+                              1. AI Heuristic Slicing
                           </span>
-                      </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                          <span className="text-muted-foreground font-mono">
+                              {session.totalFiles > 0 ? `${session.processedFiles}/${session.totalFiles}` : "Initializing..."}
+                          </span>
+                      </div>
+                      <div className="w-full h-1 bg-border/50 rounded-full overflow-hidden">
+                          <div
+                              className={`h-full transition-all duration-700 ease-out ${!isSlicing ? "bg-emerald-500" : "bg-primary"}`}
+                              style={{ width: `${session.totalFiles > 0 ? slicingProgress : (isSlicing ? 5 : 100)}%` }}
+                          />
+                      </div>
+                  </div>
+
+                  {/* Step 2: Queue Injection */}
+                  <div className={`space-y-3 transition-opacity duration-500 ${isSlicing ? "opacity-30" : "opacity-100"}`}>
+                      <div className="flex justify-between text-sm font-medium">
+                          <span className={isInjecting ? "text-foreground" : "text-muted-foreground"}>
+                              2. Queue Database Injection
+                          </span>
+                          <span className="text-muted-foreground">
+                              {isInjecting ? <Loader2 className="h-3 w-3 animate-spin inline" /> : (!isSlicing && <Check className="h-4 w-4 text-emerald-500 inline" />)}
+                          </span>
+                      </div>
+                      <div className="w-full h-1 bg-border/50 rounded-full overflow-hidden">
+                          <div
+                              className={`h-full transition-all duration-700 ease-out ${isProcessing || session.status === 'READY' ? "bg-emerald-500" : "bg-primary"}`}
+                              style={{ width: `${isProcessing || session.status === 'READY' ? 100 : (isInjecting ? 50 : 0)}%` }}
+                          />
+                      </div>
+                  </div>
+
+                  {/* Step 3: Grading */}
+                  <div className={`space-y-3 transition-opacity duration-500 ${isSlicing || isInjecting ? "opacity-30" : "opacity-100"}`}>
+                      <div className="flex justify-between text-sm font-medium">
+                          <span className={isProcessing ? "text-foreground" : "text-muted-foreground"}>
+                              3. DeepSeek Map-Reduce Engine
+                          </span>
+                          <span className="text-muted-foreground font-mono">
+                              {Math.round(gradingProgress)}%
+                          </span>
+                      </div>
+                      <div className="w-full h-1 bg-border/50 rounded-full overflow-hidden">
+                          <div
+                              className="h-full bg-primary transition-all duration-700 ease-out"
+                              style={{ width: `${gradingProgress}%` }}
+                          />
+                      </div>
+                  </div>
+              </div>
+          </div>
+      ) : session.status === 'FAILED' ? null : (
+          <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-700">
+
+              <div className="grid gap-6 md:grid-cols-2">
+                  {/* METRIC CARDS */}
+                  <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-6 flex items-center justify-between">
+                      <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Valid Extractions</p>
+                          <p className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">
+                              {session.submissions?.filter((s: any) => s.userId || s.studentRegNo)?.length || 0}
+                          </p>
+                      </div>
+                      <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                          <CheckCircle2 className="h-6 w-6" />
+                      </div>
+                  </div>
+
+                  <div className="border border-amber-500/20 bg-amber-500/5 rounded-2xl p-6 flex items-center justify-between">
+                      <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Unidentified IDs</p>
+                          <p className="text-4xl font-bold text-amber-600 dark:text-amber-400">
+                              {session.submissions?.filter((s: any) => !s.userId && !s.studentRegNo)?.length || 0}
+                          </p>
+                      </div>
+                      <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                          <Users className="h-6 w-6" />
+                      </div>
+                  </div>
+              </div>
+
+              {/* LUXURY DATA TABLE */}
+              <div className="border border-border/50 rounded-2xl overflow-hidden bg-card/50 backdrop-blur-sm">
+                  <div className="p-6 border-b border-border/50 flex justify-between items-center bg-muted/10">
+                      <h3 className="text-lg font-semibold text-foreground">Extracted Records</h3>
+                      <Badge variant="outline" className="font-mono text-xs border-primary/20 bg-primary/5 text-primary">
+                          {session.submissions?.length || 0} TOTAL
+                      </Badge>
+                  </div>
+                  <div className="p-0">
                       <Table>
-                          <TableHeader>
-                              <TableRow>
-                                  <TableHead>Identity</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead className="text-right">Score</TableHead>
+                          <TableHeader className="bg-muted/30">
+                              <TableRow className="hover:bg-transparent border-border/50">
+                                  <TableHead className="font-semibold text-xs uppercase tracking-wider h-12">Identity Marker</TableHead>
+                                  <TableHead className="font-semibold text-xs uppercase tracking-wider h-12">Engine Status</TableHead>
+                                  <TableHead className="font-semibold text-xs uppercase tracking-wider h-12 text-right">Awarded</TableHead>
                               </TableRow>
                           </TableHeader>
                           <TableBody>
                               {session.submissions?.map((sub: any) => (
-                                  <TableRow key={sub.id}>
-                                      <TableCell>
-                                          <div className="flex flex-col">
-                                              <span className="font-medium">
-                                                  {sub.studentName || sub.studentRegNo || sub.score?.detectedIdentity || <span className="text-amber-600 italic">Unidentified</span>}
+                                  <TableRow key={sub.id} className="border-border/50 hover:bg-muted/30 transition-colors">
+                                      <TableCell className="py-4">
+                                          <div className="flex flex-col space-y-1">
+                                              <span className="font-medium text-sm text-foreground">
+                                                  {sub.studentName || sub.studentRegNo || sub.score?.detectedIdentity || <span className="text-amber-500/80 italic">Unidentified Document</span>}
                                               </span>
                                               {(sub.studentName || sub.score?.detectedIdentity) && sub.studentRegNo && (
-                                                  <span className="text-xs text-muted-foreground">{sub.studentRegNo}</span>
+                                                  <span className="text-xs text-muted-foreground font-mono">{sub.studentRegNo}</span>
                                               )}
                                           </div>
                                       </TableCell>
-                                      <TableCell>
-                                          <Badge variant={sub.status === 'GRADED' ? 'default' : sub.status === 'FLAGGED' ? 'destructive' : 'secondary'}>
+                                      <TableCell className="py-4">
+                                          <Badge
+                                              variant="outline"
+                                              className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-sm ${
+                                                  sub.status === 'GRADED' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' :
+                                                  sub.status === 'FLAGGED' ? 'border-red-500/30 text-red-500 bg-red-500/5' :
+                                                  'border-border text-muted-foreground'
+                                              }`}
+                                          >
                                               {sub.status}
                                           </Badge>
                                       </TableCell>
-                                      <TableCell className="text-right font-mono">
-                                          {sub.score?.totalMarks !== undefined ? sub.score.totalMarks : '-'}
+                                      <TableCell className="py-4 text-right font-mono text-sm">
+                                          {sub.score?.totalMarks !== undefined ? sub.score.totalMarks : <span className="text-muted-foreground/30">-</span>}
                                       </TableCell>
                                   </TableRow>
                               ))}
+                              {(!session.submissions || session.submissions.length === 0) && (
+                                  <TableRow>
+                                      <TableCell colSpan={3} className="h-32 text-center text-muted-foreground text-sm">
+                                          No records generated yet.
+                                      </TableCell>
+                                  </TableRow>
+                              )}
                           </TableBody>
                       </Table>
-                  </CardContent>
-              </Card>
+                  </div>
+              </div>
           </div>
       )}
     </div>
