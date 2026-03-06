@@ -22,14 +22,21 @@ const openRouter = process.env.OPENROUTER_API_KEY
 export interface GradingResult {
   totalScore: number;
   breakdown: Array<{
-    question_id: string;
+    question: string;
     score: number;
     max: number;
-    short_evidence: string;
+    feedback: string;
+    rubricReference?: string;
+    evidenceSnippet?: string;
+    isRelevant: boolean;
+    mappedRubricQuestion: string;
   }>;
   aiReasoning: string;
   confidence: number;
   detectedIdentity?: string | null;
+  strengths?: string[];
+  weaknesses?: string[];
+  improvement?: string;
 }
 
 export interface CalibrationSettings {
@@ -131,11 +138,14 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question_id": "Q1", "score": number, "max": number, "short_evidence": "string (max 15 words)" }
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string", "isRelevant": boolean, "mappedRubricQuestion": "string" }
   ],
   "aiReasoning": "string",
   "confidence": number,
-  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')"
+  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')",
+  "strengths": ["string"],
+  "weaknesses": ["string"],
+  "improvement": "string"
 }
 Total score max: ${totalMarks}.`;
 }
