@@ -52,8 +52,8 @@ export async function simulateDeepSeekCall(ocrText: string): Promise<AIResponse>
     return {
         score: Math.floor(Math.random() * 40) + 60, // 60-100
         breakdown: [
-            { question: "Q1", score: 10, max: 10, feedback: "Correct definition." },
-            { question: "Q2", score: 8, max: 10, feedback: "Minor calculation error." }
+            { question_id: "Q1", score: 10, short_evidence: "Correct definition." },
+            { question_id: "Q2", score: 8, short_evidence: "Minor calculation error." }
         ],
         reasoning: "Student demonstrates solid understanding but made a minor arithmetic mistake in Q2.",
         confidence: Math.random() * 20 + 80, // 80-100%

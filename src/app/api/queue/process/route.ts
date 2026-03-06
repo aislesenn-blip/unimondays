@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleAiGrade } from '@/workers/grading-worker';
 import { handleCloudMarking } from '@/workers/cloud-worker';
+import pLimit from 'p-limit';
 
 export const maxDuration = 300; // 5 Minutes (Vercel Pro/Enterprise)
 export const dynamic = 'force-dynamic'; // Disable caching
@@ -40,8 +41,12 @@ export async function POST(req: NextRequest) {
 
     console.log(`[QUEUE] Processing ${jobs.length} jobs...`);
 
-    // 2. Process Jobs (SERIAL EXECUTION)
-    for (const job of jobs) {
+    const limit = pLimit(2);
+
+    // 2. Process Jobs (PARALLEL EXECUTION WITH CONCURRENCY LIMIT)
+    await Promise.allSettled(jobs.map(job => limit(async () => {
+        if (rateLimitHit) return; // Skip remaining if rate limit hit by another concurrent job
+
         // Mark as PROCESSING (Optimistic Locking)
         await prisma.job.update({
             where: { id: job.id },
@@ -80,13 +85,11 @@ export async function POST(req: NextRequest) {
                     data: {
                         status: 'PENDING',
                         error: error.message,
-                        // Do NOT increment retry count for rate limits, or increment responsibly
-                        // For now, we won't increment to prevent dead-lettering due to API congestion
                     }
                 });
 
                 rateLimitHit = true;
-                break; // STOP PROCESSING THE BATCH
+                return; // STOP PROCESSING THIS JOB
             }
 
             // GENERIC FAILURE
@@ -100,7 +103,7 @@ export async function POST(req: NextRequest) {
             });
             errors++;
         }
-    }
+    })));
 
     // 3. Recursive Trigger (The "Hydraulic Press")
     // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
