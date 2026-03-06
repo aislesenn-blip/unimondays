@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleAiGrade } from '@/workers/grading-worker';
 import { handleCloudMarking } from '@/workers/cloud-worker';
+import pLimit from 'p-limit';
 
 export const maxDuration = 300; // 5 Minutes (Vercel Pro/Enterprise)
 export const dynamic = 'force-dynamic'; // Disable caching
@@ -40,67 +41,75 @@ export async function POST(req: NextRequest) {
 
     console.log(`[QUEUE] Processing ${jobs.length} jobs...`);
 
-    // 2. Process Jobs (SERIAL EXECUTION)
-    for (const job of jobs) {
-        // Mark as PROCESSING (Optimistic Locking)
-        await prisma.job.update({
-            where: { id: job.id },
-            data: { status: 'PROCESSING', processedAt: new Date() }
-        });
+    // 2. Process Jobs (CONCURRENT EXECUTION WITH LIMIT)
+    const limit = pLimit(2);
 
-        try {
-            // EXECUTE WORKER BASED ON TYPE
-            if (job.type === 'CLOUD_MARKING') {
-                await handleCloudMarking(job);
-            } else if (job.type === 'AI_GRADE_SUBMISSION') {
-                await handleAiGrade(job);
-            } else {
-                throw new Error(`Unknown Job Type: ${job.type}`);
-            }
+    await Promise.allSettled(
+        jobs.map(job =>
+            limit(async () => {
+                if (rateLimitHit) return; // Skip if a previous job in the batch hit a rate limit
 
-            // Mark COMPLETED
-            await prisma.job.update({
-                where: { id: job.id },
-                data: { status: 'COMPLETED', result: 'Success' }
-            });
-            processedCount++;
-
-        } catch (error: any) {
-            console.error(`[QUEUE] Job ${job.id} Failed:`, error);
-
-            // RATE LIMIT ARMOR (Handling 429s/503s)
-            const isRateLimit = error.message?.includes('RATE_LIMIT_HIT') || error.message?.includes('429');
-
-            if (isRateLimit) {
-                console.warn(`[QUEUE] Rate Limit Hit on Job ${job.id}. Pausing batch.`);
-
-                // Revert status to PENDING so it's picked up later
+                // Mark as PROCESSING (Optimistic Locking)
                 await prisma.job.update({
                     where: { id: job.id },
-                    data: {
-                        status: 'PENDING',
-                        error: error.message,
-                        // Do NOT increment retry count for rate limits, or increment responsibly
-                        // For now, we won't increment to prevent dead-lettering due to API congestion
-                    }
+                    data: { status: 'PROCESSING', processedAt: new Date() }
                 });
 
-                rateLimitHit = true;
-                break; // STOP PROCESSING THE BATCH
-            }
+                try {
+                    // EXECUTE WORKER BASED ON TYPE
+                    if (job.type === 'CLOUD_MARKING') {
+                        await handleCloudMarking(job);
+                    } else if (job.type === 'AI_GRADE_SUBMISSION') {
+                        await handleAiGrade(job);
+                    } else {
+                        throw new Error(`Unknown Job Type: ${job.type}`);
+                    }
 
-            // GENERIC FAILURE
-            await prisma.job.update({
-                where: { id: job.id },
-                data: {
-                    status: 'FAILED',
-                    error: error.message,
-                    retryCount: { increment: 1 }
+                    // Mark COMPLETED
+                    await prisma.job.update({
+                        where: { id: job.id },
+                        data: { status: 'COMPLETED', result: 'Success' }
+                    });
+                    processedCount++;
+
+                } catch (error: any) {
+                    console.error(`[QUEUE] Job ${job.id} Failed:`, error);
+
+                    // RATE LIMIT ARMOR (Handling 429s/503s)
+                    const isRateLimit = error.message?.includes('RATE_LIMIT_HIT') || error.message?.includes('429');
+
+                    if (isRateLimit) {
+                        console.warn(`[QUEUE] Rate Limit Hit on Job ${job.id}. Pausing batch.`);
+
+                        // Revert status to PENDING so it's picked up later
+                        await prisma.job.update({
+                            where: { id: job.id },
+                            data: {
+                                status: 'PENDING',
+                                error: error.message,
+                                // Do NOT increment retry count for rate limits, or increment responsibly
+                                // For now, we won't increment to prevent dead-lettering due to API congestion
+                            }
+                        });
+
+                        rateLimitHit = true;
+                        return; // STOP PROCESSING THIS JOB
+                    }
+
+                    // GENERIC FAILURE
+                    await prisma.job.update({
+                        where: { id: job.id },
+                        data: {
+                            status: 'FAILED',
+                            error: error.message,
+                            retryCount: { increment: 1 }
+                        }
+                    });
+                    errors++;
                 }
-            });
-            errors++;
-        }
-    }
+            })
+        )
+    );
 
     // 3. Recursive Trigger (The "Hydraulic Press")
     // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
