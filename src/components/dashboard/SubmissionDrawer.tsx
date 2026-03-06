@@ -87,6 +87,13 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
       }
   };
 
+  // Confidence Logic
+  const confidence = submission.confidenceScore || 0;
+  const isHighTrust = confidence >= 80;
+  const isMediumTrust = confidence >= 50 && confidence < 80;
+  const confidenceColor = isHighTrust ? "bg-green-500" : isMediumTrust ? "bg-yellow-500" : "bg-red-500";
+  const confidenceLabel = isHighTrust ? "High Trust" : isMediumTrust ? "Medium Trust" : "Low Trust";
+
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -157,6 +164,22 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                         </Badge>
                     </div>
                 </div>
+
+                {/* AI Confidence Card */}
+                {submission.status !== 'PENDING' && (
+                    <div className="bg-background rounded border p-3">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                                {isHighTrust ? <ShieldCheck className="h-3 w-3 text-green-500" /> : <ShieldAlert className="h-3 w-3 text-yellow-500" />}
+                                AI Confidence: <span className="text-foreground">{Math.round(confidence)}%</span>
+                            </span>
+                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${isHighTrust ? "bg-green-100 text-green-700" : isMediumTrust ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>
+                                {confidenceLabel}
+                            </span>
+                        </div>
+                        <Progress value={confidence} className="h-1.5" indicatorColor={confidenceColor} />
+                    </div>
+                )}
 
                 {isEditing && (
                     <div className="space-y-2 border-t pt-4 animate-in fade-in zoom-in-95 duration-200">
@@ -232,29 +255,14 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                     <h3 className="text-sm font-medium mb-3">Grading Breakdown</h3>
                     <div className="border rounded-md">
                         {breakdown.map((item: any, i: number) => (
-                            <div key={i} className="flex flex-col p-3 text-sm border-b last:border-0 gap-2">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1 pr-4">
-                                        <span className="font-medium text-foreground">{item.question}</span>
-                                        <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
-                                    </div>
-                                    <div className="font-mono font-medium text-right shrink-0 ml-4">
-                                        {item.score}/{item.max}
-                                    </div>
+                            <div key={i} className="flex justify-between p-3 text-sm border-b last:border-0">
+                                <div className="flex-1 pr-4">
+                                    <span className="font-medium text-foreground">{item.question}</span>
+                                    <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
                                 </div>
-                                {item.evidenceSnippet && (
-                                    <details className="group mt-1">
-                                        <summary className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer list-none flex items-center tracking-wide transition-colors">
-                                            <span className="mr-1.5 opacity-50 group-open:rotate-90 transition-transform text-[8px]">▶</span>
-                                            Why this mark?
-                                        </summary>
-                                        <div className="pl-3 mt-1.5 border-l-2 border-muted">
-                                            <p className="text-[11px] text-muted-foreground italic leading-relaxed">
-                                                "{item.evidenceSnippet}"
-                                            </p>
-                                        </div>
-                                    </details>
-                                )}
+                                <div className="font-mono font-medium">
+                                    {item.score}/{item.max}
+                                </div>
                             </div>
                         ))}
                     </div>

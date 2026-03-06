@@ -27,9 +27,6 @@ export interface GradingResult {
     max: number;
     feedback: string;
     rubricReference?: string;
-    evidenceSnippet?: string;
-    isRelevant: boolean;
-    mappedRubricQuestion: string;
   }>;
   aiReasoning: string;
   confidence: number;
@@ -91,37 +88,47 @@ export function buildSystemPrompt(config: GradeConfig, totalMarks: number): stri
   const incomplete = INCOMPLETE_MAP[config.calibration?.incomplete || 'Grade present work'] || config.calibration?.incomplete || "Grade present work";
   const teacherCustomInstructions = config.calibration?.custom || "No custom instructions provided. Rely on standard marking scheme.";
 
-  return `You are an expert, highly observant academic grader. You are provided with a complete set of exam page images and a strict Marking Scheme (Rubric). Your job is to grade the exam holistically and output a JSON array of scores.
+  return `You are an Elite University Professor and a World-Class Academic Evaluator.
 
-CRITICAL EXAM BEHAVIORS YOU MUST HANDLE:
-1. MANDATE 1: NON-SEQUENTIAL HUNTING (JUMBLED ANSWERS)
-Students rarely answer questions in order. DO NOT abort or assume the exam is invalid. You MUST act like a human examiner: scan ALL pages to hunt down the student's attempt for EVERY question present in the provided rubric. Map the semantic meaning of their answer to the correct rubric question, even if their numbering is messy.
+MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)
+The teacher who created this exam has provided specific, non-negotiable grading rules. You MUST follow these instructions blindly. If the teacher's rules contradict any of your default empathetic or semantic guidelines, THE TEACHER'S RULES WIN.
+Teacher's Custom Instructions: \`\`\`${teacherCustomInstructions}\`\`\`
 
-2. MANDATE 2: MULTI-PAGE SPILLOVER (CONTEXT BLEED)
-Answers often start on one page and finish on another. You have all the images. Read seamlessly across page boundaries to grade the complete thought.
+MANDATE 1: THE MARKING SCHEME CALIBRATION
+Strictly evaluate the student's answer against the provided Marking Scheme. Apply the exact weightings and criteria the rubric dictates.
 
-3. MANDATE 3: RESTORE SEMANTIC GRADING TIERS
-NEVER use exact keyword matching. You must grade based on SEMANTIC MEANING. Use the Tiered Evaluation Method:
-- Tier 1 (Concept): Does the student understand the core idea?
-- Tier 2 (Process/Application): Did they apply the right steps or list conceptually accurate points? Award marks even if the vocabulary differs, provided the conceptual meaning matches the rubric exactly.
-- Tier 3 (Final Answer/Precision): Is the math or final conclusion correct?
+MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)
+If the teacher has NOT explicitly restricted synonyms or exact phrasing in their custom instructions, grade based on Conceptual Understanding. Do not punish students for using different words if the scientific/academic meaning is 100% correct.
 
-4. MANDATE 4: MATH & CALCULATION GRADING
-For ANY calculation questions, read the student's working. If their formula and final answer match the rubric's logic, award full marks. Actively interpret formulas, visual graphs, and handwritten diagrams.
+MANDATE 3: EMPATHY & OCR FORGIVENESS
+Ignore minor spelling mistakes, grammatical errors, or poor handwriting (e.g., reading 'Vontricle' instead of 'Ventricle') AS LONG AS the academic intent is mathematically or scientifically correct.
 
-5. MANDATE 5: MANDATORY EXHAUSTIVE OUTPUT (DYNAMIC CHECKLIST)
-You are FORBIDDEN from dropping questions. Count the total number of questions and sub-questions in the provided Marking Scheme. Your final JSON array MUST contain an evaluation object for EVERY SINGLE ONE of those questions, regardless of how the student numbered them. Do not truncate the output.
+MANDATE 4: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS
+When evaluating drawn sketches, graphs, or diagrams, analyze the visual geometry, spatial arrangement, and line connections. Grade the visual logic, not just the OCR text labels.
 
-6. MANDATE 6: SKIPPED QUESTIONS
-If, and ONLY if, you have exhaustively searched all provided pages and cannot find any attempt at a specific rubric question, you must still include it in your JSON array. Give it a score of 0, and in the \`evidenceSnippet\`, explicitly write: "Student completely skipped this question." Do not ignore skipped questions in your output.
+MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT
+Briefly reason through your grading decision internally before outputting the final score. Return the result STRICTLY in the requested JSON format.
 
-7. MANDATE 7: OCR ARTIFACT TOLERANCE & LOGICAL MATH REASONING
-You are evaluating text that was extracted from scanned images via OCR. Expect typographical errors, corrupted formatting, and broken symbols in both the Marking Scheme and the Student Submission (e.g., commas misread as periods, missing brackets, corrupted percentages like '%o').
-- DO NOT discard or ignore any rubric question due to formatting errors.
-- For math and calculations, rely on your internal mathematical reasoning to deduce the true intent of the equations. Re-calculate the logic implicitly. If the student's mathematical intent matches the rubric's intended logic, award full marks despite any OCR-induced typos.
+SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING
+- **No Stone Unturned**: You must scan the ENTIRE document text for the Student's Registration Number or Name. It might be in the header, footer, handwritten in the margin, or buried in the middle of a paragraph on the last page.
+- **Strict Pattern Recognition**: You MUST identify and extract the Registration Number regardless of the label used.
+  - Acceptable Labels: "Reg No", "Registration Number", "Reg:", "Student ID", "Matric No", "Index Number".
+  - Standard Formats: Look for alphanumeric patterns such as "BCS-01-0001", "S12345", "19/U/1234", "P15/1234/2023".
+- **Extraction Logic**: Extract ONLY the value (the number itself), stripping the label.
+- **Strict Return**: If you find an identifier, return it in "detectedIdentity". If absolutely NO identifier is found after a full scan, return "detectedIdentity": "UNIDENTIFIED_IDENTITY". Do not guess.
 
-TEACHER'S CUSTOM INSTRUCTIONS:
-\`\`\`${teacherCustomInstructions}\`\`\`
+SYSTEM PROTOCOL 2: CHAOS HANDLING (NON-LINEAR GRADING)
+- **Full-Document Semantic Map**: Students answer out of order. You MUST map scattered answers (e.g., Q1 on page 1, Q29 on page 3, Q5 on page 2) to the correct Marking Scheme section.
+- **Re-Sort**: Do not grade sequentially by page number. Grade sequentially by Question Number as per the Marking Scheme. Connect the semantic dots across the entire document.
+
+SYSTEM PROTOCOL 3: AUTOPILOT PROTOCOL
+- If the user specifies 'Autopilot' or 'Grade on autopilot' in Custom Rules, you must proceed even if the Marking Scheme is missing.
+- Infer a standard academic marking scheme based on the content.
+- Do NOT reject the task for a missing formal marking scheme.
+
+SYSTEM PROTOCOL 4: ADVANCED VISUAL & DIAGRAM ANALYSIS
+- **You are a Multimodal Visual Examiner.** Do NOT just read the text on the page. If the student provides a drawing, sketch, graph, or diagram, you MUST deeply analyze the visual geometry, shapes, and structural accuracy of the drawing itself.
+- If the question asks the student to draw or label a shape (e.g., a heart, an ear, a physics circuit), evaluate if the shape is visually correct, where the components are placed, and if the indicator lines point to the correct visual parts. Grade the drawing visually, not just the words.
 
 Context:
 ${config.context || "No specific context provided."}
@@ -138,7 +145,7 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string", "isRelevant": boolean, "mappedRubricQuestion": "string" }
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string" }
   ],
   "aiReasoning": "string",
   "confidence": number,
@@ -155,8 +162,8 @@ export async function gradeSubmission(
   rubric: string,
   totalMarks: number,
   config: GradeConfig = { strictness: 1.0 },
-  imageBuffer?: Buffer, // Kept for legacy compatibility if needed
-  mimeType?: string     // Kept for legacy compatibility if needed
+  imageBuffer?: Buffer, // NEW: Multimodal Payload
+  mimeType?: string     // NEW: Multimodal Payload
 ): Promise<GradingResult> {
   if (!deepseek) {
     throw new Error("DEEPSEEK_API_KEY is not set. Grading service unavailable.");
@@ -168,14 +175,43 @@ export async function gradeSubmission(
   try {
     let completion: OpenAI.Chat.Completions.ChatCompletion;
 
-    // BRANCH: TEXT-ONLY (DeepSeek V3 or Gemini Fallback)
-    // We intentionally bypass images here for Holistic Text Grading
-    console.log(`[AI_ROUTER] Routing request to DeepSeek V3 (Text-Only Holistic Grading).`);
-    completion = await deepseek.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `Marking Scheme:
+    // BRANCH: MULTIMODAL (Visual Analysis)
+    if (imageBuffer && openRouter && mimeType) {
+        console.log(`[AI_ROUTER] Routing request to Gemini 2.5 Flash (Multimodal) via OpenRouter.`);
+        const base64Data = imageBuffer.toString("base64");
+        const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+        completion = await openRouter.chat.completions.create({
+            model: "google/gemini-2.5-flash",
+            messages: [
+                { role: "system", content: systemPrompt },
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: `Marking Scheme:\n${config.markingScheme || "None"}\n\nRubric:\n${rubric}\n\nStudent Text (OCR):\n${ocrText}` },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: dataUrl,
+                                detail: "high"
+                            }
+                        }
+                    ]
+                }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+            max_tokens: 4000,
+        });
+
+    } else {
+        // BRANCH: TEXT-ONLY (DeepSeek V3)
+        console.log(`[AI_ROUTER] Routing request to DeepSeek V3 (Text-Only).`);
+        completion = await deepseek.chat.completions.create({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Marking Scheme:
 ${config.markingScheme || "None"}
 
 Rubric:
@@ -183,13 +219,12 @@ ${rubric}
 
 Student Submission:
 ${ocrText}` }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.0,
-        top_p: 0.1,
-        seed: 12345,
-        max_tokens: 8192, // Prevent infinite loops
-    });
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+            max_tokens: 4000, // Prevent infinite loops
+        });
+    }
 
     const content = completion.choices[0].message.content;
     if (!content) throw new Error("No content returned from AI Service");
