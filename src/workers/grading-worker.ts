@@ -121,11 +121,19 @@ export async function handleAiGrade(job: Job) {
       try {
           [extractedData, rubricContent, markingSchemeText] = await Promise.all([
               submissionExtractionTask(),
-              rubricOcrTask(),
+              submission.workSession.rubric ? Promise.resolve(submission.workSession.rubric) : rubricOcrTask(),
               markingSchemeOcrTask()
           ]);
       } catch (e: any) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
+      }
+
+      // Explicitly cache rubric OCR result to entirely bypass rubricOcrTask for future jobs
+      if (!submission.workSession.rubric && rubricContent && rubricContent.length > 50) {
+          await prisma.workSession.update({
+              where: { id: submission.workSession.id },
+              data: { rubric: rubricContent }
+          }).catch(e => console.warn("[DB_WARN] Failed to cache rubricContent", e));
       }
 
       const { rawText } = extractedData;
@@ -188,9 +196,8 @@ Student Identifier: ${studentId}.
                   totalScore: sim.score,
                   breakdown: sim.breakdown.map((b: any) => ({
                       ...b,
-                      isRelevant: true,
-                      mappedRubricQuestion: b.question,
-                      evidenceSnippet: "SIMULATED_SNIPPET"
+                      question_id: b.question,
+                      short_evidence: "SIMULATED_SNIPPET"
                   })),
                   aiReasoning: sim.reasoning,
                   confidence: sim.confidence,
@@ -216,8 +223,13 @@ Student Identifier: ${studentId}.
           throw new Error("Invalid AI Result: Missing or malformed breakdown array");
       }
 
-      // SILENT FILTERING: Remove irrelevant metadata/noise chunks before saving to DB
-      let validBreakdowns = result.breakdown.filter(item => item.isRelevant !== false);
+      // SILENT FILTERING: Map back to Prisma expected structure
+      let validBreakdowns = result.breakdown.map((item: any) => ({
+          ...item,
+          isRelevant: true,
+          mappedRubricQuestion: item.question_id || item.question,
+          evidenceSnippet: item.short_evidence || item.evidenceSnippet
+      }));
 
       let aggregatedScore = 0;
       validBreakdowns.forEach(item => {
@@ -265,9 +277,9 @@ Student Identifier: ${studentId}.
       console.log(`[AI_CONFIDENCE] Score: ${aggregatedConfidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
-        strengths: result.strengths || [],
-        weaknesses: result.weaknesses || [],
-        improvement: result.improvement || "Review holistic feedback for details."
+        strengths: [],
+        weaknesses: [],
+        improvement: "Review holistic feedback for details."
       });
 
       await prisma.submission.update({
