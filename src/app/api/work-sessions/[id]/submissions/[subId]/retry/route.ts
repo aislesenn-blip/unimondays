@@ -55,39 +55,31 @@ export async function POST(
         where: { submissionId: submission.id }
     });
 
-    // Then, reset the submission status back to PENDING
+    // Then, reset the submission status
     await prisma.submission.update({
         where: { id: submissionId },
         data: {
             status: 'PENDING',
-            feedback: null // Clear previous error logs or feedback
+            feedback: null // Clear error logs
         }
     });
 
-    // 4. Insert Job into the Database Queue
-    await prisma.job.create({
-        data: {
-            type: 'AI_GRADE_SUBMISSION',
-            payload: JSON.stringify({ submissionId: submission.id }),
-            status: 'PENDING'
-        }
-    });
-
-    // 5. Wake up the master Queue Processor
+    // 4. Trigger Webhook (Absolute URL Logic)
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host');
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const queueUrl = `${baseUrl}/api/queue/process`;
+    const webhookUrl = `${baseUrl}/api/webhooks/grade`;
 
-    console.log(`[RETRY] Triggering Queue: ${queueUrl}`);
+    console.log(`[RETRY] Triggering Webhook: ${webhookUrl}`);
 
     // Fire & Forget
-    fetch(queueUrl, {
+    fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    }).catch(err => console.error("[RETRY] Failed to trigger queue processor", err));
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: submission.id })
+    }).catch(err => console.error("[RETRY] Failed to trigger webhook", err));
 
-    return NextResponse.json({ success: true, message: "Grading retry initiated successfully." });
+    return NextResponse.json({ success: true, message: "Grading retry initiated." });
 
   } catch (error: any) {
     console.error("[RETRY_ERROR]", error);
