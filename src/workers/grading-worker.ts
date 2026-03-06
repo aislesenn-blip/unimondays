@@ -290,12 +290,8 @@ Student Identifier: ${studentId}.
 
       // Explicitly update the Job status to COMPLETED within this worker block
       // to guarantee the UI queue listener detects the resolution immediately.
-      await prisma.job.updateMany({
-         where: {
-             type: 'AI_GRADE_SUBMISSION',
-             payload: { contains: submission.id }, // Match the payload string
-             status: { in: ['PENDING', 'PROCESSING'] }
-         },
+      await prisma.job.update({
+         where: { id: job.id },
          data: {
              status: 'COMPLETED',
              result: 'Success'
