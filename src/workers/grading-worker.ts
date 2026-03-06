@@ -1,7 +1,7 @@
 import { Job } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readFile } from '@/lib/storage';
-import { ocrDocument, extractPagesMultimodal, PageData } from '@/lib/ai/gemini';
+import { ocrDocument } from '@/lib/ai/gemini';
 import { gradeSubmission, GradeConfig, GradingResult } from '@/lib/ai/deepseek';
 import { simulateDeepSeekCall } from '@/lib/ai/simulator';
 
@@ -42,27 +42,37 @@ export async function handleAiGrade(job: Job) {
   console.log(`[GRADING_START] Submission ID: ${submissionId}, WorkSession: ${submission.workSession.title}`);
 
   try {
-      // STAGE 1: PARALLEL MULTIMODAL EXTRACTION (TRANSCRIPTION ONLY)
-      const submissionExtractionTask = async (): Promise<{ rawText: string }> => {
-          if (!submission.filePath) throw new Error("No file path for submission.");
+      // PARALLEL TASK 1: Submission OCR (Return buffer for visual analysis)
+      const submissionOcrTask = async (): Promise<{ text: string, buffer: Buffer, mimeType: string }> => {
+          if (!submission.filePath) throw new Error("No file path and no OCR text for submission.");
 
           console.log(`[SUPABASE_FETCH] Submission File: ${submission.filePath}`);
           const buffer = await readFile(submission.filePath, 'exam_pdfs');
 
-          // 1. Multimodal Page Extraction
-          console.log(`[MULTIMODAL_START] Extracting pages from PDF buffer...`);
-          const pages: PageData[] = await extractPagesMultimodal(buffer);
+          const mimeType = submission.filePath.toLowerCase().endsWith('.png') ? 'image/png' :
+                           submission.filePath.toLowerCase().endsWith('.jpg') || submission.filePath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+                           'application/pdf';
 
-          // 2. Holistic Context Assembly (Stage 2 Prep)
-          const rawText = pages.map(p => p.extractedText).join('\n\n--- PAGE BREAK ---\n\n');
+          if (submission.ocrText) {
+              console.log(`[OCR_SKIP] Submission already OCR'd. Length: ${submission.ocrText.length}`);
+              return { text: submission.ocrText, buffer, mimeType };
+          }
 
-          // Cache the extraction
-          await prisma.submission.update({
-              where: { id: submissionId },
-              data: { ocrText: rawText, status: 'PROCESSING' }
-          });
+          try {
+              console.log(`[OCR_START] Sending ${buffer.length} bytes to Gemini (${mimeType})...`);
+              const text = await ocrDocument(buffer, mimeType);
+              console.log(`[OCR_SUCCESS] Extracted ${text.length} characters.`);
 
-          return { rawText };
+              // Save immediately
+              await prisma.submission.update({
+                  where: { id: submissionId },
+                  data: { ocrText: text, status: 'PROCESSING' }
+              });
+              return { text, buffer, mimeType };
+          } catch (ocrError: any) {
+              console.error("[OCR_FATAL_ERROR]", ocrError);
+              throw new Error(`OCR Processing Failed: ${ocrError.message}`);
+          }
       };
 
       // PARALLEL TASK 2: Rubric OCR (with Caching)
@@ -104,6 +114,7 @@ export async function handleAiGrade(job: Job) {
                   const buffer = await readFile(ms, 'exam_pdfs');
                   const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
                   const text = await ocrDocument(buffer, mimeType);
+                  console.log(`[OCR_SUCCESS] Marking Scheme extracted: ${text.length} chars.`);
                   return text;
               } catch (e: any) {
                   console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
@@ -113,14 +124,14 @@ export async function handleAiGrade(job: Job) {
           return ms;
       };
 
-      // EXECUTE INITIAL PARALLEL TASKS
-      let extractedData: { rawText: string };
+      // EXECUTE PARALLEL TASKS
+      let submissionData: { text: string, buffer: Buffer, mimeType: string };
       let rubricContent: string;
       let markingSchemeText: string | undefined;
 
       try {
-          [extractedData, rubricContent, markingSchemeText] = await Promise.all([
-              submissionExtractionTask(),
+          [submissionData, rubricContent, markingSchemeText] = await Promise.all([
+              submissionOcrTask(),
               rubricOcrTask(),
               markingSchemeOcrTask()
           ]);
@@ -128,11 +139,11 @@ export async function handleAiGrade(job: Job) {
           throw new Error(`Prerequisite Check Failed: ${e.message}`);
       }
 
-      const { rawText } = extractedData;
+      const { text: ocrText, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
 
-      // Identity Extraction: Scavenge the raw text for a registration number
-      const idMatch = rawText.match(/(?:REGISTRATION NUMBER|REG NO|STUDENT ID)[\s:]*([A-Za-z0-9\-]+)/i);
-      let extractedStudentId = idMatch ? idMatch[1] : undefined;
+      // 2. FIX: EXTRACT AND SAVE REGISTRATION NUMBER
+      const regMatch = ocrText.match(/(?:REGISTRATION NUMBER|REG NO|STUDENT ID)[\s:]*([A-Za-z0-9\-]+)/i);
+      let extractedStudentId = regMatch ? regMatch[1] : undefined;
 
       if (extractedStudentId && !submission.studentRegNo) {
           await prisma.submission.update({
@@ -140,6 +151,7 @@ export async function handleAiGrade(job: Job) {
               data: { studentRegNo: extractedStudentId }
           });
           submission.studentRegNo = extractedStudentId; // Update local state to prevent false GHOST flagging later
+          console.log(`[AI_IDENTITY] Successfully extracted Registration Number: ${extractedStudentId}`);
       }
 
       // Prepare Config
@@ -174,109 +186,116 @@ Student Identifier: ${studentId}.
         context: contextString
       };
 
-      // STAGE 2: COMBINED TEXT GRADING (HOLISTIC CONTEXT)
+      // 3. Grade (Zero-Trust Tracing)
       const totalMarks = submission.workSession.totalMarks || 100;
-      console.log(`[AI_GRADE] Starting Holistic Text-Only Grading for Submission ${submissionId}.`);
+
+      console.log(`[AI_GRADE] Invoking AI for Job ${job.id}`);
+      console.log(`- Config: Strictness=${config.strictness}`);
+      console.log(`- Context: ${contextString.trim()}`);
+      console.log(`- Payload: Submission=${ocrText.length} chars, Rubric=${rubricContent.length} chars`);
+      if (submissionBuffer) console.log(`- Visual: Buffer loaded (${submissionBuffer.length} bytes, ${submissionMime})`);
 
       let result: GradingResult;
 
-      try {
-          if (!process.env.DEEPSEEK_API_KEY) {
-              console.log(`[Simulator] Using DeepSeek Simulator`);
-              const sim = await simulateDeepSeekCall(rawText);
-              result = {
-                  totalScore: sim.score,
-                  breakdown: sim.breakdown.map((b: any) => ({
-                      ...b,
-                      isRelevant: true,
-                      mappedRubricQuestion: b.question,
-                      evidenceSnippet: "SIMULATED_SNIPPET"
-                  })),
-                  aiReasoning: sim.reasoning,
-                  confidence: sim.confidence,
-                  detectedIdentity: extractedStudentId || "SIMULATED_ID"
-              };
-          } else {
-              result = await gradeSubmission(
-                  rawText,
-                  rubricContent,
-                  totalMarks,
-                  config,
-                  undefined, // Force text-only to avoid context overflow with images
-                  undefined
-              );
-              console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
-          }
-      } catch (gradingError: any) {
-          console.error(`[AI_GRADING_ERROR] Failed to grade holistic text:`, gradingError.message);
-          throw new Error(`Holistic Grading Failed: ${gradingError.message}`);
+      // Simulator Check
+      if (!process.env.DEEPSEEK_API_KEY) {
+          console.log(`[Simulator] Using DeepSeek Simulator`);
+          const sim = await simulateDeepSeekCall(ocrText);
+          if (sim.breakdown === "INVALID_JSON_RESPONSE") throw new Error("AI returned malformed JSON (Simulator)");
+
+          result = {
+              totalScore: sim.score,
+              breakdown: sim.breakdown as any,
+              aiReasoning: sim.reasoning,
+              confidence: sim.confidence,
+              strengths: ["Consistency", "Clarity"],
+              weaknesses: ["Calculation Error"],
+              improvement: "Check arithmetic."
+          };
+      } else {
+          // Pass image buffer for multimodal grading
+          result = await gradeSubmission(ocrText, rubricContent, totalMarks, config, submissionBuffer, submissionMime);
+          console.log(`[AI_SUCCESS] Graded. Score: ${result.totalScore}/${totalMarks}`);
       }
-
-      if (!result.breakdown || !Array.isArray(result.breakdown)) {
-          throw new Error("Invalid AI Result: Missing or malformed breakdown array");
-      }
-
-      // SILENT FILTERING: Remove irrelevant metadata/noise chunks before saving to DB
-      let validBreakdowns = result.breakdown.filter(item => item.isRelevant !== false);
-
-      let aggregatedScore = 0;
-      validBreakdowns.forEach(item => {
-          aggregatedScore += item.score;
-      });
-
-      const aggregatedConfidence = result.confidence ?? 95;
-      const aggregatedReasoning = result.aiReasoning || "Holistic grading completed.";
-      const aggregatedIdentity = extractedStudentId || result.detectedIdentity || "UNIDENTIFIED_IDENTITY";
 
       // 4. Save Score & Feedback
-      const breakdownStr = JSON.stringify(validBreakdowns);
+      if (typeof result.totalScore !== 'number') {
+          throw new Error("Invalid AI Result: Missing totalScore");
+      }
+
+      const breakdownStr = JSON.stringify(result.breakdown);
 
       await prisma.score.upsert({
         where: { submissionId: submission.id },
         update: {
-          totalMarks: aggregatedScore,
+          totalMarks: result.totalScore,
           breakdown: breakdownStr,
-          remarks: aggregatedReasoning,
-          detectedIdentity: aggregatedIdentity,
+          remarks: result.aiReasoning,
+          detectedIdentity: result.detectedIdentity,
           gradedAt: new Date()
         },
         create: {
           submissionId: submission.id,
-          totalMarks: aggregatedScore,
+          totalMarks: result.totalScore,
           breakdown: breakdownStr,
-          remarks: aggregatedReasoning,
-          detectedIdentity: aggregatedIdentity
+          remarks: result.aiReasoning,
+          detectedIdentity: result.detectedIdentity
         }
       });
 
       // 5. Update Submission Status (Dynamic Confidence Threshold)
+      // UNIDENTIFIED FALLBACK: If AI returns null identity OR 'UNIDENTIFIED_IDENTITY' literal, handle flagging.
+      // If we also lack local user context (bulk upload), this is CRITICAL FLAGGING.
       let status: string;
       const threshold = submission.workSession.confidenceThreshold ?? 85;
 
+      const isIdentityMissing = !result.detectedIdentity || result.detectedIdentity === 'UNIDENTIFIED_IDENTITY';
       const isContextMissing = !submission.userId && !submission.studentRegNo;
 
-      if (isContextMissing) {
-          status = 'FLAGGED';
-          console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
+      if (isIdentityMissing) {
+          if (isContextMissing) {
+              // GHOST SUBMISSION: No AI ID, No DB ID.
+              status = 'FLAGGED';
+              result.confidence = 0;
+              result.aiReasoning = `IDENTITY CRISIS: ${result.aiReasoning || "System could not identify student."} Please manually assign ownership.`;
+              console.warn(`[AI_IDENTITY] Unidentified GHOST submission. Flagging for manual review.`);
+          } else {
+              // PARTIAL MATCH: No AI ID, but we know who uploaded it (Authenticated Student).
+              // We proceed but maybe lower confidence? For now, we trust the auth context but log it.
+              console.log(`[AI_IDENTITY] AI missed identity, but using Auth Context: ${submission.user?.fullName}`);
+              status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
+          }
       } else {
-          status = aggregatedConfidence >= threshold ? 'GRADED' : 'FLAGGED';
+          status = result.confidence >= threshold ? 'GRADED' : 'FLAGGED';
       }
 
-      console.log(`[AI_CONFIDENCE] Score: ${aggregatedConfidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
+      console.log(`[AI_CONFIDENCE] Score: ${result.confidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
         strengths: result.strengths || [],
         weaknesses: result.weaknesses || [],
-        improvement: result.improvement || "Review holistic feedback for details."
+        improvement: result.improvement || "No specific advice."
       });
 
+      // 3. FIX THE PENDING STATE DESYNC
+      // Ensure the Submission status is definitively updated so the UI clears "PENDING"
       await prisma.submission.update({
         where: { id: submission.id },
         data: {
-          status,
-          confidenceScore: aggregatedConfidence,
+          status: status, // Must be 'GRADED' or 'FLAGGED', clearing 'PENDING'
+          confidenceScore: result.confidence,
           feedback: feedbackStr
         }
+      });
+
+      // Explicitly update the Job status to COMPLETED within this worker block
+      // to guarantee the UI queue listener detects the resolution immediately.
+      await prisma.job.update({
+         where: { id: job.id },
+         data: {
+             status: 'COMPLETED',
+             result: 'Success'
+         }
       });
 
       // Create Audit Log
@@ -284,11 +303,12 @@ Student Identifier: ${studentId}.
         data: {
           userId: submission.userId,
           action: status === 'GRADED' ? 'GRADED' : 'FLAGGED',
-          details: `Submission for ${submission.workSession.title} ${status}. Score: ${aggregatedScore}`,
+          details: `Submission for ${submission.workSession.title} ${status}. Score: ${result.totalScore}`,
           severity: status === 'GRADED' ? 'INFO' : 'WARNING'
         }
       });
 
+      // Increment Lecturer Quota
       if (submission.workSession.lecturerId) {
         await prisma.user.update({
             where: { id: submission.workSession.lecturerId },
@@ -298,7 +318,7 @@ Student Identifier: ${studentId}.
 
       return {
         success: true,
-        score: aggregatedScore,
+        score: result.totalScore,
         status
       };
 
