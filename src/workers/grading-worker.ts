@@ -104,6 +104,16 @@ export async function handleAiGrade(job: Job) {
                   const buffer = await readFile(ms, 'exam_pdfs');
                   const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
                   const text = await ocrDocument(buffer, mimeType);
+
+                  // AGGRESSIVE CACHING: Overwrite the URL with the raw OCR text in the DB
+                  // so subsequent submissions never have to run this task again.
+                  if (text && text.length > 50) {
+                      await prisma.workSession.update({
+                          where: { id: submission.workSession.id },
+                          data: { markingScheme: text }
+                      }).catch(e => console.warn("[DB_WARN] Failed to cache marking scheme", e));
+                  }
+
                   return text;
               } catch (e: any) {
                   console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
@@ -265,9 +275,9 @@ Student Identifier: ${studentId}.
       console.log(`[AI_CONFIDENCE] Score: ${aggregatedConfidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
-        strengths: result.strengths || [],
-        weaknesses: result.weaknesses || [],
-        improvement: result.improvement || "Review holistic feedback for details."
+        strengths: [],
+        weaknesses: [],
+        improvement: "Review holistic feedback for details."
       });
 
       await prisma.submission.update({
