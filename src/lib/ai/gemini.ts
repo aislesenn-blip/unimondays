@@ -1,14 +1,9 @@
 import OpenAI from 'openai';
-import pLimit from 'p-limit';
 
-// Polyfill required for pdf-to-img in Node.js/Serverless environments
-import { DOMMatrix, DOMPoint, DOMRect } from '@napi-rs/canvas';
-if (typeof globalThis.DOMMatrix === 'undefined') {
-  globalThis.DOMMatrix = DOMMatrix as any;
-  globalThis.DOMPoint = DOMPoint as any;
-  globalThis.DOMRect = DOMRect as any;
-}
-import { pdf } from 'pdf-to-img';
+// Ensure we don't crash at build time if env var is missing,
+// but validation logic inside functions will handle runtime checks.
+// The SDK throws if initialized without apiKey, so we pass a placeholder or empty string
+// if the env var is missing, but only inside a conditional check or rely on runtime check.
 
 const apiKey = process.env.OPENROUTER_API_KEY || "dummy-key-for-build";
 
@@ -22,16 +17,18 @@ const openai = new OpenAI({
 });
 
 export async function ocrDocument(buffer: Buffer, mimeType: string = "application/pdf"): Promise<string> {
+  // Runtime check for real key
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is not set. OCR service unavailable.");
   }
 
   try {
+    // OpenAI Vision API requires specific data URL format
     const base64Data = buffer.toString("base64");
     const dataUrl = `data:${mimeType};base64,${base64Data}`;
 
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-2.5-flash", // Explicit OpenRouter model ID
       messages: [
         {
           role: "user",
@@ -41,13 +38,13 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
               type: "image_url",
               image_url: {
                 url: dataUrl,
-                detail: "high"
+                detail: "high" // Force high resolution for OCR accuracy
               }
             }
           ],
         },
       ],
-      max_tokens: 4096,
+      max_tokens: 4096, // Ensure we get the full text
     });
 
     const text = response.choices[0]?.message?.content;
@@ -57,115 +54,21 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
 
   } catch (error: any) {
     console.error("OpenRouter OCR Error:", error);
+
+    // Handle Rate Limits (OpenAI 429) & Service Unavailable (503)
     if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
       throw new Error("RATE_LIMIT_HIT: OpenRouter/Gemini Service overloaded.");
     }
+
     throw new Error(`Failed to perform OCR on document: ${error.message}`);
-  }
-}
-
-export interface PageData {
-  pageNumber: number;
-  extractedText: string;
-  pageImageBase64: string;
-}
-
-export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageData[]> {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not set. Extraction service unavailable.");
-  }
-
-  console.log(`[MULTIMODAL_EXTRACT] Starting extraction. Buffer size: ${pdfBuffer.length} bytes`);
-
-  const results: PageData[] = [];
-  const BATCH_SIZE = 5;
-
-  try {
-    // 1. FIX TRUNCATION: `pdf-to-img` defaults to returning only page 1 unless configured to return all or iterated fully.
-    // However, when iterating an async generator from pdf-to-img, if an internal limit was reached or if the loop
-    // was capped, it would fail. We explicitly remove ANY artificial limits and process the ENTIRE document.
-    const document = await pdf(pdfBuffer, { scale: 1.5 });
-
-    let pageNum = 1;
-    let currentBatch: Promise<PageData>[] = [];
-
-    const createExtractionTask = async (currentPage: number, imageBuffer: Buffer): Promise<PageData> => {
-      console.log(`[MULTIMODAL_EXTRACT] Processing Page ${currentPage}...`);
-      const base64Image = imageBuffer.toString('base64');
-      const dataUrl = `data:image/jpeg;base64,${base64Image}`;
-      let pageText = "";
-
-      try {
-        const response = await openai.chat.completions.create({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "Carefully analyze this exam page. 1) Transcribe all handwritten text. 2) Provide a detailed visual description of any diagrams, sketches, or graphs present, including labels and what they represent. Do not grade." },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: dataUrl,
-                    detail: "high"
-                  }
-                }
-              ],
-            },
-          ],
-          max_tokens: 2000,
-          temperature: 0.0,
-        });
-
-        pageText = response.choices[0]?.message?.content || "BLANK_PAGE";
-      } catch (error: any) {
-         console.error(`[MULTIMODAL_EXTRACT] Gemini Error on Page ${currentPage}:`, error.message);
-         pageText = "EXTRACTION_FAILED";
-      }
-
-      return {
-        pageNumber: currentPage,
-        extractedText: pageText,
-        pageImageBase64: base64Image
-      };
-    };
-
-    // This loop ensures EVERY single page yielded by the buffer is extracted.
-    for await (const imageBuffer of document) {
-      const currentPage = pageNum++;
-
-      currentBatch.push(createExtractionTask(currentPage, imageBuffer));
-
-      if (currentBatch.length >= BATCH_SIZE) {
-        const resolvedBatch = await Promise.all(currentBatch);
-        results.push(...resolvedBatch);
-        currentBatch = [];
-        if (global.gc) global.gc();
-      }
-    }
-
-    if (currentBatch.length > 0) {
-      const resolvedBatch = await Promise.all(currentBatch);
-      results.push(...resolvedBatch);
-      if (global.gc) global.gc();
-    }
-
-    results.sort((a, b) => a.pageNumber - b.pageNumber);
-    console.log(`[MULTIMODAL_EXTRACT] Successfully extracted ${results.length} pages.`);
-
-    return results;
-
-  } catch (error: any) {
-    console.error(`[MULTIMODAL_EXTRACT_FATAL] PDF Parsing Failed:`, error);
-    throw new Error(`Failed to parse PDF pages: ${error.message}`);
   }
 }
 
 export interface PdfSplit {
   regNo: string;
   name?: string;
-  startPage: number;
-  endPage: number;
+  startPage: number; // 1-based
+  endPage: number;   // 1-based
 }
 
 export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
@@ -175,7 +78,7 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
 
   try {
     const base64Data = buffer.toString("base64");
-    const mime = "application/pdf";
+    const mime = "application/pdf"; // Assuming PDF context from function name
     const dataUrl = `data:${mime};base64,${base64Data}`;
 
     const prompt = `
@@ -215,16 +118,18 @@ export async function analyzePdfStructure(buffer: Buffer): Promise<PdfSplit[]> {
           ],
         },
       ],
-      response_format: { type: "json_object" },
+      response_format: { type: "json_object" }, // Gemini supports JSON mode via OpenRouter usually
     });
 
     const text = response.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim();
     if (!text) throw new Error("No content returned");
 
+    // Handle potential wrapper object like { "splits": [...] } or direct array
     let json = JSON.parse(text);
     if (Array.isArray(json)) return json as PdfSplit[];
     if (json.splits && Array.isArray(json.splits)) return json.splits as PdfSplit[];
 
+    // Fallback if structure is unknown but likely array-like
     if (Object.keys(json).length === 1 && Array.isArray(Object.values(json)[0])) {
         return Object.values(json)[0] as PdfSplit[];
     }

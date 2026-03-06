@@ -141,19 +141,6 @@ export async function handleAiGrade(job: Job) {
 
       const { text: ocrText, buffer: submissionBuffer, mimeType: submissionMime } = submissionData;
 
-      // 2. FIX: EXTRACT AND SAVE REGISTRATION NUMBER
-      const regMatch = ocrText.match(/(?:REGISTRATION NUMBER|REG NO|STUDENT ID)[\s:]*([A-Za-z0-9\-]+)/i);
-      let extractedStudentId = regMatch ? regMatch[1] : undefined;
-
-      if (extractedStudentId && !submission.studentRegNo) {
-          await prisma.submission.update({
-              where: { id: submissionId },
-              data: { studentRegNo: extractedStudentId }
-          });
-          submission.studentRegNo = extractedStudentId; // Update local state to prevent false GHOST flagging later
-          console.log(`[AI_IDENTITY] Successfully extracted Registration Number: ${extractedStudentId}`);
-      }
-
       // Prepare Config
       const strictnessMap: Record<string, number> = {
         'LENIENT': 0.8, 'MODERATE': 1.0, 'STRICT': 1.2
@@ -277,25 +264,13 @@ Student Identifier: ${studentId}.
         improvement: result.improvement || "No specific advice."
       });
 
-      // 3. FIX THE PENDING STATE DESYNC
-      // Ensure the Submission status is definitively updated so the UI clears "PENDING"
       await prisma.submission.update({
         where: { id: submission.id },
         data: {
-          status: status, // Must be 'GRADED' or 'FLAGGED', clearing 'PENDING'
+          status,
           confidenceScore: result.confidence,
           feedback: feedbackStr
         }
-      });
-
-      // Explicitly update the Job status to COMPLETED within this worker block
-      // to guarantee the UI queue listener detects the resolution immediately.
-      await prisma.job.update({
-         where: { id: job.id },
-         data: {
-             status: 'COMPLETED',
-             result: 'Success'
-         }
       });
 
       // Create Audit Log
