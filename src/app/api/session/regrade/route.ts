@@ -1,49 +1,47 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { validateRequest } from "@/lib/auth";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
     try {
-        const user = await validateRequest(req);
-        if (!user || user.role === 'STUDENT') {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const cookieStore = await cookies();
+        const sessionCookie = cookieStore.get('auth-session');
+
+        if (!sessionCookie) {
+             return NextResponse.json({ error: 'Unauthorized: No session found' }, { status: 401 });
+        }
+
+        let session;
+        try {
+            session = JSON.parse(sessionCookie.value);
+        } catch (e) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid session' }, { status: 401 });
+        }
+
+        const userId = session.userId;
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized: Missing User ID' }, { status: 401 });
         }
 
         const body = await req.json();
         const { workSessionId } = body;
 
         if (!workSessionId) {
-            return NextResponse.json({ error: "Session ID required" }, { status: 400 });
+            return NextResponse.json({ error: 'Missing workSessionId' }, { status: 400 });
         }
 
-        // Verify ownership
-        const session = await prisma.workSession.findUnique({
-            where: { id: workSessionId }
+        // Verify Ownership
+        const workSession = await prisma.workSession.findUnique({
+            where: { id: workSessionId, lecturerId: userId }
         });
 
-        if (!session || session.lecturerId !== user.id) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!workSession) {
+            return NextResponse.json({ error: 'Work Session not found or unauthorized' }, { status: 403 });
         }
 
-        // Get all submissions for this session
-        const submissions = await prisma.submission.findMany({
-            where: { workSessionId: workSessionId }
-        });
-
-        if (submissions.length === 0) {
-            return NextResponse.json({ message: "No submissions to regrade." }, { status: 200 });
-        }
-
-        const submissionIds = submissions.map(s => s.id);
-
-        // 1. Delete all existing scores for these submissions
-        await prisma.score.deleteMany({
-            where: { submissionId: { in: submissionIds } }
-        });
-
-        // 2. Reset status of all submissions to PENDING
+        // 1. Bulk Reset Submissions (Keep OCR text to save Gemini vision costs if only grading logic changed)
         await prisma.submission.updateMany({
-            where: { id: { in: submissionIds } },
+            where: { workSessionId: workSessionId },
             data: {
                 status: 'PENDING',
                 feedback: null,
@@ -51,36 +49,46 @@ export async function POST(req: NextRequest) {
             }
         });
 
-        // 3. Create fresh Jobs for the queue processor
-        const jobsToCreate = submissionIds.map(subId => ({
-            type: 'AI_GRADE_SUBMISSION',
-            payload: JSON.stringify({ submissionId: subId }),
-            status: 'PENDING'
-        }));
-
-        await prisma.job.createMany({
-            data: jobsToCreate
+        // 2. Delete Old Scores
+        await prisma.score.deleteMany({
+            where: { submission: { workSessionId: workSessionId } }
         });
 
-        // 4. Wake up the master Queue Processor
-        const protocol = req.headers.get('x-forwarded-proto') || 'http';
-        const host = req.headers.get('host');
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-        const queueUrl = `${baseUrl}/api/queue/process`;
-
-        // Fire & Forget
-        fetch(queueUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        }).catch(err => console.error("[BATCH_REGRADE] Failed to trigger queue", err));
-
-        return NextResponse.json({
-            success: true,
-            message: `Initiated regrade for ${submissions.length} submissions.`
+        // 3. Fetch submissions to create jobs
+        const submissions = await prisma.submission.findMany({
+            where: { workSessionId: workSessionId },
+            select: { id: true }
         });
+
+        if (submissions.length > 0) {
+            // 4. Bulk Job Insertion
+            const jobPayloads = submissions.map(sub => ({
+                type: 'AI_GRADE_SUBMISSION',
+                payload: JSON.stringify({ submissionId: sub.id }),
+                status: 'PENDING'
+            }));
+
+            await prisma.job.createMany({ data: jobPayloads });
+
+            // 5. Trigger the Queue (The Hydraulic Press)
+            const protocol = req.headers.get('x-forwarded-proto') || 'http';
+            const host = req.headers.get('host');
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+            const queueUrl = `${baseUrl}/api/queue/process`;
+
+            console.log(`[BATCH_REGRADE] Enqueued ${submissions.length} jobs. Triggering Processor: ${queueUrl}`);
+
+            // Fire and forget next batch
+            fetch(queueUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).catch(err => console.error("[BATCH_REGRADE] Failed to trigger queue processor:", err));
+        }
+
+        return NextResponse.json({ success: true, count: submissions.length, message: "Batch regrading initialized." });
 
     } catch (error: any) {
         console.error("[BATCH_REGRADE_ERROR]", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to initialize batch re-grade due to a system error.' }, { status: 500 });
     }
 }
