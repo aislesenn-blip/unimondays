@@ -72,18 +72,36 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
 
         let rawContent = completion.choices[0]?.message?.content || '{}';
 
-        // Strip markdown if it exists
-        const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-        const resultData = JSON.parse(cleanJsonString);
+        // 1. Log the RAW response so we can see it in Vercel
+        console.log("====== RAW AI RESPONSE START ======");
+        console.log(rawContent);
+        console.log("====== RAW AI RESPONSE END ======");
 
-        // 4. Atomic Database Finalization
+        let resultData: any = {};
+
+        // 2. Bulletproof Parsing
+        try {
+            // Strip markdown formatting if DeepSeek hallucinated it
+            const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
+
+            // Find the first { and last } to avoid conversational text
+            const jsonMatch = cleanJsonString.match(/\{[\s\S]*\}/);
+            const finalStringToParse = jsonMatch ? jsonMatch[0] : cleanJsonString;
+
+            resultData = JSON.parse(finalStringToParse);
+            console.log("✅ SUCCESSFULLY PARSED JSON!");
+        } catch (error) {
+            console.error("❌ JSON PARSING FAILED. DeepSeek returned invalid JSON:", error);
+        }
+
+        // 3. Fallback Database Mapping (Catch all possible naming variations)
         await prisma.score.create({
             data: {
                 submissionId: submission.id,
-                totalMarks: resultData.totalScore || 0,
-                remarks: resultData.overallRemarks || "",
-                breakdown: JSON.stringify(resultData.breakdown || []),
-                detectedIdentity: resultData.regNo || "UNKNOWN"
+                totalMarks: resultData.totalScore || resultData.total_score || 0,
+                remarks: resultData.overallRemarks || resultData.remarks || "No overall remarks provided.",
+                breakdown: JSON.stringify(resultData.breakdown || resultData.results || []),
+                detectedIdentity: resultData.regNo || resultData.reg_no || "UNKNOWN"
             }
         });
 
@@ -91,12 +109,12 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
             where: { id: submission.id },
             data: {
                 status: 'GRADED',
-                feedback: resultData.aiFeedback || ""
+                feedback: resultData.aiFeedback || resultData.generalFeedback || "No AI feedback provided."
             }
         });
 
-        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.regNo}`);
-        return NextResponse.json({ success: true, regNo: resultData.regNo });
+        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.regNo || resultData.reg_no}`);
+        return NextResponse.json({ success: true, regNo: resultData.regNo || resultData.reg_no });
 
     } catch (error: any) {
         console.error(`[REDUCER FATAL ERROR]:`, error);
