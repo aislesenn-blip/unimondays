@@ -24,20 +24,34 @@ export async function POST(req: NextRequest) {
         const fullExamText = sortedData.map(chunk => `[PAGES ${chunk.pages.join(',')}]\n${chunk.text}`).join('\n\n');
 
         // 2. The Chaos Hunter Prompt (Precision Engineering)
-        const systemPrompt = `You are a strict, expert academic grader. The following text is raw, chaotic, and assembled from multiple scanned pages of a student's exam.
+        const systemPrompt = `
+You are an expert, strict, and highly analytical academic examiner. Your task is to grade a student's exam submission based ONLY on the provided Marking Guide (Rubric) and the raw extracted text (OCR) from the student's exam paper.
 
-YOUR MANDATE:
-1. IDENTITY HUNT: First, hunt for the student's Registration Number or Name. If missing, output "UNKNOWN_STUDENT".
-2. HOLISTIC GRADING: Grade strictly against the marking scheme. Do not penalize for answers written out of order or on the wrong page. Find the answer wherever it is.
-3. PERSONALIZED REMARKS: Provide detailed, accurate, and personalized feedback for each question explaining exactly why marks were awarded or lost.
-4. STRICT JSON FORMAT: You MUST return ONLY this exact JSON structure. Do not wrap it in markdown block quotes.
+### INSTRUCTIONS:
+1. **Holistic Scanning:** Scan the entire extracted text. Students may answer out of order or spill over pages. Match their answers to the corresponding questions in the Marking Guide.
+2. **Granular Grading:** Grade each sub-question individually. Award full marks for complete answers, partial marks for incomplete but relevant answers, and 0 marks for skipped or completely wrong answers.
+3. **Identity Extraction:** Locate the student's Registration Number (e.g., 2018-04-12551) from the text. If not found, use "UNKNOWN".
+4. **Constructive Feedback:** Write a detailed overall feedback section explicitly categorized into "Strengths:", "Weaknesses:", and "Improvement:".
+5. **Overall Remarks:** Provide a brief summary of how you conducted the grading (e.g., "I graded holistically, mapping scattered answers...").
+
+### STRICT OUTPUT FORMAT:
+You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (like \`\`\`json). Do not add any conversational text. The JSON MUST exactly match this schema:
+
 {
-  "reg_no": "String",
-  "total_score": Number,
-  "results": [
-    {"q": "QuestionNum", "score": Number, "remark": "String"}
+  "regNo": "String (The extracted registration number)",
+  "totalScore": Number (The sum of all awarded scores),
+  "aiFeedback": "String (Must contain Strengths, Weaknesses, and Improvement)",
+  "overallRemarks": "String (Summary of the grading process)",
+  "breakdown": [
+    {
+      "question": "String (Question Number, e.g., Q1A i)",
+      "score": Number (Awarded marks),
+      "maxScore": Number (Maximum possible marks from rubric),
+      "feedback": "String (Specific reason why this mark was awarded. E.g., 'Correct definition provided.')"
+    }
   ]
-}`;
+}
+`;
 
         // 3. Native DeepSeek Call
         const completion = await deepSeekClient.chat.completions.create({
@@ -52,31 +66,31 @@ YOUR MANDATE:
 
         let rawContent = completion.choices[0]?.message?.content || '{}';
 
-        // Extract JSON strictly between first { and last } to avoid Markdown/Conversational wrap
-        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            rawContent = jsonMatch[0];
-        }
-
-        const resultData = JSON.parse(rawContent);
+        // Strip markdown if it exists
+        const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
+        const resultData = JSON.parse(cleanJsonString);
 
         // 4. Atomic Database Finalization
         await prisma.score.create({
             data: {
                 submissionId: submission.id,
-                totalMarks: resultData.total_score || 0,
-                breakdown: JSON.stringify(resultData.results || []),
-                detectedIdentity: resultData.reg_no || "UNKNOWN"
+                totalMarks: resultData.totalScore || 0,
+                remarks: resultData.overallRemarks || "",
+                breakdown: JSON.stringify(resultData.breakdown || []),
+                detectedIdentity: resultData.regNo || "UNKNOWN"
             }
         });
 
         await prisma.submission.update({
             where: { id: submission.id },
-            data: { status: 'GRADED' }
+            data: {
+                status: 'GRADED',
+                feedback: resultData.aiFeedback || ""
+            }
         });
 
-        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.reg_no}`);
-        return NextResponse.json({ success: true, regNo: resultData.reg_no });
+        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.regNo}`);
+        return NextResponse.json({ success: true, regNo: resultData.regNo });
 
     } catch (error: any) {
         console.error(`[REDUCER FATAL ERROR]:`, error);
