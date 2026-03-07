@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
             }
         });
 
-        const baseUrl = new URL(req.url).origin;
+        const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
 
         // 3. Dispatch Parallel Map Jobs to QStash
         const messages = chunks.map(pageBatch => ({

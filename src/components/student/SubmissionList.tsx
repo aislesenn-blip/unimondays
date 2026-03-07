@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StudentResultDrawer } from "./ResultDrawer";
@@ -11,35 +11,22 @@ export function SubmissionList() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchSubmissions = React.useCallback(async () => {
-    try {
-      const res = await fetch("/api/student/submissions");
-      const data = await res.json();
-      if (data.success) {
-        setSubmissions(data.data);
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      try {
+        const res = await fetch("/api/student/submissions");
+        const data = await res.json();
+        if (data.success) {
+          setSubmissions(data.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch submissions", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch submissions", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
+    };
     fetchSubmissions();
-  }, [fetchSubmissions]);
-
-  // Polling mechanism
-  useEffect(() => {
-    const hasPending = submissions.some(sub => sub.status === 'PENDING' || sub.status === 'PROCESSING');
-    if (!hasPending) return;
-
-    const interval = setInterval(() => {
-      fetchSubmissions();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [submissions, fetchSubmissions]);
+  }, []);
 
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="animate-spin text-muted-foreground" /></div>;

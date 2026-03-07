@@ -200,12 +200,16 @@ export async function POST(req: NextRequest) {
 
     console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${triggerUrl}`);
 
-    // Fire and forget (with error logging)
-    fetch(triggerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: submission.id })
-    }).catch(err => console.error("[SUBMIT] Failed to trigger map-reduce processor:", err));
+    // Await fetch to prevent Serverless Termination
+    try {
+        await fetch(triggerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ submissionId: submission.id })
+        });
+    } catch (err) {
+        console.error("[SUBMIT] Failed to trigger map-reduce processor:", err);
+    }
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
 
