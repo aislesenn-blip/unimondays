@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { supabase } from '@/lib/supabase'; // Admin Client
+import { Client } from "@upstash/qstash";
+import { getPdfPageCount } from '@/lib/pdf-utils';
 
 export const maxDuration = 300; // Vercel timeout protection
+const CHUNK_SIZE = 4; // Max pages per Gemini Vision request
 
 export async function POST(req: NextRequest) {
   try {
@@ -191,23 +194,56 @@ export async function POST(req: NextRequest) {
         }
     });
 
-    // 9. ASYNC TRIGGER: "The Hydraulic Press"
-    // We trigger the queue processor asynchronously. It will pick up this job (and others).
+    // 9. MAP-REDUCE QSTASH DISPATCH (Bypassing external trigger)
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
-    const triggerUrl = `${protocol}://${host}/api/grade/trigger`;
+    const baseUrl = `${protocol}://${host}`;
 
-    console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${triggerUrl}`);
-
-    // Await fetch to prevent Serverless Termination
     try {
-        await fetch(triggerUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ submissionId: submission.id })
+        // Calculate chunks
+        const totalPages = await getPdfPageCount(submission.filePath);
+
+        if (totalPages <= 0) {
+            await prisma.submission.update({
+                where: { id: submission.id },
+                data: { status: 'FAILED', feedback: 'Empty PDF or unable to read pages.' }
+            });
+            throw new Error("PDF has 0 pages.");
+        }
+
+        const chunks = [];
+        for (let i = 1; i <= totalPages; i += CHUNK_SIZE) {
+            const pageBatch = [];
+            for (let j = 0; j < CHUNK_SIZE && (i + j) <= totalPages; j++) {
+                pageBatch.push(i + j);
+            }
+            chunks.push(pageBatch);
+        }
+
+        // Initialize Atomic Tracking State
+        await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+                status: 'PROCESSING',
+                totalChunks: chunks.length,
+                processedChunks: 0,
+                extractedData: []
+            }
         });
-    } catch (err) {
-        console.error("[SUBMIT] Failed to trigger map-reduce processor:", err);
+
+        // Initialize QStash and Dispatch
+        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+        const messages = chunks.map(pageBatch => ({
+            url: `${baseUrl}/api/grade/ocr`,
+            body: { submissionId: submission.id, pages: pageBatch, pdfUrl: submission.filePath }
+        }));
+
+        await qstash.batchJSON(messages);
+        console.log(`[SUBMIT] Successfully dispatched ${chunks.length} Map-Reduce jobs to QStash.`);
+
+    } catch (dispatchError: any) {
+        console.error("[SUBMIT] Failed to dispatch to QStash:", dispatchError);
+        // We still return success to the student, the job table will act as a fallback/retry mechanism if implemented
     }
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
