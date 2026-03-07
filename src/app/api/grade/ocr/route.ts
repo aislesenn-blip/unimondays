@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { Client } from "@upstash/qstash";
 import { extractMultiplePageImagesFromBuffer } from '@/lib/pdf-utils';
-import { readFile } from '@/lib/storage';
+import { supabase } from '@/lib/supabase'; // Using the admin client
 
 const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
@@ -13,8 +13,23 @@ export async function POST(req: NextRequest) {
     try {
         const { submissionId, pages, pdfUrl } = await req.json(); // pages is an array: [1, 2, 3, 4]
 
-        // 1. Download PDF Buffer Exactly ONCE
-        const pdfBuffer = await readFile(pdfUrl, 'exam_pdfs');
+        // 1. Download PDF Buffer Exactly ONCE using robust Supabase Admin SDK
+        // Clean path to ensure it doesn't have leading slashes if it's already a relative storage path
+        const cleanPath = pdfUrl?.startsWith('/') ? pdfUrl.slice(1) : pdfUrl;
+
+        const { data: fileData, error: downloadError } = await supabase
+            .storage
+            .from('exam_pdfs')
+            .download(cleanPath);
+
+        if (downloadError || !fileData) {
+            console.error(`[Storage Error] Failed to download PDF for submission ${submissionId}:`, downloadError);
+            throw new Error(`Supabase Download Failed: ${downloadError?.message || 'No data returned'}`);
+        }
+
+        // Convert Blob/File to Buffer for your PDF parser
+        const arrayBuffer = await fileData.arrayBuffer();
+        const pdfBuffer = Buffer.from(arrayBuffer);
 
         // 2. Extract multiple pages in a single iteration
         const pageImages = await extractMultiplePageImagesFromBuffer(pdfBuffer, pages);
