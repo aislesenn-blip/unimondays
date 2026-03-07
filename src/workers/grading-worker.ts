@@ -98,12 +98,26 @@ export async function handleAiGrade(job: Job) {
           if (!ms) return undefined;
 
           // Check for URL-like paths (uploaded files) including 'rubrics/', 'bulk_uploads/', or pdf extensions
+          // If it's already plain text (cached), return it directly
+          if (!ms.startsWith('rubrics/') && !ms.startsWith('bulk_uploads/') && !ms.includes('/') && !ms.toLowerCase().endsWith('.pdf')) {
+              return ms;
+          }
+
           if (ms.startsWith('rubrics/') || ms.startsWith('bulk_uploads/') || ms.includes('/') || ms.toLowerCase().endsWith('.pdf')) {
               try {
                   console.log(`[SUPABASE_FETCH] Marking Scheme: ${ms}`);
                   const buffer = await readFile(ms, 'exam_pdfs');
                   const mimeType = ms.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
                   const text = await ocrDocument(buffer, mimeType);
+
+                  // Cache OCR result to prevent redundant processing
+                  if (text && text.length > 50) {
+                      await prisma.workSession.update({
+                          where: { id: submission.workSession.id },
+                          data: { markingScheme: text }
+                      }).catch(e => console.warn("[DB_WARN] Failed to cache marking scheme", e));
+                  }
+
                   return text;
               } catch (e: any) {
                   console.warn("[OCR_WARN] Marking Scheme OCR failed.", e.message);
@@ -187,12 +201,10 @@ Student Identifier: ${studentId}.
               result = {
                   totalScore: sim.score,
                   breakdown: sim.breakdown.map((b: any) => ({
-                      ...b,
-                      isRelevant: true,
-                      mappedRubricQuestion: b.question,
-                      evidenceSnippet: "SIMULATED_SNIPPET"
+                      question_id: b.question_id,
+                      score: b.score,
+                      short_evidence: "SIMULATED_SNIPPET"
                   })),
-                  aiReasoning: sim.reasoning,
                   confidence: sim.confidence,
                   detectedIdentity: extractedStudentId || "SIMULATED_ID"
               };
@@ -216,8 +228,20 @@ Student Identifier: ${studentId}.
           throw new Error("Invalid AI Result: Missing or malformed breakdown array");
       }
 
+      // 4. Transform Diet JSON for Database (Schema Compatibility)
+      // The DB JSON expects fields like 'mappedRubricQuestion', 'isRelevant', 'evidenceSnippet'
+      const formattedBreakdown = result.breakdown.map(item => ({
+          isRelevant: true, // Legacy compatibility: assume all diet items are relevant
+          mappedRubricQuestion: item.question_id,
+          question: item.question_id,
+          score: item.score,
+          max: item.score, // Fallback since diet doesn't return max
+          feedback: item.short_evidence,
+          evidenceSnippet: item.short_evidence
+      }));
+
       // SILENT FILTERING: Remove irrelevant metadata/noise chunks before saving to DB
-      let validBreakdowns = result.breakdown.filter(item => item.isRelevant !== false);
+      let validBreakdowns = formattedBreakdown.filter(item => item.isRelevant !== false);
 
       let aggregatedScore = 0;
       validBreakdowns.forEach(item => {
@@ -225,7 +249,7 @@ Student Identifier: ${studentId}.
       });
 
       const aggregatedConfidence = result.confidence ?? 95;
-      const aggregatedReasoning = result.aiReasoning || "Holistic grading completed.";
+      const aggregatedReasoning = "Holistic grading completed via Diet JSON.";
       const aggregatedIdentity = extractedStudentId || result.detectedIdentity || "UNIDENTIFIED_IDENTITY";
 
       // 4. Save Score & Feedback
@@ -265,9 +289,9 @@ Student Identifier: ${studentId}.
       console.log(`[AI_CONFIDENCE] Score: ${aggregatedConfidence}, Threshold: ${threshold} -> Status: ${status} (Dynamic Threshold Applied)`);
 
       const feedbackStr = JSON.stringify({
-        strengths: result.strengths || [],
-        weaknesses: result.weaknesses || [],
-        improvement: result.improvement || "Review holistic feedback for details."
+        strengths: [],
+        weaknesses: [],
+        improvement: "Review holistic feedback for details."
       });
 
       await prisma.submission.update({
