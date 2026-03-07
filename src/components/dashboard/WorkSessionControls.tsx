@@ -139,11 +139,11 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
       <CardContent className="p-4 flex flex-col gap-4">
 
         {/* Top Action Bar (Premium UX) */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-border/50">
-            <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-border/50">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground font-medium tracking-wide">
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground font-medium tracking-wide w-full sm:w-auto justify-start sm:justify-center">
                             <BookOpen className="w-4 h-4 mr-2 text-primary" />
                             Playbook Marking Guide
                         </Button>
@@ -274,10 +274,52 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                                 </Tabs>
                             </section>
 
+                            {/* New Educational Content Section */}
+                            <section>
+                                <h3 className="text-xl font-medium tracking-tight mb-4 flex items-center gap-2">
+                                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                                    3. Examples of 10 Different Valid Responses for Same Question
+                                </h3>
+                                <div className="bg-muted/20 p-6 rounded-lg border">
+                                    <div className="font-medium text-sm mb-4 text-foreground">
+                                        <p><span className="text-primary font-semibold">Question:</span> “Explain photosynthesis.”</p>
+                                        <p className="mt-1"><span className="text-primary font-semibold">Rubric:</span> Plants use sunlight to make food.</p>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <p className="font-semibold text-sm mb-2">Student responses:</p>
+                                        <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
+                                            <li>“Plants manufacture glucose using sunlight.”</li>
+                                            <li>“Leaves convert light energy into chemical energy.”</li>
+                                            <li>“Photosynthesis produces food from sunlight.”</li>
+                                            <li>“Green plants use chlorophyll to make sugar using sunlight.”</li>
+                                            <li>“Plants synthesize carbohydrates from sunlight energy.”</li>
+                                            <li>“Sunlight is converted into food in plants.”</li>
+                                            <li>“Through chlorophyll, plants capture sunlight to create energy-rich compounds.”</li>
+                                            <li>“Sunlight drives the formation of organic molecules in leaves.”</li>
+                                            <li>“Plants produce energy-rich sugars from sunlight.”</li>
+                                            <li>“Glucose is synthesized in plants using light energy.”</li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 p-3 rounded text-sm border-l-2 border-emerald-500 mb-6">
+                                        <strong>Result:</strong> All recognized correctly by AI → Tier 2. Ensures full marks fairly.
+                                    </div>
+
+                                    <h4 className="font-semibold text-sm mb-2 text-foreground">Example of Correct but Out-of-Scope Answer (Tier 3)</h4>
+                                    <div className="text-sm text-muted-foreground mb-3">
+                                        Student response: “Plants are important for oxygen production.”
+                                    </div>
+                                    <div className="bg-destructive/10 text-destructive p-3 rounded text-sm border-l-2 border-destructive">
+                                        <strong>Result:</strong> Factually true, but does not answer the photosynthesis mechanism → 0 marks. Ensures AI doesn’t reward irrelevant knowledge.
+                                    </div>
+                                </div>
+                            </section>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 {/* Guidelines */}
                                 <section>
-                                    <h3 className="text-xl font-medium tracking-tight mb-4">3. Upload Guidelines</h3>
+                                    <h3 className="text-xl font-medium tracking-tight mb-4">4. Upload Guidelines</h3>
                                     <ul className="space-y-3 text-sm text-muted-foreground">
                                         <li className="flex items-start gap-2">
                                             <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
@@ -296,7 +338,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
 
                                 {/* Key Takeaways */}
                                 <section>
-                                    <h3 className="text-xl font-medium tracking-tight mb-4">4. Key Takeaways</h3>
+                                    <h3 className="text-xl font-medium tracking-tight mb-4">5. Key Takeaways</h3>
                                     <ul className="space-y-3 text-sm text-muted-foreground">
                                         <li className="flex items-start gap-2">
                                             <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
@@ -318,7 +360,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 </Dialog>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                 <input
                     type="file"
                     accept="application/pdf"
@@ -329,7 +371,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 <Button
                     variant="outline"
                     size="sm"
-                    className="border-dashed"
+                    className="border-dashed w-full sm:w-auto justify-center"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={!!loading}
                 >
@@ -340,7 +382,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 <Button
                     variant="default"
                     size="sm"
-                    className="bg-primary text-primary-foreground shadow-sm transition-all"
+                    className="bg-primary text-primary-foreground shadow-sm transition-all w-full sm:w-auto justify-center"
                     onClick={handleBatchRegrade}
                     disabled={!!loading || areGradesReleased}
                 >
