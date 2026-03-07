@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deepseek } from "@/lib/ai/deepseek";
+import OpenAI from "openai";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+
+const deepseek = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: process.env.OPENROUTER_API_KEY || 'missing-key',
+});
 
 export const maxDuration = 60; // Allow 60 seconds for chat completions
 

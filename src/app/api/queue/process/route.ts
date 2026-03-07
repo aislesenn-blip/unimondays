@@ -1,134 +1,67 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleAiGrade } from '@/workers/grading-worker';
-import { handleCloudMarking } from '@/workers/cloud-worker';
 
-export const maxDuration = 300; // 5 Minutes (Vercel Pro/Enterprise)
-export const dynamic = 'force-dynamic'; // Disable caching
+export const maxDuration = 300; // 5 min
+export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-  // Security: Ensure only internal calls or authorized crons can trigger this
-  // For now, we'll allow it but you might want to add a CRON_SECRET check
-  const authHeader = req.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      // console.warn("Unauthorized queue trigger attempt");
-      // return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      // For this "Audit Fix", we'll be lenient to allow the student submit flow to trigger it easily
-  }
+export async function GET() {
+    return NextResponse.json({ status: "Vercel OOM Protected Queue" });
+}
 
-  let processedCount = 0;
-  let errors = 0;
-  let rateLimitHit = false;
+export async function POST() {
+    console.log("[QUEUE] Wakeup: Project 1000 - Sequential Mode");
 
-  try {
-    // 1. Fetch Pending Jobs (Leaky Bucket / Batch Processing)
-    // We take 5 at a time to avoid Vercel timeouts
-    const jobs = await prisma.job.findMany({
-        where: {
-            status: 'PENDING',
-            type: { in: ['AI_GRADE_SUBMISSION', 'CLOUD_MARKING'] },
-            retryCount: { lt: 3 } // Max 3 retries
-        },
-        orderBy: { createdAt: 'asc' }, // FIFO
-        take: 5
-    });
-
-    if (jobs.length === 0) {
-        return NextResponse.json({ message: 'No pending jobs found.' });
-    }
-
-    console.log(`[QUEUE] Processing ${jobs.length} jobs...`);
-
-    // 2. Process Jobs (SERIAL EXECUTION)
-    for (const job of jobs) {
-        // Mark as PROCESSING (Optimistic Locking)
-        await prisma.job.update({
-            where: { id: job.id },
-            data: { status: 'PROCESSING', processedAt: new Date() }
+    try {
+        // STRICT LIMIT 3 (Never exceed or lambda dies)
+        const jobs = await prisma.job.findMany({
+            where: { status: 'PENDING' },
+            orderBy: { createdAt: 'asc' },
+            take: 3
         });
 
-        try {
-            // EXECUTE WORKER BASED ON TYPE
-            if (job.type === 'CLOUD_MARKING') {
-                await handleCloudMarking(job);
-            } else if (job.type === 'AI_GRADE_SUBMISSION') {
-                await handleAiGrade(job);
-            } else {
-                throw new Error(`Unknown Job Type: ${job.type}`);
-            }
+        if (jobs.length === 0) {
+            console.log("[QUEUE] Empty queue.");
+            return NextResponse.json({ processed: 0 });
+        }
 
-            // Mark COMPLETED
-            await prisma.job.update({
-                where: { id: job.id },
-                data: { status: 'COMPLETED', result: 'Success' }
-            });
-            processedCount++;
+        console.log(`[QUEUE] Processing ${jobs.length} jobs sequentially.`);
 
-        } catch (error: any) {
-            console.error(`[QUEUE] Job ${job.id} Failed:`, error);
+        // SEQUENTIAL FOR-LOOP (The antidote to Vercel 504s)
+        for (const job of jobs) {
+            console.log(`[QUEUE] -> Starting Job ${job.id}`);
+            await prisma.job.update({ where: { id: job.id }, data: { status: 'PROCESSING' } });
 
-            // RATE LIMIT ARMOR (Handling 429s/503s)
-            const isRateLimit = error.message?.includes('RATE_LIMIT_HIT') || error.message?.includes('429');
+            try {
+                if (job.type === 'AI_GRADE_SUBMISSION') {
+                    await handleAiGrade(job);
+                }
 
-            if (isRateLimit) {
-                console.warn(`[QUEUE] Rate Limit Hit on Job ${job.id}. Pausing batch.`);
+                await prisma.job.update({ where: { id: job.id }, data: { status: 'COMPLETED' } });
+                console.log(`[QUEUE] -> Job ${job.id} SUCCESS`);
 
-                // Revert status to PENDING so it's picked up later
+            } catch (err: any) {
+                console.error(`[QUEUE] -> Job ${job.id} FAILED:`, err.message);
+
+                // Fallback to PENDING for 3 retries
+                const retryCount = (job.retryCount || 0) + 1;
+                const newStatus = retryCount >= 3 ? 'FAILED' : 'PENDING';
+
                 await prisma.job.update({
                     where: { id: job.id },
-                    data: {
-                        status: 'PENDING',
-                        error: error.message,
-                        // Do NOT increment retry count for rate limits, or increment responsibly
-                        // For now, we won't increment to prevent dead-lettering due to API congestion
-                    }
+                    data: { status: newStatus, error: err.message, retryCount }
                 });
-
-                rateLimitHit = true;
-                break; // STOP PROCESSING THE BATCH
             }
-
-            // GENERIC FAILURE
-            await prisma.job.update({
-                where: { id: job.id },
-                data: {
-                    status: 'FAILED',
-                    error: error.message,
-                    retryCount: { increment: 1 }
-                }
-            });
-            errors++;
         }
+
+        console.log("[QUEUE] Batch Complete.");
+
+        const remaining = await prisma.job.count({ where: { status: 'PENDING' } });
+
+        return NextResponse.json({ processed: jobs.length, remaining });
+
+    } catch (fatalError: any) {
+        console.error("[QUEUE] FATAL ERROR", fatalError);
+        return NextResponse.json({ error: fatalError.message }, { status: 500 });
     }
-
-    // 3. Recursive Trigger (The "Hydraulic Press")
-    // If we processed a full batch successfully AND didn't hit a rate limit, trigger self.
-    // If rate limit hit, we STOP to let the API cool down.
-    if (!rateLimitHit && jobs.length === 5) {
-        const protocol = req.headers.get('x-forwarded-proto') || 'http';
-        const host = req.headers.get('host');
-        const baseUrl = `${protocol}://${host}`;
-
-        console.log(`[QUEUE] Batch full & healthy. Triggering recursion: ${baseUrl}/api/queue/process`);
-
-        // Fire and forget next batch
-        fetch(`${baseUrl}/api/queue/process`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        }).catch(e => console.error("Failed to trigger next batch", e));
-    }
-
-    return NextResponse.json({
-        success: true,
-        processed: processedCount,
-        failed: errors,
-        rateLimitHit,
-        message: `Processed ${processedCount} jobs. ${errors} failed. Rate Limit: ${rateLimitHit}`
-    });
-
-  } catch (error: any) {
-    console.error("[QUEUE] Critical Failure:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
 }

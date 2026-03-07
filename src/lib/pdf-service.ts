@@ -37,11 +37,11 @@ export async function splitPdfBatch(buffer: Buffer): Promise<{ regNo: string, fi
 
     // 3. Save file
     // Sanitize regNo for filename
-    const safeRegNo = split.regNo.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeRegNo = (split.regNo || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '_');
     const filePath = await saveBuffer(pdfBuffer, `${safeRegNo}.pdf`, 'submissions/split');
 
     results.push({
-      regNo: split.regNo,
+      regNo: split.regNo || 'UNKNOWN',
       filePath
     });
   }
