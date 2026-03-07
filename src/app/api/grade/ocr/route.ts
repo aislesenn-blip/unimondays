@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
         // 4. Fire Reducer if this was the last chunk to finish
         if (updatedSubmission.processedChunks === updatedSubmission.totalChunks) {
-            const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
             await qstash.publishJSON({
                 url: `${baseUrl}/api/grade/finalize`,
                 body: { submissionId }

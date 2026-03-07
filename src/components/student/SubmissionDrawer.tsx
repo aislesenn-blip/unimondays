@@ -65,6 +65,18 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
         return;
       }
 
+      // Trigger Map-Reduce grading
+      try {
+        await fetch("/api/grade/trigger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ submissionId: data.submissionId })
+        });
+      } catch (triggerError) {
+        console.error("Failed to trigger grading", triggerError);
+        // We don't block the UI if trigger fails, the queue might still pick it up
+      }
+
       toast.success("Submitted successfully!");
       onSuccess();
       onOpenChange(false);
