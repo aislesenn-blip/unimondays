@@ -137,62 +137,37 @@ Output STRICT JSON:
 Total score max: ${totalMarks}.`;
 }
 
-export async function gradeSubmission(
-  ocrText: string,
-  rubric: string,
-  totalMarks: number,
-  config: GradeConfig = { strictness: 1.0 },
-  imageBuffer?: Buffer, // Kept for legacy compatibility if needed
-  mimeType?: string     // Kept for legacy compatibility if needed
-): Promise<GradingResult> {
-  if (!deepseek) {
-    throw new Error("DEEPSEEK_API_KEY is not set. Grading service unavailable.");
-  }
+export async function gradeSubmission(rawText: string, rubricContent: string, markingSchemeContent: string) {
+    if (!process.env.OPENROUTER_API_KEY) {
+        throw new Error("OPENROUTER_API_KEY is not set.");
+    }
 
-  // Optimize prompt: Remove excessive whitespace, focus on JSON strictness
-  const systemPrompt = buildSystemPrompt(config, totalMarks);
+    console.log("[DEEPSEEK] Initiating God-Tier Grading with JSON Diet...");
 
-  try {
-    let completion: OpenAI.Chat.Completions.ChatCompletion;
+    const systemPrompt = `You are an expert academic grader. You have 100% accuracy.
+MANDATE 1: NON-SEQUENTIAL HUNTING. Find the answers regardless of page order.
+MANDATE 2: THE PHOTOSYNTHESIS PROTOCOL (FEW-SHOT PRECISION).
+Always grade exactly based on the marking scheme. Example: If the scheme says "Award 2 marks for mentioning Chlorophyll", and the student mentions "Green leaves" without "Chlorophyll" (Out of scope), award 0 marks. Do not guess. Do not assume.
+MANDATE 3: JSON DIET (CRITICAL).
+You MUST output the absolute minimum text to save tokens. Use this exact minified JSON array format ONLY:
+{"results": [{"q": "QuestionNumber", "s": ScoreGained, "f": "Max 5 words explaining why"}]}
+DO NOT write long feedback. DO NOT add strengths/weaknesses arrays.`;
 
-    // BRANCH: TEXT-ONLY (DeepSeek V3 or Gemini Fallback)
-    // We intentionally bypass images here for Holistic Text Grading
-    console.log(`[AI_ROUTER] Routing request to DeepSeek V3 (Text-Only Holistic Grading).`);
-    completion = await deepseek.chat.completions.create({
-        model: "deepseek-chat",
+    const completion = await deepseek.chat.completions.create({
+        model: "deepseek/deepseek-chat",
         messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: `Marking Scheme:
-${config.markingScheme || "None"}
-
-Rubric:
-${rubric}
-
-Student Submission:
-${ocrText}` }
+            { role: "user", content: `MARKING SCHEME:\n${markingSchemeContent}\n\nRUBRIC:\n${rubricContent}\n\nSTUDENT EXAM:\n${rawText}` }
         ],
         response_format: { type: "json_object" },
         temperature: 0.0,
         top_p: 0.1,
-        seed: 12345,
-        max_tokens: 8192, // Prevent infinite loops
+        max_tokens: 2000, // Reduced token limit to enforce budget constraints
     });
 
-    const content = completion.choices[0].message.content;
-    if (!content) throw new Error("No content returned from AI Service");
+    const resultString = completion.choices[0]?.message?.content || '{"results":[]}';
 
-    // Sanitize JSON (Markdown Stripping)
-    const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-
-    const result = JSON.parse(cleanContent);
-    return result as GradingResult;
-
-  } catch (error: any) {
-    console.error("AI Grading Error:", error);
-    // Add more context to error
-    if (error.status === 429 || error.status === 503 || error.message?.includes('429') || error.message?.includes('503')) {
-        throw new Error("RATE_LIMIT_HIT: AI Service overloaded.");
-    }
-    throw new Error(`Failed to grade submission: ${error.message}`);
-  }
+    // Clean markdown wrappers if any exist
+    const cleanString = resultString.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanString);
 }
