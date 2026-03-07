@@ -107,6 +107,11 @@ model Submission {
   filePath       String?          @map("file_path")
   ocrText        String?          @map("ocr_text")
   status         String @default("PENDING") // SubmissionStatus enum
+
+  // Distributed Processing State
+  totalChunks      Int      @default(0)
+  processedChunks  Int      @default(0)
+  extractedData    Json[]   @default([]) // Array of JSON objects: { pages: number[], text: string }
   feedback       String? // Stored as string
   confidenceScore Float?          @map("confidence_score")
   submittedAt    DateTime?        @default(now()) @map("submitted_at")

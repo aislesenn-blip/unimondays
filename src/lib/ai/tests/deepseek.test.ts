@@ -29,7 +29,7 @@ describe('AI System Prompt Generation', () => {
 
     const prompt = buildSystemPrompt(config, 100);
 
-    expect(prompt).toContain("TEACHER'S CUSTOM INSTRUCTIONS:");
+    expect(prompt).toContain("MANDATE 00: THE TEACHER'S CUSTOM INSTRUCTIONS (SUPREME LAW)");
     expect(prompt).toContain('IGNORE SPELLING ERRORS AND BE VERY LENIENT');
   });
 
@@ -44,24 +44,29 @@ describe('AI System Prompt Generation', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
 
-    expect(prompt).toContain('MANDATE 1: NON-SEQUENTIAL HUNTING (JUMBLED ANSWERS)');
-    expect(prompt).toContain('MANDATE 2: MULTI-PAGE SPILLOVER (CONTEXT BLEED)');
-    expect(prompt).toContain('MANDATE 3: RESTORE SEMANTIC GRADING TIERS');
-    expect(prompt).toContain('MANDATE 4: MATH & CALCULATION GRADING');
-    expect(prompt).toContain('MANDATE 5: MANDATORY EXHAUSTIVE OUTPUT (DYNAMIC CHECKLIST)');
+    expect(prompt).toContain('MANDATE 1: THE MARKING SCHEME CALIBRATION');
+    expect(prompt).toContain('MANDATE 2: SEMANTIC FLEXIBILITY (ONLY IF ALLOWED BY MANDATE 00 & 1)');
+    expect(prompt).toContain('MANDATE 3: EMPATHY & OCR FORGIVENESS');
+    expect(prompt).toContain('MANDATE 4: MULTIMODAL DIAGRAM & GEOMETRY ANALYSIS');
+    expect(prompt).toContain('MANDATE 5: CHAIN OF THOUGHT REASONING & JSON OUTPUT');
   });
 
   it('should preserve critical system protocols', () => {
     const config: GradeConfig = { strictness: 1.0 };
     const prompt = buildSystemPrompt(config, 100);
 
+    // Identity Extraction (Old Mandate 1)
+    expect(prompt).toContain('SYSTEM PROTOCOL 1: FORENSIC IDENTITY SCAVENGING');
     expect(prompt).toContain('detectedIdentity');
 
-    // Skipped Questions (Mandate 6)
-    expect(prompt).toContain('MANDATE 6: SKIPPED QUESTIONS');
+    // Chaos Handling (Old Mandate 2)
+    expect(prompt).toContain('SYSTEM PROTOCOL 2: CHAOS HANDLING (NON-LINEAR GRADING)');
 
-    // OCR Tolerance (Mandate 7)
-    expect(prompt).toContain('MANDATE 7: OCR ARTIFACT TOLERANCE & LOGICAL MATH REASONING');
+    // Autopilot (Old Mandate 6)
+    expect(prompt).toContain('SYSTEM PROTOCOL 3: AUTOPILOT PROTOCOL');
+
+    // Visual Analysis (Old Mandate 7)
+    expect(prompt).toContain('SYSTEM PROTOCOL 4: ADVANCED VISUAL & DIAGRAM ANALYSIS');
   });
 
   it('should include the strict JSON output schema', () => {
