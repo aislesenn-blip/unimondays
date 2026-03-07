@@ -59,7 +59,12 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
 }
 `;
 
-        // 3. Native DeepSeek Call
+        // 3. Diagnostic Logs
+        console.log("--- PAYLOAD SIZES ---");
+        console.log("OCR Text Length:", fullExamText ? fullExamText.length : 0);
+        console.log("Marking Guide Length:", submission.workSession.rubric ? submission.workSession.rubric.length : 0);
+
+        // 4. Native DeepSeek Call
         const completion = await deepSeekClient.chat.completions.create({
             model: "deepseek-chat",
             messages: [
