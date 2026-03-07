@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { Client } from "@upstash/qstash";
 import { getPdfPageCount } from '@/lib/pdf-utils';
 
-const qstash = new Client({ token: process.env.QSTASH_TOKEN || 'dummy' });
+const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const CHUNK_SIZE = 4; // Max pages per Gemini Vision request
 
 export async function POST(req: NextRequest) {
@@ -38,11 +38,12 @@ export async function POST(req: NextRequest) {
 
         // 3. Dispatch Parallel Map Jobs to QStash
         const messages = chunks.map(pageBatch => ({
-            destination: `${baseUrl}/api/grade/ocr`,
-            body: JSON.stringify({ submissionId, pages: pageBatch, pdfUrl: submission.filePath }) // Pass filePath
+            url: `${baseUrl}/api/grade/ocr`,
+            body: { submissionId, pages: pageBatch, pdfUrl: submission.filePath } // Pass filePath
         }));
 
-        await qstash.publishJSON({ url: `${baseUrl}/api/grade/ocr`, body: messages });
+        // Pass the array DIRECTLY to batchJSON
+        await qstash.batchJSON(messages);
 
         return NextResponse.json({ success: true, message: `Dispatched ${chunks.length} parallel OCR workers.` });
     } catch (error: any) {
