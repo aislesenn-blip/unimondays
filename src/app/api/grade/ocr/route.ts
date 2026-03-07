@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { Client } from "@upstash/qstash";
-import { extractSinglePageImage } from '@/lib/pdf-utils';
+import { extractMultiplePageImagesFromBuffer } from '@/lib/pdf-utils';
+import { readFile } from '@/lib/storage';
 
 const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
@@ -12,26 +13,39 @@ export async function POST(req: NextRequest) {
     try {
         const { submissionId, pages, pdfUrl } = await req.json(); // pages is an array: [1, 2, 3, 4]
 
-        // 1. Build Multimodal Content Array
+        // 1. Download PDF Buffer Exactly ONCE
+        const pdfBuffer = await readFile(pdfUrl, 'exam_pdfs');
+
+        // 2. Extract multiple pages in a single iteration
+        const pageImages = await extractMultiplePageImagesFromBuffer(pdfBuffer, pages);
+
+        // 3. Build Multimodal Content Array
         const promptContent: any[] = [
             { type: "text", text: `Transcribe all handwritten text from these pages precisely. Do not summarize. Pages: ${pages.join(', ')}` }
         ];
 
         for (const pageNum of pages) {
-            const imageBuffer = await extractSinglePageImage(pdfUrl, pageNum);
-            promptContent.push({
-                type: "image_url",
-                image_url: { url: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` }
-            });
+            const imageBuffer = pageImages.get(pageNum);
+            if (imageBuffer) {
+                promptContent.push({
+                    type: "image_url",
+                    image_url: { url: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` }
+                });
+            }
         }
 
-        // 2. Parallel OCR via Gemini Vision
-        const completion = await openRouterClient.chat.completions.create({
-            model: "google/gemini-2.5-flash",
-            messages: [{ role: "user", content: promptContent }]
-        });
-
-        const extractedText = completion.choices[0]?.message?.content || "";
+        // 4. Parallel OCR via Gemini Vision (with strict timeout/error handling)
+        let extractedText = "";
+        try {
+            const completion = await openRouterClient.chat.completions.create({
+                model: "google/gemini-2.5-flash",
+                messages: [{ role: "user", content: promptContent }]
+            });
+            extractedText = completion.choices[0]?.message?.content || "";
+        } catch (aiError: any) {
+            console.error(`[OCR_AI_ERROR] OpenRouter failed for submission ${submissionId}, pages ${pages.join(',')}:`, aiError);
+            throw aiError; // Rethrow to let QStash retry the chunk if applicable
+        }
         const chunkData = { pages, text: extractedText };
 
         // 3. ATOMIC LOCK & REDUCE TRIGGER (Zero Race Conditions)

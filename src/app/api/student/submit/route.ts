@@ -6,7 +6,7 @@ import { Client } from "@upstash/qstash";
 import { getPdfPageCount } from '@/lib/pdf-utils';
 
 export const maxDuration = 300; // Vercel timeout protection
-const CHUNK_SIZE = 4; // Max pages per Gemini Vision request
+const CHUNK_SIZE = 2; // Reduced to 2 pages per worker to prevent OpenRouter timeouts
 
 export async function POST(req: NextRequest) {
   try {
