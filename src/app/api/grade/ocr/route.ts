@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 import { Client } from "@upstash/qstash";
 import { extractSinglePageImage } from '@/lib/pdf-utils';
 
-const qstash = new Client({ token: process.env.QSTASH_TOKEN || 'dummy' });
+const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
 export const maxDuration = 60;
 
@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
 
         // 4. Fire Reducer if this was the last chunk to finish
         if (updatedSubmission.processedChunks === updatedSubmission.totalChunks) {
-            const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+            const protocol = req.headers.get('x-forwarded-proto') || 'https';
+            const host = req.headers.get('host') || 'localhost:3000';
+            const baseUrl = `${protocol}://${host}`;
             await qstash.publishJSON({
                 url: `${baseUrl}/api/grade/finalize`,
                 body: { submissionId }

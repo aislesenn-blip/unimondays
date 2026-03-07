@@ -50,7 +50,15 @@ YOUR MANDATE:
             temperature: 0.0,
         });
 
-        const resultData = JSON.parse(completion.choices[0]?.message?.content || '{}');
+        let rawContent = completion.choices[0]?.message?.content || '{}';
+
+        // Extract JSON strictly between first { and last } to avoid Markdown/Conversational wrap
+        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            rawContent = jsonMatch[0];
+        }
+
+        const resultData = JSON.parse(rawContent);
 
         // 4. Atomic Database Finalization
         await prisma.score.create({
