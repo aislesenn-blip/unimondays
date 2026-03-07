@@ -196,15 +196,14 @@ export async function POST(req: NextRequest) {
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host');
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const triggerUrl = `${baseUrl}/api/grade/trigger`;
+    const queueUrl = `${baseUrl}/api/queue/process`;
 
-    console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${triggerUrl}`);
+    console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${queueUrl}`);
 
     // Fire and forget (with error logging)
-    fetch(triggerUrl, {
+    fetch(queueUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: submission.id })
+        headers: { 'Content-Type': 'application/json' }
     }).catch(err => console.error("[SUBMIT] Failed to trigger queue processor:", err));
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
