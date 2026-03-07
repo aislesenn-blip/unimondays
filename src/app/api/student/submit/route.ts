@@ -193,10 +193,9 @@ export async function POST(req: NextRequest) {
 
     // 9. ASYNC TRIGGER: "The Hydraulic Press"
     // We trigger the queue processor asynchronously. It will pick up this job (and others).
-    const protocol = req.headers.get('x-forwarded-proto') || 'http';
-    const host = req.headers.get('host');
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const triggerUrl = `${baseUrl}/api/grade/trigger`;
+    const protocol = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('host') || 'localhost:3000';
+    const triggerUrl = `${protocol}://${host}/api/grade/trigger`;
 
     console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${triggerUrl}`);
 
