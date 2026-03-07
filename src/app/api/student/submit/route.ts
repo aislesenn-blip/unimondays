@@ -196,15 +196,16 @@ export async function POST(req: NextRequest) {
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host');
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const queueUrl = `${baseUrl}/api/queue/process`;
+    const triggerUrl = `${baseUrl}/api/grade/trigger`;
 
-    console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${queueUrl}`);
+    console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${triggerUrl}`);
 
     // Fire and forget (with error logging)
-    fetch(queueUrl, {
+    fetch(triggerUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    }).catch(err => console.error("[SUBMIT] Failed to trigger queue processor:", err));
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: submission.id })
+    }).catch(err => console.error("[SUBMIT] Failed to trigger map-reduce processor:", err));
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
 
