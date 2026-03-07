@@ -179,32 +179,20 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. ENTERPRISE QUEUE PATTERN (V3.0)
-    // Instead of directly invoking the webhook, we insert a persistent Job record.
-    // This allows for robust retries, rate-limiting, and 100k burst handling.
-
-    await prisma.job.create({
-        data: {
-            type: 'AI_GRADE_SUBMISSION',
-            payload: JSON.stringify({ submissionId: submission.id }),
-            status: 'PENDING'
-        }
-    });
-
-    // 9. ASYNC TRIGGER: "The Hydraulic Press"
-    // We trigger the queue processor asynchronously. It will pick up this job (and others).
+    // 8. SERVERLESS MAP-REDUCE PATTERN
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host');
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const queueUrl = `${baseUrl}/api/queue/process`;
+    const triggerUrl = `${baseUrl}/api/grade/trigger`;
 
-    console.log(`[SUBMIT] Job Enqueued. Triggering Processor: ${queueUrl}`);
+    console.log(`[SUBMIT] Submission Saved. Triggering Serverless Map-Reduce: ${triggerUrl}`);
 
     // Fire and forget (with error logging)
-    fetch(queueUrl, {
+    fetch(triggerUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    }).catch(err => console.error("[SUBMIT] Failed to trigger queue processor:", err));
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: submission.id })
+    }).catch(err => console.error("[SUBMIT] Failed to trigger Map-Reduce:", err));
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
 

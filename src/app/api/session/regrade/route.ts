@@ -61,28 +61,23 @@ export async function POST(req: NextRequest) {
         });
 
         if (submissions.length > 0) {
-            // 4. Bulk Job Insertion
-            const jobPayloads = submissions.map(sub => ({
-                type: 'AI_GRADE_SUBMISSION',
-                payload: JSON.stringify({ submissionId: sub.id }),
-                status: 'PENDING'
-            }));
-
-            await prisma.job.createMany({ data: jobPayloads });
-
-            // 5. Trigger the Queue (The Hydraulic Press)
+        // 4. Trigger Serverless Map-Reduce for all submissions
             const protocol = req.headers.get('x-forwarded-proto') || 'http';
             const host = req.headers.get('host');
             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-            const queueUrl = `${baseUrl}/api/queue/process`;
+        const triggerUrl = `${baseUrl}/api/grade/trigger`;
 
-            console.log(`[BATCH_REGRADE] Enqueued ${submissions.length} jobs. Triggering Processor: ${queueUrl}`);
+        console.log(`[BATCH_REGRADE] Triggering Map-Reduce for ${submissions.length} submissions: ${triggerUrl}`);
 
-            // Fire and forget next batch
-            fetch(queueUrl, {
+        // Fire and forget triggers sequentially
+        // To avoid swamping the event loop or Vercel, we can Promise.all a bounded concurrent map or just fire sequentially
+        for (const sub of submissions) {
+            fetch(triggerUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            }).catch(err => console.error("[BATCH_REGRADE] Failed to trigger queue processor:", err));
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ submissionId: sub.id })
+            }).catch(err => console.error(`[BATCH_REGRADE] Failed to trigger sub ${sub.id}:`, err));
+        }
         }
 
         return NextResponse.json({ success: true, count: submissions.length, message: "Batch regrading initialized." });
