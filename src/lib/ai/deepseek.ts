@@ -27,14 +27,16 @@ export interface GradingResult {
     max: number;
     feedback: string;
     rubricReference?: string;
-    evidenceSnippet?: string; // Max 15 words
+    evidenceSnippet?: string;
     isRelevant: boolean;
     mappedRubricQuestion: string;
   }>;
   aiReasoning: string;
   confidence: number;
   detectedIdentity?: string | null;
-  // Deprecated to save tokens/time: strengths, weaknesses, improvement
+  strengths?: string[];
+  weaknesses?: string[];
+  improvement?: string;
 }
 
 export interface CalibrationSettings {
@@ -136,13 +138,16 @@ Output STRICT JSON:
 {
   "totalScore": number,
   "breakdown": [
-    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string (MAX 15 WORDS)", "isRelevant": boolean, "mappedRubricQuestion": "string" }
+    { "question": "Q1", "score": number, "max": number, "feedback": "string", "rubricReference": "string", "evidenceSnippet": "string", "isRelevant": boolean, "mappedRubricQuestion": "string" }
   ],
   "aiReasoning": "string",
   "confidence": number,
-  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')"
+  "detectedIdentity": "string (Extract Name/ID or 'UNIDENTIFIED_IDENTITY')",
+  "strengths": ["string"],
+  "weaknesses": ["string"],
+  "improvement": "string"
 }
-Total score max: ${totalMarks}. KEEP JSON MINIFIED. NO STRENGTHS/WEAKNESSES ARRAYS.`;
+Total score max: ${totalMarks}.`;
 }
 
 export async function gradeSubmission(
