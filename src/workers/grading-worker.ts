@@ -144,8 +144,8 @@ JSON: { "extracted_evidence": "short quote", "score": number, "feedback": "tier 
                         feedback: result.feedback || "No feedback provided.",
                         evidenceSnippet: result.extracted_evidence || "None found"
                     };
-                } catch (e) {
-                    return { question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine failed.", evidenceSnippet: "ERROR" };
+                } catch (e: any) {
+                    throw new Error("Engine failed: " + e.message);
                 }
             })
         );
@@ -153,6 +153,10 @@ JSON: { "extracted_evidence": "short quote", "score": number, "feedback": "tier 
         const formattedBreakdown = await Promise.all(atomicGradingPromises);
 
         // 5. SAVE TO DB
+        if (formattedBreakdown.some((item: any) => item.feedback?.includes("Engine failed"))) {
+            throw new Error("Engine failed during grading process. Aborting save.");
+        }
+
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
         await prisma.score.upsert({
