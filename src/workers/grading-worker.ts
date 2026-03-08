@@ -118,15 +118,12 @@ export async function handleAiGrade(job: any) {
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are an empathetic professor. Grade ONE question against ONE rubric segment.
-RULES:
-1. SEMANTIC MATCH: Grade based on MEANING, not exact words. Award marks for core concepts.
-2. EMPATHY: Always seek reasons to give points. Use [Partial Match] for incomplete but relevant answers.
-3. BREVITY: Keep feedback to MAX 1-2 short sentences BUT BE ACCURATE,AND CONCISE.
-4. TIERS: Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
-5. MATH/DIAGRAMS: Award full/partial marks based on text explanation; ignore OCR's inability to see sketches.
-
-JSON: { "extracted_evidence": "short quote", "score": number, "feedback": "tier + short explanation" }` },
+                            { role: "system", content: `You are a grader. Evaluate ONE question against ONE rubric segment.
+MANDATORY DIRECTIVES:
+1. Extract exact evidence first.
+2. Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+3. DO NOT penalize for missing sketches/diagrams as OCR cannot read them.
+JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences" }` },
                             { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
@@ -155,18 +152,11 @@ JSON: { "extracted_evidence": "short quote", "score": number, "feedback": "tier 
         // 5. SAVE TO DB
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
-        await prisma.score.upsert({
-            where: { submissionId: submission.id },
-            update: {
-                totalMarks: calculatedTotalScore,
-                remarks: "Assessment complete. Please review your specific feedback below.",
-                breakdown: JSON.stringify(formattedBreakdown),
-                detectedIdentity: detectedRegNo
-            },
-            create: {
+        await prisma.score.create({
+            data: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
-                remarks: "Assessment complete. Please review your specific feedback below.",
+                remarks: "Graded via Atomic Map-Reduce.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             }
