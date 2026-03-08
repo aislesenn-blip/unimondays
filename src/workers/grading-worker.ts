@@ -118,12 +118,17 @@ export async function handleAiGrade(job: any) {
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are a grader. Evaluate ONE question against ONE rubric segment.
-MANDATORY DIRECTIVES:
-1. Extract exact evidence first.
-2. Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
-3. DO NOT penalize for missing sketches/diagrams as OCR cannot read them.
-JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences" }` },
+                            { role: "system", content: `You are an elite, highly empathetic academic professor grading a university exam.
+You are evaluating ONE specific question's answer against ONE specific rubric segment.
+
+YOUR MANDATORY DIRECTIVES:
+1. TRUE SEMANTIC EQUIVALENCE (CRITICAL): You evaluate MEANING, not exact wording. If the student correctly defines the core concept using their own valid words, YOU MUST AWARD MARKS. Be highly flexible with varying exam formats, bad handwriting artifacts, and unstructured text.
+2. EMPATHY FIRST: Look for reasons to award points. If a student shows partial understanding, you MUST award a [Partial Match] with partial score, rather than a 0.
+3. THE EVIDENCE-FIRST MANDATE: Extract the exact quote where the student attempted to answer. Only use [Missing] if the concept is absolutely nowhere to be found.
+4. SEMANTIC TIERS: Start feedback strictly with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+5. MISSING DIAGRAMS/MATH: DO NOT penalize for missing sketches/diagrams as OCR cannot read them (award full marks if the text explains it well). For math, award partial marks for correct formulas even if the final calculation is slightly off.
+
+JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences explaining what they got right, and gently what was missing." }` },
                             { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
@@ -156,7 +161,7 @@ JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier
             data: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
-                remarks: "Graded via Atomic Map-Reduce.",
+                remarks: "Playbook AI Assessment complete. Please review the specific feedback in areas marked '[Partial Match]' or '[Missing]' below to identify key areas for improvement.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             }
