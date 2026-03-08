@@ -65,19 +65,22 @@ export async function POST(req: NextRequest) {
             const protocol = req.headers.get('x-forwarded-proto') || 'http';
             const host = req.headers.get('host');
             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-        const triggerUrl = `${baseUrl}/api/grade/trigger`;
+        const triggerUrl = `${baseUrl}/api/queue/process`;
 
-        console.log(`[BATCH_REGRADE] Triggering Map-Reduce for ${submissions.length} submissions: ${triggerUrl}`);
+        console.log(`[BATCH_REGRADE] Triggering Map-Reduce for ${submissions.length} submissions.`);
 
-        // Fire and forget triggers sequentially
-        // To avoid swamping the event loop or Vercel, we can Promise.all a bounded concurrent map or just fire sequentially
         for (const sub of submissions) {
-            fetch(triggerUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ submissionId: sub.id })
-            }).catch(err => console.error(`[BATCH_REGRADE] Failed to trigger sub ${sub.id}:`, err));
+            await prisma.job.create({
+                data: {
+                    type: 'AI_GRADE_SUBMISSION',
+                    payload: JSON.stringify({ submissionId: sub.id }),
+                    retryCount: 0
+                }
+            });
         }
+
+        // Fire detached wake-up ping
+        fetch(triggerUrl, { method: 'POST' }).catch(err => console.error(`[BATCH_REGRADE] Failed to wake up queue:`, err));
         }
 
         return NextResponse.json({ success: true, count: submissions.length, message: "Batch regrading initialized." });

@@ -78,8 +78,8 @@ export async function POST(req: NextRequest) {
             const host = req.headers.get('host') || 'localhost:3000';
             const baseUrl = `${protocol}://${host}`;
             await qstash.publishJSON({
-                url: `${baseUrl}/api/grade/finalize`,
-                body: { submissionId }
+                url: `${baseUrl}/api/queue/process`,
+                body: { type: 'AI_GRADE_SUBMISSION', payload: { submissionId } }
             });
         }
 

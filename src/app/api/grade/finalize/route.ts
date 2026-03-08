@@ -87,20 +87,26 @@ export async function POST(req: NextRequest) {
             throw new Error("Fatal: Rubric text is entirely missing. Cannot grade.");
         }
 
-        // --- 1. THE MAP PHASE (Structural OCR) ---
-        console.log("[ARCHITECTURE] Initiating Structural OCR Map Phase...");
-        let studentAnswersMap: Record<string, string> = {};
+        // 1. MAP PHASE FIX: Combine all text to prevent false Missings
+        let fullExamText = "";
+        let detectedRegNo = "UNKNOWN";
+
         try {
-            if (submission.filePath) {
-                const buffer = await withRetries(() => readFile(submission.filePath!, 'exam_pdfs'));
-                studentAnswersMap = await withRetries(() => extractStructuredMapMultimodal(buffer));
-            } else {
-                throw new Error("No PDF available to perform Structural OCR.");
+            const sortedData = (submission.extractedData as any[]).sort((a, b) => a.pages[0] - b.pages[0]);
+            for (const chunk of sortedData) {
+                try {
+                    const parsed = JSON.parse(chunk.text);
+                    if (parsed.registration_number && parsed.registration_number !== "UNKNOWN") {
+                        detectedRegNo = parsed.registration_number;
+                    }
+                    fullExamText += "\n\n" + (parsed.full_text || "");
+                } catch {
+                    fullExamText += "\n\n" + chunk.text;
+                }
             }
-        } catch (error: any) {
-            console.error("[CRITICAL] Failed to execute Structural OCR map phase:", error);
-            throw new Error("Map Phase Failed");
-        }
+        } catch(e) { console.error("Failed to parse OCR chunks", e); }
+
+        if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
 
         // --- 2. PARSE THE MARKING SCHEME (Rubric Array) ---
         console.log("[ARCHITECTURE] Parsing Marking Scheme into Question Array...");
@@ -130,13 +136,17 @@ Return strictly a JSON object: {"Q1": "Rubric text for Q1...", "Q2": "Rubric tex
         // --- 3. THE REDUCE PHASE (Atomic Grading) ---
         console.log("[ARCHITECTURE] Orchestrating Parallel Atomic Calls...");
         const limit = pLimit(10);
-        const atomicPromises = Object.keys(rubricMap).map(questionId => {
+        const parsedRubricMap = Object.keys(rubricMap).map(k => ({ id: k, segment: rubricMap[k] }));
+
+        const atomicPromises = parsedRubricMap.map((rubricItem: any) => {
             return limit(async () => {
-                const studentSegment = studentAnswersMap[questionId] || "None found or missing entirely.";
-                const rubricSegment = rubricMap[questionId];
+                // ARCHITECTURE FIX: Feed the ENTIRE text to DeepSeek. DeepSeek will find the answer. This guarantees 0% data loss.
+                const studentContext = fullExamText;
+                const questionId = rubricItem.id;
+                const rubricSegment = rubricItem.segment;
 
                 try {
-                    const result = await withRetries(() => gradeAtomicSegment(questionId, studentSegment, rubricSegment));
+                    const result = await withRetries(() => gradeAtomicSegment(questionId, studentContext, rubricSegment));
                     return {
                         ...result,
                         q: result.q || questionId
@@ -172,26 +182,23 @@ Return strictly a JSON object: {"Q1": "Rubric text for Q1...", "Q2": "Rubric tex
 
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
-        // Attempting to extract Registration Number & Overall remarks from full text or studentAnswersMap
-        // We'll quickly run a simple generic prompt on the aggregated Map text
-        const combinedStudentText = Object.values(studentAnswersMap).join('\n\n');
+        // Attempting to extract Registration Number & Overall remarks from full text
         let aiFeedback = "Successfully graded via Atomic Parallel Pipeline.";
-        let regNo = "UNKNOWN";
+        let regNo = detectedRegNo;
 
         try {
-            const metaPrompt = `Extract the student's Registration Number from the following text and write a 3-paragraph encouraging overall feedback for the student based on their answers. Return strictly JSON: {"regNo": "...", "aiFeedback": "..."}`;
+            const metaPrompt = `Write a 3-paragraph encouraging overall feedback for the student based on their answers. Return strictly JSON: {"aiFeedback": "..."}`;
             const metaCompletion = await deepSeekClient.chat.completions.create({
                 model: "deepseek-chat",
                 messages: [
                     { role: "system", content: metaPrompt },
-                    { role: "user", content: combinedStudentText.substring(0, 4000) } // Just look at beginning
+                    { role: "user", content: fullExamText.substring(0, 4000) } // Just look at beginning
                 ],
                 response_format: { type: "json_object" },
                 temperature: 0.1,
             });
             const metaContent = JSON.parse(metaCompletion.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim() || "{}");
             if (metaContent.aiFeedback) aiFeedback = metaContent.aiFeedback;
-            if (metaContent.regNo) regNo = metaContent.regNo;
         } catch (e) {
             console.warn("[META PARSE ERROR] Could not extract global metadata.");
         }

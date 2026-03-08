@@ -23,16 +23,20 @@ export async function POST(
     });
 
     // SERVERLESS MAP-REDUCE PATTERN
+    await prisma.job.create({
+        data: {
+            type: 'AI_GRADE_SUBMISSION',
+            payload: JSON.stringify({ submissionId: subId }),
+            retryCount: 0
+        }
+    });
+
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host');
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const triggerUrl = `${baseUrl}/api/grade/trigger`;
+    const triggerUrl = `${baseUrl}/api/queue/process`;
 
-    fetch(triggerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: subId })
-    }).catch(e => console.error("Failed to ping trigger via fetch:", e));
+    fetch(triggerUrl, { method: 'POST' }).catch(e => console.error("Failed to ping queue via fetch:", e));
 
     return NextResponse.json({ success: true, message: "Triggered Map-Reduce." });
   } catch (error: any) {
