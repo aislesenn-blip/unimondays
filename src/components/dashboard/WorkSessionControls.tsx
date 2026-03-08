@@ -66,6 +66,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
+                  markingScheme: filePath,
                   rubricUrl: filePath,
                   rubric: null // CRITICAL: Invalidates the OCR cache
               }),
