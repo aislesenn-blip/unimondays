@@ -25,12 +25,13 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
     const base64Data = imageBuffer.toString("base64");
     const dataUrl = `data:image/jpeg;base64,${base64Data}`;
 
+    // MANDATORY FIX: Enforce Registration Number extraction and an "Unlabelled" bucket for loose text.
     const textPrompt = isStructuralOcr
-        ? "Extract the student's text and categorize it by question numbers (Q1, Q2, Q3...). If a student answers a question across multiple pages, concatenate them. Return strictly a JSON: {\"Q1\": \"text...\", \"Q2\": \"text...\"}. Do not lose a single word of the student's response."
+        ? "Extract the student's text. You MUST extract the Registration Number or Name at the top of the page. Then, categorize the answers by question numbers (e.g., Q1A, Q2, etc.). If you find text but cannot explicitly determine the question number, put it in the 'UNLABELLED' key. Return STRICTLY this JSON format: {\"registration_number\": \"...\", \"answers\": {\"Q1A\": \"...\", \"UNLABELLED\": \"...\"}}."
         : "Extract all handwritten and printed text from this document. Return it as clean markdown.";
 
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-2.5-flash", // Use Flash for maximum mapping speed
       messages: [
         {
           role: "user",
@@ -38,10 +39,7 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
             { type: "text", text: textPrompt },
             {
               type: "image_url",
-              image_url: {
-                url: dataUrl,
-                detail: "high"
-              }
+              image_url: { url: dataUrl, detail: "high" }
             }
           ],
         },

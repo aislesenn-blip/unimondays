@@ -87,29 +87,31 @@ export async function POST(req: NextRequest) {
         }
 
         // 1. MAP PHASE: Re-parse the Extracted Student Data Map
-        // We assume structural JSON from OCR is cached in `extractedData` array or we parse it
-        // If it's old raw text, we construct a generic map. For robust architecture, we merge it safely.
         let studentAnswersMap: Record<string, string> = {};
+        let detectedRegNo = "UNKNOWN";
+
         try {
             const sortedData = (submission.extractedData as any[]).sort((a, b) => a.pages[0] - b.pages[0]);
             for (const chunk of sortedData) {
                 try {
-                    // Check if chunk.text is a JSON object itself
                     const parsed = JSON.parse(chunk.text);
-                    if (typeof parsed === 'object') {
-                        for (const [key, value] of Object.entries(parsed)) {
-                            studentAnswersMap[key] = (studentAnswersMap[key] || '') + '\n' + String(value);
+                    if (parsed.registration_number && parsed.registration_number !== "UNKNOWN") {
+                        detectedRegNo = parsed.registration_number;
+                    }
+
+                    const answersObj = parsed.answers || parsed;
+                    if (typeof answersObj === 'object') {
+                        for (const [key, value] of Object.entries(answersObj)) {
+                            const normalizedKey = key.toUpperCase().replace(/\s/g, '');
+                            studentAnswersMap[normalizedKey] = (studentAnswersMap[normalizedKey] || '') + '\n' + String(value);
                         }
-                    } else {
-                         studentAnswersMap["Global"] = (studentAnswersMap["Global"] || '') + '\n' + chunk.text;
                     }
                 } catch {
-                     studentAnswersMap["Global"] = (studentAnswersMap["Global"] || '') + '\n' + chunk.text;
+                     studentAnswersMap["UNLABELLED"] = (studentAnswersMap["UNLABELLED"] || '') + '\n' + chunk.text;
                 }
             }
         } catch(e) { console.error("Failed to map student answers", e); }
 
-        // Ensure we have fallback text
         const fullExamText = Object.entries(studentAnswersMap).map(([k,v]) => `[${k}]\n${v}`).join('\n\n');
 
         // 2. MAP PHASE: Parse Rubric into Atomic Questions
@@ -167,8 +169,15 @@ You must return ONLY valid JSON matching this EXACT structure.
 
         const atomicGradingPromises = parsedRubricMap.map((rubricItem: any) =>
             limit(async () => {
-                // Determine relevant student context
-                let studentContext = studentAnswersMap[rubricItem.question] || fullExamText; // Fallback to full text if structural OCR failed to isolate
+                const normRubricKey = String(rubricItem.question).toUpperCase().replace(/\s/g, '');
+
+                // CRITICAL FIX: If exact match fails, fallback to FULL TEXT to prevent false [Missing] tags.
+                let studentContext = studentAnswersMap[normRubricKey];
+                if (!studentContext || studentContext.trim() === '') {
+                    studentContext = fullExamText;
+                } else {
+                    studentContext += `\n\n[Possible Continuation]:\n${studentAnswersMap["UNLABELLED"] || ''}`;
+                }
 
                 try {
                     const response = await deepSeekClient.chat.completions.create({
@@ -236,7 +245,7 @@ You must return ONLY valid JSON matching this EXACT structure.
                 totalMarks: calculatedTotalScore, // <--- Using exact Node.js math
                 remarks: synthesis.overallRemarks || "No overall remarks provided.",
                 breakdown: JSON.stringify(formattedBreakdown), // <--- Perfectly mapped for the UI!
-                detectedIdentity: "UNKNOWN"
+                detectedIdentity: detectedRegNo // MUST BE SAVED
             }
         });
 
@@ -250,7 +259,7 @@ You must return ONLY valid JSON matching this EXACT structure.
         });
 
         console.log(`[PRODUCTION] Grading Complete. Calculated Score: ${calculatedTotalScore}`);
-        return NextResponse.json({ success: true, regNo: "UNKNOWN" });
+        return NextResponse.json({ success: true, regNo: detectedRegNo });
 
     } catch (error: any) {
         console.error(`[REDUCER FATAL ERROR]:`, error);
