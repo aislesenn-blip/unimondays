@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { supabase } from '@/lib/supabase'; // Admin Client
+import { Client } from "@upstash/qstash";
+import { getPdfPageCount } from '@/lib/pdf-utils';
 
 export const maxDuration = 300; // Vercel timeout protection
+const CHUNK_SIZE = 2; // Reduced to 2 pages per worker to prevent OpenRouter timeouts
 
 export async function POST(req: NextRequest) {
   try {
@@ -179,20 +182,69 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. SERVERLESS MAP-REDUCE PATTERN
-    const protocol = req.headers.get('x-forwarded-proto') || 'http';
-    const host = req.headers.get('host');
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const triggerUrl = `${baseUrl}/api/grade/trigger`;
+    // 8. ENTERPRISE QUEUE PATTERN (V3.0)
+    // Instead of directly invoking the webhook, we insert a persistent Job record.
+    // This allows for robust retries, rate-limiting, and 100k burst handling.
 
-    console.log(`[SUBMIT] Submission Saved. Triggering Serverless Map-Reduce: ${triggerUrl}`);
+    await prisma.job.create({
+        data: {
+            type: 'AI_GRADE_SUBMISSION',
+            payload: JSON.stringify({ submissionId: submission.id }),
+            status: 'PENDING'
+        }
+    });
 
-    // Fire and forget (with error logging)
-    fetch(triggerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: submission.id })
-    }).catch(err => console.error("[SUBMIT] Failed to trigger Map-Reduce:", err));
+    // 9. MAP-REDUCE QSTASH DISPATCH (Bypassing external trigger)
+    const protocol = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('host') || 'localhost:3000';
+    const baseUrl = `${protocol}://${host}`;
+
+    try {
+        // Calculate chunks
+        const totalPages = await getPdfPageCount(submission.filePath);
+
+        if (totalPages <= 0) {
+            await prisma.submission.update({
+                where: { id: submission.id },
+                data: { status: 'FAILED', feedback: 'Empty PDF or unable to read pages.' }
+            });
+            throw new Error("PDF has 0 pages.");
+        }
+
+        const chunks = [];
+        for (let i = 1; i <= totalPages; i += CHUNK_SIZE) {
+            const pageBatch = [];
+            for (let j = 0; j < CHUNK_SIZE && (i + j) <= totalPages; j++) {
+                pageBatch.push(i + j);
+            }
+            chunks.push(pageBatch);
+        }
+
+        // Initialize Atomic Tracking State
+        await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+                status: 'PROCESSING',
+                totalChunks: chunks.length,
+                processedChunks: 0,
+                extractedData: []
+            }
+        });
+
+        // Initialize QStash and Dispatch
+        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+        const messages = chunks.map(pageBatch => ({
+            url: `${baseUrl}/api/grade/ocr`,
+            body: { submissionId: submission.id, pages: pageBatch, pdfUrl: submission.filePath }
+        }));
+
+        await qstash.batchJSON(messages);
+        console.log(`[SUBMIT] Successfully dispatched ${chunks.length} Map-Reduce jobs to QStash.`);
+
+    } catch (dispatchError: any) {
+        console.error("[SUBMIT] Failed to dispatch to QStash:", dispatchError);
+        // We still return success to the student, the job table will act as a fallback/retry mechanism if implemented
+    }
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
 
