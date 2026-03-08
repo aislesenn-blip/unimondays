@@ -29,11 +29,16 @@ export async function handleAiGrade(job: any) {
     let submissionIdToUpdate: string | null = null;
 
     try {
-        const payload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
-        submissionIdToUpdate = payload.submissionId;
+        const rawPayload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
+        // Unwrap the nested payload from QStash if it exists, otherwise use raw
+        const actualPayload = rawPayload.payload ? rawPayload.payload : rawPayload;
+
+        submissionIdToUpdate = actualPayload.submissionId;
+
+        if (!submissionIdToUpdate) throw new Error("Payload is missing submissionId");
 
         const submission = await prisma.submission.findUnique({
-            where: { id: payload.submissionId },
+            where: { id: submissionIdToUpdate },
             include: { workSession: true }
         });
 
