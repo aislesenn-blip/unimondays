@@ -59,11 +59,26 @@ export async function POST(req: NextRequest) {
             throw new Error("Fatal: Rubric text is entirely missing. Cannot grade.");
         }
 
-        // 1. Sort the chaotic chunks back into logical page order
-        const sortedData = (submission.extractedData as any[])
-            .sort((a, b) => a.pages[0] - b.pages[0]);
+        // 1. MAP PHASE FIX: Combine all text to prevent false Missings
+        let fullExamText = "";
+        let detectedRegNo = "UNKNOWN";
 
-        const fullExamText = sortedData.map(chunk => `[PAGES ${chunk.pages.join(',')}]\n${chunk.text}`).join('\n\n');
+        try {
+            const sortedData = (submission.extractedData as any[]).sort((a, b) => a.pages[0] - b.pages[0]);
+            for (const chunk of sortedData) {
+                try {
+                    const parsed = JSON.parse(chunk.text);
+                    if (parsed.registration_number && parsed.registration_number !== "UNKNOWN") {
+                        detectedRegNo = parsed.registration_number;
+                    }
+                    fullExamText += "\n\n" + (parsed.full_text || "");
+                } catch {
+                    fullExamText += "\n\n" + chunk.text;
+                }
+            }
+        } catch(e) { console.error("Failed to parse OCR chunks", e); }
+
+        if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
 
         // 2. The Chaos Hunter Prompt (Precision Engineering)
         const systemPrompt = `You are an elite, empathetic academic professor grading a university exam.

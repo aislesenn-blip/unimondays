@@ -21,9 +21,14 @@ const openai = new OpenAI({
 });
 
 // Helper: Existing OpenRouter/Gemini fetch logic
-async function callGeminiVisionAPI(imageBuffer: Buffer) {
+async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean = false) {
     const base64Data = imageBuffer.toString("base64");
     const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+
+    // ARCHITECTURE FIX: Extract Reg No and FULL RAW TEXT. Do not attempt to map questions here to prevent data loss.
+    const textPrompt = isStructuralOcr
+        ? "Extract all handwritten and printed text. You MUST find the Registration Number at the top. Return STRICTLY this JSON format: {\"registration_number\": \"...\", \"full_text\": \"...all extracted text from the page...\"}."
+        : "Extract all handwritten and printed text from this document. Return it as clean markdown.";
 
     const response = await openai.chat.completions.create({
       model: "google/gemini-2.5-flash",
@@ -31,7 +36,7 @@ async function callGeminiVisionAPI(imageBuffer: Buffer) {
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown." },
+            { type: "text", text: textPrompt },
             {
               type: "image_url",
               image_url: {
@@ -42,7 +47,8 @@ async function callGeminiVisionAPI(imageBuffer: Buffer) {
           ],
         },
       ],
-      max_tokens: 2000,
+      response_format: isStructuralOcr ? { type: "json_object" } : undefined,
+      max_tokens: 8192,
     });
 
     const text = response.choices[0]?.message?.content;

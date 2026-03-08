@@ -14,16 +14,19 @@ import { AppealModal } from "./AppealModal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function StudentResultDrawer({ submission }: { submission: any }) {
-  // Parse logic
-  let feedback: any = {};
+  // Parse logic FIX
+  let feedback: any = submission.feedback;
   let breakdown: any[] = [];
   try {
-      feedback = typeof submission.feedback === 'string' ? JSON.parse(submission.feedback) : (submission.feedback || {});
-      breakdown = submission.breakdown
-        ? (typeof submission.breakdown === 'string' ? JSON.parse(submission.breakdown) : submission.breakdown)
+      // FIX: Read from submission.breakdown directly because the API flattened it
+      const rawBreakdown = submission.breakdown;
+      breakdown = rawBreakdown
+        ? (typeof rawBreakdown === 'string' ? JSON.parse(rawBreakdown) : rawBreakdown)
         : [];
       if (!Array.isArray(breakdown)) breakdown = [];
-  } catch (e) { console.warn(e); }
+  } catch (e) {
+      console.warn("Failed to parse breakdown", e);
+  }
 
   const isReleased = submission.isReleased; // Assuming API returns this flag or based on status
   // Allow appeal if grades are released, appeals are allowed, and not already appealed/pending
