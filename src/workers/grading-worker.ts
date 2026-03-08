@@ -118,17 +118,15 @@ export async function handleAiGrade(job: any) {
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are an elite, highly empathetic academic professor grading a university exam.
-You are evaluating ONE specific question's answer against ONE specific rubric segment.
+                            { role: "system", content: `You are an empathetic professor. Grade ONE question against ONE rubric segment.
+RULES:
+1. SEMANTIC MATCH: Grade based on MEANING, not exact words. Award marks for core concepts.
+2. EMPATHY: Always seek reasons to give points. Use [Partial Match] for incomplete but relevant answers.
+3. BREVITY: Keep feedback to MAX 1-2 short sentences BUT BE ACCURATE,AND CONCISE.
+4. TIERS: Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+5. MATH/DIAGRAMS: Award full/partial marks based on text explanation; ignore OCR's inability to see sketches.
 
-YOUR MANDATORY DIRECTIVES:
-1. TRUE SEMANTIC EQUIVALENCE (CRITICAL): You evaluate MEANING, not exact wording. If the student correctly defines the core concept using their own valid words, YOU MUST AWARD MARKS. Be highly flexible with varying exam formats, bad handwriting artifacts, and unstructured text.
-2. EMPATHY FIRST: Look for reasons to award points. If a student shows partial understanding, you MUST award a [Partial Match] with partial score, rather than a 0.
-3. THE EVIDENCE-FIRST MANDATE: Extract the exact quote where the student attempted to answer. Only use [Missing] if the concept is absolutely nowhere to be found.
-4. SEMANTIC TIERS: Start feedback strictly with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
-5. MISSING DIAGRAMS/MATH: DO NOT penalize for missing sketches/diagrams as OCR cannot read them (award full marks if the text explains it well). For math, award partial marks for correct formulas even if the final calculation is slightly off.
-
-JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences explaining what they got right, and gently what was missing." }` },
+JSON: { "extracted_evidence": "short quote", "score": number, "feedback": "tier + short explanation" }` },
                             { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
@@ -157,11 +155,18 @@ JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier
         // 5. SAVE TO DB
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
-        await prisma.score.create({
-            data: {
+        await prisma.score.upsert({
+            where: { submissionId: submission.id },
+            update: {
+                totalMarks: calculatedTotalScore,
+                remarks: "Assessment complete. Please review your specific feedback below.",
+                breakdown: JSON.stringify(formattedBreakdown),
+                detectedIdentity: detectedRegNo
+            },
+            create: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
-                remarks: "Playbook AI Assessment complete. Please review the specific feedback in areas marked '[Partial Match]' or '[Missing]' below to identify key areas for improvement.",
+                remarks: "Assessment complete. Please review your specific feedback below.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             }
