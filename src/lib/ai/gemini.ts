@@ -61,6 +61,60 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
     return callGeminiVisionAPI(buffer, false);
 }
 
+export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise<Record<string, string>> {
+    console.log("[GEMINI] Starting Structural OCR Map Phase...");
+    const document = await pdf(pdfBuffer, { scale: 1.0 });
+
+    let combinedMap: Record<string, string> = {};
+    let pageNum = 1;
+
+    for await (const imageBuffer of document) {
+        console.log(`[GEMINI] Processing Page ${pageNum} for Structured Map...`);
+        const base64Data = imageBuffer.toString("base64");
+        const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+
+        const response = await openai.chat.completions.create({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Extract the student's text and categorize it by question numbers (Q1, Q2, Q3...). If a student answers a question across multiple pages, concatenate them. Return strictly a JSON: {\"Q1\": \"text...\", \"Q2\": \"text...\"}. Do not lose a single word of the student's response." },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: dataUrl,
+                    detail: "high"
+                  }
+                }
+              ],
+            },
+          ],
+          max_tokens: 8192,
+          response_format: { type: "json_object" },
+        });
+
+        const text = response.choices[0]?.message?.content || "{}";
+        try {
+            const cleanString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const pageMap = JSON.parse(cleanString);
+            for (const key in pageMap) {
+                if (combinedMap[key]) {
+                    combinedMap[key] += "\n" + pageMap[key];
+                } else {
+                    combinedMap[key] = pageMap[key];
+                }
+            }
+        } catch (e) {
+            console.error(`[GEMINI] Failed to parse JSON for page ${pageNum}:`, e);
+        }
+        pageNum++;
+    }
+
+    console.log("[GEMINI] Structural OCR Map Phase Complete.");
+    return combinedMap;
+}
+
 // Memory-Safe Sequential PDF Extraction
 export interface PageData {
   pageNumber: number;

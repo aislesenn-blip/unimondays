@@ -18,8 +18,10 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
   let feedback: any = submission.feedback;
   let breakdown: any[] = [];
   try {
-      breakdown = submission.score?.breakdown
-        ? (typeof submission.score.breakdown === 'string' ? JSON.parse(submission.score.breakdown) : submission.score.breakdown)
+      // FIX: Read from submission.breakdown directly because the API flattened it
+      const rawBreakdown = submission.breakdown;
+      breakdown = rawBreakdown
+        ? (typeof rawBreakdown === 'string' ? JSON.parse(rawBreakdown) : rawBreakdown)
         : [];
       if (!Array.isArray(breakdown)) breakdown = [];
   } catch (e) { console.warn("Failed to parse breakdown", e); }

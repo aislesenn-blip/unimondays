@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
-import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import { extractPagesMultimodal, extractStructuredMapMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import { gradeAtomicSegment } from '@/lib/ai/deepseek';
 import { readFile } from '@/lib/storage';
 import pLimit from 'p-limit';
 
@@ -235,10 +236,30 @@ You must return ONLY valid JSON matching this EXACT structure.
              synthesis = JSON.parse(clean);
         } catch(e) {}
 
-        // 2. ABSOLUTE MATH ACCURACY: Calculate total in backend, not AI.
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
-        // 3. ATOMIC DATABASE UPDATE
+        // Attempting to extract Registration Number & Overall remarks from full text
+        let aiFeedback = "Successfully graded via Atomic Parallel Pipeline.";
+        let regNo = detectedRegNo;
+
+        try {
+            const metaPrompt = `Write a 3-paragraph encouraging overall feedback for the student based on their answers. Return strictly JSON: {"aiFeedback": "..."}`;
+            const metaCompletion = await deepSeekClient.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: metaPrompt },
+                    { role: "user", content: fullExamText.substring(0, 4000) } // Just look at beginning
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.1,
+            });
+            const metaContent = JSON.parse(metaCompletion.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim() || "{}");
+            if (metaContent.aiFeedback) aiFeedback = metaContent.aiFeedback;
+        } catch (e) {
+            console.warn("[META PARSE ERROR] Could not extract global metadata.");
+        }
+
+        // --- 5. ATOMIC DATABASE UPDATE ---
         await prisma.score.create({
             data: {
                 submissionId: submission.id,
@@ -249,7 +270,6 @@ You must return ONLY valid JSON matching this EXACT structure.
             }
         });
 
-        // Add the remarks to the submission or score if your schema supports it
         await prisma.submission.update({
             where: { id: submission.id },
             data: {
