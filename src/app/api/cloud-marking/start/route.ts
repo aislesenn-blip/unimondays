@@ -38,16 +38,12 @@ export async function POST(req: NextRequest) {
         }
     });
 
-    // 3. Trigger Queue (Assuming we use the same queue endpoint)
-    // In a real serverless env, we might hit the queue endpoint, but here we just create the job
-    // and let the worker pick it up or trigger it explicitly if needed.
-    // For now, let's assume the queue worker is polling or triggered via cron/webhook.
-    // But to be responsive, we can fire-and-forget the process endpoint.
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/queue/process`, {
+    // 3. Trigger Serverless Process
+    // Cloud Marking uses a different worker logic than grade trigger usually, but if it translates to grade trigger:
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/cloud-marking/${bulkSession.id}/convert`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'CLOUD_MARKING' }) // Signal to process
-    }).catch(e => console.error("Failed to trigger queue", e));
+        headers: { 'Content-Type': 'application/json' }
+    }).catch(e => console.error("Failed to trigger cloud conversion", e));
 
     return NextResponse.json(bulkSession);
 

@@ -22,22 +22,19 @@ export async function POST(
       data: { status: "PENDING", feedback: null },
     });
 
-    // INJECT TO QUEUE
-    await prisma.job.create({
-      data: {
-        type: "AI_GRADE_SUBMISSION",
-        payload: JSON.stringify({ submissionId: subId }),
-        status: "PENDING",
-        retryCount: 0,
-      },
-    });
+    // SERVERLESS MAP-REDUCE PATTERN
+    const protocol = req.headers.get('x-forwarded-proto') || 'http';
+    const host = req.headers.get('host');
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+    const triggerUrl = `${baseUrl}/api/grade/trigger`;
 
-    // START QUEUE NON-BLOCKING (IMPORTANT)
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/queue/process`, {
+    fetch(triggerUrl, {
         method: 'POST',
-    }).catch(e => console.error("Failed to ping queue via fetch:", e));
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: subId })
+    }).catch(e => console.error("Failed to ping trigger via fetch:", e));
 
-    return NextResponse.json({ success: true, message: "Added to queue." });
+    return NextResponse.json({ success: true, message: "Triggered Map-Reduce." });
   } catch (error: any) {
     console.error("[RETRY API ERROR]", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

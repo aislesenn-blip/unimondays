@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 
+export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
+
 // STRICT: Must be Native DeepSeek API, not OpenRouter.
 const deepSeekClient = new OpenAI({ baseURL: "https://api.deepseek.com", apiKey: process.env.DEEPSEEK_API_KEY || 'dummy' });
-export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
     try {
@@ -16,6 +18,18 @@ export async function POST(req: NextRequest) {
         });
 
         if (!submission) throw new Error("Submission not found");
+
+        // FALLBACK CASCADE: Check all possible rubric fields
+        const actualRubric = submission.workSession.rubric || submission.workSession.markingScheme || "";
+
+        if (!actualRubric || actualRubric.trim().length === 0) {
+            console.error("[CRITICAL] No Rubric or Marking Scheme found. Halting grading.");
+            await prisma.submission.update({
+                where: { id: submission.id },
+                data: { status: 'FAILED', feedback: 'Missing Marking Scheme' } // Map gradingError to feedback for Prisma
+            });
+            return NextResponse.json({ error: "Missing Rubric" }, { status: 400 });
+        }
 
         // 1. Sort the chaotic chunks back into logical page order
         const sortedData = (submission.extractedData as any[])
@@ -69,7 +83,7 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
             model: "deepseek-chat",
             messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: `MARKING SCHEME:\n${submission.workSession.rubric}\n\nSTUDENT EXAM:\n${fullExamText}` }
+                { role: "user", content: `MARKING SCHEME:\n${actualRubric}\n\nSTUDENT EXAM:\n${fullExamText}` }
             ],
             response_format: { type: "json_object" },
             temperature: 0.0,
@@ -125,7 +139,7 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
         console.error(`[REDUCER FATAL ERROR]:`, error);
         const { submissionId } = await req.json().catch(()=>({}));
         if(submissionId) {
-            await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
+            await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED', feedback: error.message } });
         }
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
