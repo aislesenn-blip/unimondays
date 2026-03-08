@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
-import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import { extractPagesMultimodal, extractStructuredMapMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import { gradeAtomicSegment } from '@/lib/ai/deepseek';
 import { readFile } from '@/lib/storage';
+import pLimit from 'p-limit';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -85,133 +87,136 @@ export async function POST(req: NextRequest) {
             throw new Error("Fatal: Rubric text is entirely missing. Cannot grade.");
         }
 
-        // 1. Sort the chaotic chunks back into logical page order
-        const sortedData = (submission.extractedData as any[])
-            .sort((a, b) => a.pages[0] - b.pages[0]);
-
-        const fullExamText = sortedData.map(chunk => `[PAGES ${chunk.pages.join(',')}]\n${chunk.text}`).join('\n\n');
-
-        // 2. The Chaos Hunter Prompt (Precision Engineering)
-        const systemPrompt = `You are an elite, empathetic academic professor grading a university exam.
-You are evaluating a student's scanned, OCR-extracted exam against a strict Marking Scheme.
-
-YOUR MANDATORY DIRECTIVES:
-1. ANTI-LAZINESS (CRITICAL): The student's text is messy, out of order, or missing question numbers. DO NOT blindly output "Skipped question". You MUST semantically scan the ENTIRE student text for concepts, formulas, or keywords matching the rubric. Grade based on meaning, not layout.
-2. THE EVIDENCE-FIRST MANDATE (CRITICAL ANTI-LAZINESS RULE):
-Before you determine the \`score\` or write the \`feedback\`, you MUST fill out the \`extracted_evidence\` field. You must aggressively scan the ENTIRE student text (all pages, regardless of numbering) and extract the exact quote or phrase where the student attempted to answer the concept. Forcing yourself to output the evidence FIRST guarantees you will not lazily skip a question. Only if you have scanned the entire document and found absolutely zero semantic match, you may write "None found" in the evidence field and grade it as [Missing].
-(Note: The extracted_evidence field is strictly for backend LLM reasoning. Do NOT display it on the Frontend UI. Keep the UI clean with just the question, score, and 3-line feedback).
-3. TRUE SEMANTIC EQUIVALENCE (CRITICAL): You are evaluating MEANING, not exact wording. If the rubric provides specific examples (e.g., "Silicon" for beneficial nutrients) but the student correctly defines the core concept using their own valid words or different valid examples, YOU MUST AWARD MARKS. Do not lazily flag a concept as [Missing] just because the student didn't use the exact keywords or examples from the rubric. Dig into the semantics.
-3. EMPATHETIC TONE: Speak directly to the student in your feedback (e.g., "You showed a great understanding of X..."). Do NOT use internal robotic language like "I graded holistically" or "mapped to rubric".
-3. SEMANTIC TIERS: Every question's feedback MUST start with one of these exact NLP tags:
-   - [Exact Match]: Concept perfectly aligns with the rubric.
-   - [Partial Match]: Concept is touched upon but missing key rubric details.
-   - [Out of Scope]: Concept is irrelevant or factually incorrect.
-   - [Missing]: The concept was truly nowhere to be found in the entire exam text.
-4. NO MATH: Do NOT calculate the total score. The backend system will calculate it. Just provide the individual scores.
-5. OMNI-FORMAT GRADING MANDATE (CRITICAL - DO NOT SKIP):
-You MUST grade EVERY question present in the Marking Scheme, regardless of its format. Do not skip a question because it looks complex in the OCR text. Apply the Semantic Tiers strictly across all formats:
-- CALCULATIONS & MATH: Follow the step-by-step logic in the rubric. Grade intermediate steps, formulas, and final answers.
-- DIAGRAMS & SKETCHES: The OCR has converted the student's drawings into descriptive text. You MUST read these textual descriptions of the diagrams. If the OCR text describes the shapes, labels, or processes required by the rubric diagram, award the exact marks.
-- MULTIPLE CHOICE (MCQs): Scan the text for the exact option letter (e.g., A, B, C, D) OR the exact text of the chosen option.
-- ESSAYS/SHORT ANSWERS: Apply standard holistic semantic matching.
-If it is in the rubric, you MUST find the evidence in the text and grade it. NO EXCEPTIONS.
-6. UNREADABLE OCR/HANDWRITING: If text is truly unreadable garbage, use [Out of Scope] or [Missing] and explain that the writing could not be deciphered.
-7. EXTREME SCATTERED CONTEXT & NUMBERING BLINDNESS (CRITICAL):
-Students often answer questions completely out of order (e.g., Question 6 on page 1, and Question 1 on page 20). They also use incomplete numbering (e.g., writing "1" at the top of the page, and then only writing "ii)", "iii)" for sub-questions).
-DO NOT search the text using strict question labels like "Q1A ii". You MUST perform a semantic keyword search across the ENTIRE document for the RUBRIC CONCEPTS (e.g., "beneficial nutrients", "wicking system", "precision agriculture vs precision technologies").
-If the concept, definition, or answer exists ANYWHERE in the student's text, you MUST grade it according to the rubric, regardless of the numbering or page order. ONLY use the [Missing] tag if you have exhaustively verified that the specific concept is entirely absent from all pages.
-
-8. STRICT LENGTH LIMITS (NO WALLS OF TEXT):
-  1. The \`aiFeedback\` field MUST be a maximum of 3 concise sentences summarizing the overall performance.
-  2. The \`feedback\` string for EACH question in the breakdown array MUST be a maximum of 3 sentences. Get straight to the point: State the tier, why they got it, and what was missing.
-
-STRICT JSON SCHEMA MANDATE:
-You must return ONLY valid JSON matching this EXACT structure. The frontend UI crashes if you deviate.
-
-{
-  "regNo": "String (Extract student registration number, or 'UNKNOWN')",
-  "aiFeedback": "String (A 3-paragraph, student-facing, encouraging summary of their strengths, weaknesses, and areas for improvement.)",
-  "overallRemarks": "String (A single, highly encouraging closing sentence to the student.)",
-  "breakdown": [
-    {
-      "question": "String (e.g., Q1A i)",
-      "extracted_evidence": "String (Insert the exact quote from the student's text here. If completely absent, write 'None found'.)",
-      "score": Number (Marks awarded),
-      "max": Number (Maximum possible marks based on the rubric. MUST use the key 'max', NOT 'maxScore'),
-      "feedback": "String (Must start with the Semantic Tier tag, followed by a detailed explanation. e.g., '[Partial Match] You correctly identified X, but missed Y.')"
-    }
-  ]
-}`;
-
-        // 3. Diagnostic Logs
-        console.log("--- PAYLOAD SIZES ---");
-        console.log("OCR Text Length:", fullExamText ? fullExamText.length : 0);
-        console.log("Marking Guide Length:", finalRubricText ? finalRubricText.length : 0);
-
-        // 4. Native DeepSeek Call
-        const completion = await deepSeekClient.chat.completions.create({
-            model: "deepseek-chat",
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: `MARKING SCHEME:\n${finalRubricText}\n\nSTUDENT EXAM:\n${fullExamText}` }
-            ],
-            max_tokens: 8192, // <--- CRITICAL: Allow massive JSON output so it never truncates
-            response_format: { type: "json_object" },
-            temperature: 0.1, // Keep it deterministic
-        });
-
-        let rawContent = completion.choices[0]?.message?.content || '{}';
-
-        // 1. Log the RAW response so we can see it in Vercel
-        console.log("====== RAW AI RESPONSE START ======");
-        console.log(rawContent);
-        console.log("====== RAW AI RESPONSE END ======");
-
-        const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-
-        let resultData: any = {};
+        // --- 1. THE MAP PHASE (Structural OCR) ---
+        console.log("[ARCHITECTURE] Initiating Structural OCR Map Phase...");
+        let studentAnswersMap: Record<string, string> = {};
         try {
-            const jsonMatch = cleanJsonString.match(/\{[\s\S]*\}/);
-            resultData = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJsonString);
-        } catch (error) {
-            console.error("[JSON PARSE ERROR] AI returned malformed JSON:", error);
-            throw new Error("AI returned invalid JSON");
+            if (submission.filePath) {
+                const buffer = await withRetries(() => readFile(submission.filePath!, 'exam_pdfs'));
+                studentAnswersMap = await withRetries(() => extractStructuredMapMultimodal(buffer));
+            } else {
+                throw new Error("No PDF available to perform Structural OCR.");
+            }
+        } catch (error: any) {
+            console.error("[CRITICAL] Failed to execute Structural OCR map phase:", error);
+            throw new Error("Map Phase Failed");
         }
 
-        // 1. SAFEGUARD: Force UI Contract Mapping
-        // If the AI stubborn outputs 'maxScore', map it to 'max' for the UI.
-        const formattedBreakdown = (resultData.breakdown || []).map((item: any) => ({
-            question: item.question || "Unknown",
-            score: Number(item.score) || 0,
+        // --- 2. PARSE THE MARKING SCHEME (Rubric Array) ---
+        console.log("[ARCHITECTURE] Parsing Marking Scheme into Question Array...");
+        const parseSchemePrompt = `Parse the following Marking Scheme into a JSON object mapping each question number strictly to its individual rubric segment.
+Return strictly a JSON object: {"Q1": "Rubric text for Q1...", "Q2": "Rubric text for Q2..."}`;
+
+        const schemeParseCompletion = await deepSeekClient.chat.completions.create({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: parseSchemePrompt },
+                { role: "user", content: finalRubricText }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+        });
+
+        const parsedSchemeContent = schemeParseCompletion.choices[0]?.message?.content || "{}";
+        const cleanSchemeString = parsedSchemeContent.replace(/```json/g, '').replace(/```/g, '').trim();
+        let rubricMap: Record<string, string> = {};
+        try {
+            rubricMap = JSON.parse(cleanSchemeString);
+        } catch (e) {
+            console.error("[JSON PARSE ERROR] AI returned malformed Marking Scheme JSON:", e);
+            throw new Error("Failed to parse Marking Scheme");
+        }
+
+        // --- 3. THE REDUCE PHASE (Atomic Grading) ---
+        console.log("[ARCHITECTURE] Orchestrating Parallel Atomic Calls...");
+        const limit = pLimit(10);
+        const atomicPromises = Object.keys(rubricMap).map(questionId => {
+            return limit(async () => {
+                const studentSegment = studentAnswersMap[questionId] || "None found or missing entirely.";
+                const rubricSegment = rubricMap[questionId];
+
+                try {
+                    const result = await withRetries(() => gradeAtomicSegment(questionId, studentSegment, rubricSegment));
+                    return {
+                        ...result,
+                        q: result.q || questionId
+                    };
+                } catch (e) {
+                    console.error(`[ATOMIC GRADING ERROR] Failed grading for ${questionId}:`, e);
+                    // Fallback object to ensure safe failure
+                    return {
+                        q: questionId,
+                        s: 0,
+                        max: 0,
+                        f: "[Error] AI grading failed for this specific segment.",
+                        extracted_evidence: "GRADING_FAILED_API_ERROR"
+                    };
+                }
+            });
+        });
+
+        const atomicResults = await Promise.all(atomicPromises);
+
+        // --- 4. DYNAMIC RE-ASSEMBLY ---
+        console.log("[ARCHITECTURE] Dynamically Re-assembling Breakdown...");
+
+        const formattedBreakdown = atomicResults.map((item: any) => ({
+            question: item.q || "Unknown",
+            score: Number(item.s) || 0,
             max: Number(item.max || item.maxScore) || 0,
-            feedback: item.feedback || "No feedback provided."
+            feedback: item.f || "No feedback provided.",
+            extracted_evidence: item.extracted_evidence || "None found",
+            isRelevant: true,
+            mappedRubricQuestion: `Q: ${item.q}`
         }));
 
-        // 2. ABSOLUTE MATH ACCURACY: Calculate total in backend, not AI.
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
-        // 3. ATOMIC DATABASE UPDATE
+        // Attempting to extract Registration Number & Overall remarks from full text or studentAnswersMap
+        // We'll quickly run a simple generic prompt on the aggregated Map text
+        const combinedStudentText = Object.values(studentAnswersMap).join('\n\n');
+        let aiFeedback = "Successfully graded via Atomic Parallel Pipeline.";
+        let regNo = "UNKNOWN";
+
+        try {
+            const metaPrompt = `Extract the student's Registration Number from the following text and write a 3-paragraph encouraging overall feedback for the student based on their answers. Return strictly JSON: {"regNo": "...", "aiFeedback": "..."}`;
+            const metaCompletion = await deepSeekClient.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: metaPrompt },
+                    { role: "user", content: combinedStudentText.substring(0, 4000) } // Just look at beginning
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.1,
+            });
+            const metaContent = JSON.parse(metaCompletion.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim() || "{}");
+            if (metaContent.aiFeedback) aiFeedback = metaContent.aiFeedback;
+            if (metaContent.regNo) regNo = metaContent.regNo;
+        } catch (e) {
+            console.warn("[META PARSE ERROR] Could not extract global metadata.");
+        }
+
+        // --- 5. ATOMIC DATABASE UPDATE ---
         await prisma.score.create({
             data: {
                 submissionId: submission.id,
-                totalMarks: calculatedTotalScore, // <--- Using exact Node.js math
-                remarks: resultData.overallRemarks || "No overall remarks provided.",
-                breakdown: JSON.stringify(formattedBreakdown), // <--- Perfectly mapped for the UI!
-                detectedIdentity: resultData.regNo || "UNKNOWN"
+                totalMarks: calculatedTotalScore,
+                remarks: "Graded via Atomic Parallel Pipeline.",
+                breakdown: JSON.stringify(formattedBreakdown),
+                detectedIdentity: regNo
             }
         });
 
-        // Add the remarks to the submission or score if your schema supports it
         await prisma.submission.update({
             where: { id: submission.id },
             data: {
                 status: 'GRADED',
-                feedback: resultData.aiFeedback || resultData.generalFeedback || "No AI feedback provided."
+                feedback: aiFeedback
             }
         });
 
-        console.log(`[PRODUCTION] Grading Complete. Calculated Score: ${calculatedTotalScore}`);
-        return NextResponse.json({ success: true, regNo: resultData.regNo || resultData.reg_no });
+        console.log(`[PRODUCTION] Atomic Pipeline Grading Complete. Calculated Score: ${calculatedTotalScore}`);
+        return NextResponse.json({ success: true, regNo: regNo });
 
     } catch (error: any) {
         console.error(`[REDUCER FATAL ERROR]:`, error);
