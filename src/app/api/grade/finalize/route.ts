@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
+import pLimit from 'p-limit';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -85,107 +86,145 @@ export async function POST(req: NextRequest) {
             throw new Error("Fatal: Rubric text is entirely missing. Cannot grade.");
         }
 
-        // 1. Sort the chaotic chunks back into logical page order
-        const sortedData = (submission.extractedData as any[])
-            .sort((a, b) => a.pages[0] - b.pages[0]);
+        // 1. MAP PHASE: Re-parse the Extracted Student Data Map
+        // We assume structural JSON from OCR is cached in `extractedData` array or we parse it
+        // If it's old raw text, we construct a generic map. For robust architecture, we merge it safely.
+        let studentAnswersMap: Record<string, string> = {};
+        try {
+            const sortedData = (submission.extractedData as any[]).sort((a, b) => a.pages[0] - b.pages[0]);
+            for (const chunk of sortedData) {
+                try {
+                    // Check if chunk.text is a JSON object itself
+                    const parsed = JSON.parse(chunk.text);
+                    if (typeof parsed === 'object') {
+                        for (const [key, value] of Object.entries(parsed)) {
+                            studentAnswersMap[key] = (studentAnswersMap[key] || '') + '\n' + String(value);
+                        }
+                    } else {
+                         studentAnswersMap["Global"] = (studentAnswersMap["Global"] || '') + '\n' + chunk.text;
+                    }
+                } catch {
+                     studentAnswersMap["Global"] = (studentAnswersMap["Global"] || '') + '\n' + chunk.text;
+                }
+            }
+        } catch(e) { console.error("Failed to map student answers", e); }
 
-        const fullExamText = sortedData.map(chunk => `[PAGES ${chunk.pages.join(',')}]\n${chunk.text}`).join('\n\n');
+        // Ensure we have fallback text
+        const fullExamText = Object.entries(studentAnswersMap).map(([k,v]) => `[${k}]\n${v}`).join('\n\n');
 
-        // 2. The Chaos Hunter Prompt (Precision Engineering)
-        const systemPrompt = `You are an elite, empathetic academic professor grading a university exam.
-You are evaluating a student's scanned, OCR-extracted exam against a strict Marking Scheme.
+        // 2. MAP PHASE: Parse Rubric into Atomic Questions
+        // Use an LLM call to segment the monolithic rubric into an array of strictly isolated objects.
+        const rubricSegmentationPrompt = `You are a parser. Parse the following monolithic Marking Scheme text into a strict JSON array of individual question criteria.
+        Each object MUST have a 'question' label and the specific 'rubric_segment' text defining how to grade it.
+        Return strictly JSON: { "rubric": [ { "question": "Q1", "rubric_segment": "criteria text", "max_score": 10 } ] }`;
+
+        const rubricParseResponse = await deepSeekClient.chat.completions.create({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: rubricSegmentationPrompt },
+                { role: "user", content: finalRubricText }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+        });
+
+        let parsedRubricMap: any[] = [];
+        try {
+            const raw = rubricParseResponse.choices[0]?.message?.content || '{"rubric":[]}';
+            const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+            parsedRubricMap = JSON.parse(clean).rubric || [];
+        } catch (e) {
+            console.warn("Failed to parse rubric map, falling back to monolithic.", e);
+            parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
+        }
+
+        // 3. ATOMIC GRADING PROMPT (REDUCE PHASE)
+        const atomicSystemPrompt = `You are an elite, empathetic academic professor grading a university exam.
+You are evaluating ONE specific question's answer against ONE specific rubric segment.
 
 YOUR MANDATORY DIRECTIVES:
-1. ANTI-LAZINESS (CRITICAL): The student's text is messy, out of order, or missing question numbers. DO NOT blindly output "Skipped question". You MUST semantically scan the ENTIRE student text for concepts, formulas, or keywords matching the rubric. Grade based on meaning, not layout.
-2. THE EVIDENCE-FIRST MANDATE (CRITICAL ANTI-LAZINESS RULE):
-Before you determine the \`score\` or write the \`feedback\`, you MUST fill out the \`extracted_evidence\` field. You must aggressively scan the ENTIRE student text (all pages, regardless of numbering) and extract the exact quote or phrase where the student attempted to answer the concept. Forcing yourself to output the evidence FIRST guarantees you will not lazily skip a question. Only if you have scanned the entire document and found absolutely zero semantic match, you may write "None found" in the evidence field and grade it as [Missing].
-(Note: The extracted_evidence field is strictly for backend LLM reasoning. Do NOT display it on the Frontend UI. Keep the UI clean with just the question, score, and 3-line feedback).
-3. TRUE SEMANTIC EQUIVALENCE (CRITICAL): You are evaluating MEANING, not exact wording. If the rubric provides specific examples (e.g., "Silicon" for beneficial nutrients) but the student correctly defines the core concept using their own valid words or different valid examples, YOU MUST AWARD MARKS. Do not lazily flag a concept as [Missing] just because the student didn't use the exact keywords or examples from the rubric. Dig into the semantics.
-3. EMPATHETIC TONE: Speak directly to the student in your feedback (e.g., "You showed a great understanding of X..."). Do NOT use internal robotic language like "I graded holistically" or "mapped to rubric".
-3. SEMANTIC TIERS: Every question's feedback MUST start with one of these exact NLP tags:
+1. THE EVIDENCE-FIRST MANDATE (CRITICAL ANTI-LAZINESS RULE):
+Before you determine the \`score\` or write the \`feedback\`, you MUST fill out the \`extracted_evidence\` field. You must aggressively scan the provided student text and extract the exact quote or phrase where the student attempted to answer the concept. Forcing yourself to output the evidence FIRST guarantees you will not lazily skip a question. Only if you have scanned the text and found absolutely zero semantic match, you may write "None found" in the evidence field and grade it as [Missing].
+2. TRUE SEMANTIC EQUIVALENCE (CRITICAL): You are evaluating MEANING, not exact wording. If the rubric provides specific examples but the student correctly defines the core concept using their own valid words, YOU MUST AWARD MARKS.
+3. SEMANTIC TIERS: Your \`feedback\` MUST start with one of these exact NLP tags:
    - [Exact Match]: Concept perfectly aligns with the rubric.
    - [Partial Match]: Concept is touched upon but missing key rubric details.
    - [Out of Scope]: Concept is irrelevant or factually incorrect.
-   - [Missing]: The concept was truly nowhere to be found in the entire exam text.
-4. NO MATH: Do NOT calculate the total score. The backend system will calculate it. Just provide the individual scores.
-5. OMNI-FORMAT GRADING MANDATE (CRITICAL - DO NOT SKIP):
-You MUST grade EVERY question present in the Marking Scheme, regardless of its format. Do not skip a question because it looks complex in the OCR text. Apply the Semantic Tiers strictly across all formats:
-- CALCULATIONS & MATH: Follow the step-by-step logic in the rubric. Grade intermediate steps, formulas, and final answers.
-- DIAGRAMS & SKETCHES: The OCR has converted the student's drawings into descriptive text. You MUST read these textual descriptions of the diagrams. If the OCR text describes the shapes, labels, or processes required by the rubric diagram, award the exact marks.
-- MULTIPLE CHOICE (MCQs): Scan the text for the exact option letter (e.g., A, B, C, D) OR the exact text of the chosen option.
-- ESSAYS/SHORT ANSWERS: Apply standard holistic semantic matching.
-If it is in the rubric, you MUST find the evidence in the text and grade it. NO EXCEPTIONS.
-6. UNREADABLE OCR/HANDWRITING: If text is truly unreadable garbage, use [Out of Scope] or [Missing] and explain that the writing could not be deciphered.
-7. EXTREME SCATTERED CONTEXT & NUMBERING BLINDNESS (CRITICAL):
-Students often answer questions completely out of order (e.g., Question 6 on page 1, and Question 1 on page 20). They also use incomplete numbering (e.g., writing "1" at the top of the page, and then only writing "ii)", "iii)" for sub-questions).
-DO NOT search the text using strict question labels like "Q1A ii". You MUST perform a semantic keyword search across the ENTIRE document for the RUBRIC CONCEPTS (e.g., "beneficial nutrients", "wicking system", "precision agriculture vs precision technologies").
-If the concept, definition, or answer exists ANYWHERE in the student's text, you MUST grade it according to the rubric, regardless of the numbering or page order. ONLY use the [Missing] tag if you have exhaustively verified that the specific concept is entirely absent from all pages.
-
-8. STRICT LENGTH LIMITS (NO WALLS OF TEXT):
-  1. The \`aiFeedback\` field MUST be a maximum of 3 concise sentences summarizing the overall performance.
-  2. The \`feedback\` string for EACH question in the breakdown array MUST be a maximum of 3 sentences. Get straight to the point: State the tier, why they got it, and what was missing.
+   - [Missing]: The concept was nowhere to be found.
+4. STRICT LENGTH LIMITS: The \`feedback\` string MUST be a maximum of 3 sentences. Get straight to the point: State the tier, why they got it, and what was missing.
 
 STRICT JSON SCHEMA MANDATE:
-You must return ONLY valid JSON matching this EXACT structure. The frontend UI crashes if you deviate.
-
+You must return ONLY valid JSON matching this EXACT structure.
 {
-  "regNo": "String (Extract student registration number, or 'UNKNOWN')",
-  "aiFeedback": "String (A 3-paragraph, student-facing, encouraging summary of their strengths, weaknesses, and areas for improvement.)",
-  "overallRemarks": "String (A single, highly encouraging closing sentence to the student.)",
-  "breakdown": [
-    {
-      "question": "String (e.g., Q1A i)",
-      "extracted_evidence": "String (Insert the exact quote from the student's text here. If completely absent, write 'None found'.)",
-      "score": Number (Marks awarded),
-      "max": Number (Maximum possible marks based on the rubric. MUST use the key 'max', NOT 'maxScore'),
-      "feedback": "String (Must start with the Semantic Tier tag, followed by a detailed explanation. e.g., '[Partial Match] You correctly identified X, but missed Y.')"
-    }
-  ]
+  "extracted_evidence": "String (Exact quote from student or 'None found')",
+  "score": Number (Marks awarded),
+  "feedback": "String (Starts with Semantic Tier, max 3 sentences)"
 }`;
 
-        // 3. Diagnostic Logs
-        console.log("--- PAYLOAD SIZES ---");
-        console.log("OCR Text Length:", fullExamText ? fullExamText.length : 0);
-        console.log("Marking Guide Length:", finalRubricText ? finalRubricText.length : 0);
+        // 4. ATOMIC MAP-REDUCE EXECUTION WITH CONCURRENCY CONTROL
+        console.log(`[ARCHITECTURE] Initiating Atomic Grading for ${parsedRubricMap.length} Questions...`);
+        const limit = pLimit(10);
 
-        // 4. Native DeepSeek Call
-        const completion = await deepSeekClient.chat.completions.create({
+        const atomicGradingPromises = parsedRubricMap.map((rubricItem: any) =>
+            limit(async () => {
+                // Determine relevant student context
+                let studentContext = studentAnswersMap[rubricItem.question] || fullExamText; // Fallback to full text if structural OCR failed to isolate
+
+                try {
+                    const response = await deepSeekClient.chat.completions.create({
+                        model: "deepseek-chat",
+                        messages: [
+                            { role: "system", content: atomicSystemPrompt },
+                            { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER SEGMENT:\n${studentContext}` }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.1,
+                    });
+
+                    const raw = response.choices[0]?.message?.content || '{}';
+                    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const result = JSON.parse(clean);
+
+                    return {
+                        question: rubricItem.question,
+                        score: Number(result.score) || 0,
+                        max: Number(rubricItem.max_score) || 0,
+                        feedback: result.feedback || "No feedback provided.",
+                        evidenceSnippet: result.extracted_evidence || "None found"
+                    };
+                } catch (e) {
+                    console.error(`Atomic grading failed for ${rubricItem.question}`, e);
+                    return {
+                        question: rubricItem.question,
+                        score: 0,
+                        max: Number(rubricItem.max_score) || 0,
+                        feedback: "[Out of Scope] Grading engine failed for this segment.",
+                        evidenceSnippet: "GRADING_FAILED_API_ERROR"
+                    };
+                }
+            })
+        );
+
+        // Wait for all atomic shards to finish
+        const formattedBreakdown = await Promise.all(atomicGradingPromises);
+
+        // 5. SYNTHESIS: Generate Overall Feedback via Fast Model
+        const synthesisPrompt = `Generate an encouraging, empathetic overall summary for the student. Focus on their strengths and weaknesses. Keep it under 3 sentences. Return JSON: {"aiFeedback": "...", "overallRemarks": "..."}`;
+        const synthesisResponse = await deepSeekClient.chat.completions.create({
             model: "deepseek-chat",
             messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: `MARKING SCHEME:\n${finalRubricText}\n\nSTUDENT EXAM:\n${fullExamText}` }
+                { role: "system", content: synthesisPrompt },
+                { role: "user", content: JSON.stringify(formattedBreakdown) }
             ],
-            max_tokens: 8192, // <--- CRITICAL: Allow massive JSON output so it never truncates
             response_format: { type: "json_object" },
-            temperature: 0.1, // Keep it deterministic
+            temperature: 0.3,
         });
 
-        let rawContent = completion.choices[0]?.message?.content || '{}';
-
-        // 1. Log the RAW response so we can see it in Vercel
-        console.log("====== RAW AI RESPONSE START ======");
-        console.log(rawContent);
-        console.log("====== RAW AI RESPONSE END ======");
-
-        const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-
-        let resultData: any = {};
+        let synthesis = { aiFeedback: "Good effort.", overallRemarks: "Keep it up!" };
         try {
-            const jsonMatch = cleanJsonString.match(/\{[\s\S]*\}/);
-            resultData = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJsonString);
-        } catch (error) {
-            console.error("[JSON PARSE ERROR] AI returned malformed JSON:", error);
-            throw new Error("AI returned invalid JSON");
-        }
-
-        // 1. SAFEGUARD: Force UI Contract Mapping
-        // If the AI stubborn outputs 'maxScore', map it to 'max' for the UI.
-        const formattedBreakdown = (resultData.breakdown || []).map((item: any) => ({
-            question: item.question || "Unknown",
-            score: Number(item.score) || 0,
-            max: Number(item.max || item.maxScore) || 0,
-            feedback: item.feedback || "No feedback provided."
-        }));
+             const clean = (synthesisResponse.choices[0]?.message?.content || '{}').replace(/```json/g, '').replace(/```/g, '').trim();
+             synthesis = JSON.parse(clean);
+        } catch(e) {}
 
         // 2. ABSOLUTE MATH ACCURACY: Calculate total in backend, not AI.
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
@@ -195,9 +234,9 @@ You must return ONLY valid JSON matching this EXACT structure. The frontend UI c
             data: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore, // <--- Using exact Node.js math
-                remarks: resultData.overallRemarks || "No overall remarks provided.",
+                remarks: synthesis.overallRemarks || "No overall remarks provided.",
                 breakdown: JSON.stringify(formattedBreakdown), // <--- Perfectly mapped for the UI!
-                detectedIdentity: resultData.regNo || "UNKNOWN"
+                detectedIdentity: "UNKNOWN"
             }
         });
 
@@ -206,12 +245,12 @@ You must return ONLY valid JSON matching this EXACT structure. The frontend UI c
             where: { id: submission.id },
             data: {
                 status: 'GRADED',
-                feedback: resultData.aiFeedback || resultData.generalFeedback || "No AI feedback provided."
+                feedback: synthesis.aiFeedback || "No AI feedback provided."
             }
         });
 
         console.log(`[PRODUCTION] Grading Complete. Calculated Score: ${calculatedTotalScore}`);
-        return NextResponse.json({ success: true, regNo: resultData.regNo || resultData.reg_no });
+        return NextResponse.json({ success: true, regNo: "UNKNOWN" });
 
     } catch (error: any) {
         console.error(`[REDUCER FATAL ERROR]:`, error);
