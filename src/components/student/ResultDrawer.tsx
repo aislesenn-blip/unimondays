@@ -137,36 +137,11 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                              </h3>
                              <div className="space-y-4">
                                 {breakdown.map((item: any, i: number) => (
-                                    <div key={i} className="border border-slate-200 rounded-lg p-4 mb-4 bg-white shadow-sm">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="bg-slate-100 text-slate-700 font-bold text-xs px-2.5 py-1 rounded-md">
-                                                    {item.question || `Q${i+1}`}
-                                                </div>
-                                            </div>
-
-                                            <div className={`flex items-center justify-center font-bold text-sm px-3 py-1 rounded-full shadow-sm border ${item.score === item.max ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                                                {item.score} <span className="mx-1 text-xs font-normal opacity-50">/</span> {item.max}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid gap-3 sm:grid-cols-2">
-                                            {/* Expected / Rubric Reference */}
-                                            {item.rubricReference && (
-                                                <div className="text-xs p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                    <span className="font-bold text-slate-400 uppercase tracking-widest text-[9px] block mb-1.5 flex items-center gap-1">
-                                                        <FileText className="h-3 w-3" /> Criteria
-                                                    </span>
-                                                    <p className="text-slate-600 leading-relaxed font-medium">{item.rubricReference}</p>
-                                                </div>
-                                            )}
-
-                                            {/* Feedback */}
-                                            <div className="text-xs p-3 bg-blue-50/30 rounded-xl border border-blue-100 sm:col-span-2">
-                                                <span className="font-bold text-blue-400 uppercase tracking-widest text-[9px] block mb-1.5 flex items-center gap-1">
-                                                    <ArrowUpCircle className="h-3 w-3" /> AI Feedback
-                                                </span>
-                                                <p className="text-slate-700 leading-relaxed font-medium">
+                                    <div key={i} className="border border-slate-200 rounded-lg p-4 mb-4 bg-white shadow-sm flex flex-col group">
+                                        <div className="flex justify-between items-start gap-4">
+                                            <div className="flex-1">
+                                                <span className="font-medium text-sm text-slate-800">{item.question || `Q${i+1}`}</span>
+                                                <p className="text-slate-700 text-sm mt-1 leading-relaxed">
                                                     {item.feedback?.includes('[Exact Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold mr-1">Exact Match</span> :
                                                      item.feedback?.includes('[Partial Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-cyan-100 text-cyan-800 border border-cyan-200 font-bold mr-1">Partial Match</span> :
                                                      item.feedback?.includes('[Out of Scope]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Out of Scope</span> :
@@ -174,7 +149,12 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                                                     {item.feedback?.replace(/\[.*?\]\s*/, '')}
                                                 </p>
                                             </div>
+                                            <div className="font-mono text-sm text-right shrink-0 mt-0.5">
+                                                <span className="font-semibold text-slate-800">{item.score}</span>
+                                                <span className="text-slate-500">/{item.max}</span>
+                                            </div>
                                         </div>
+                                        {/* Notice: We don't render evidence snippet in Student view to keep it clean, as per requirements. But it's available. */}
                                     </div>
                                 ))}
                              </div>

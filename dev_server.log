@@ -14,3 +14,5 @@
 ○ Compiling /verify-ui ...
  GET /verify-ui 200 in 3.9s (compile: 3.5s, proxy.ts: 108ms, render: 296ms)
  GET /verify-ui 200 in 105ms (compile: 5ms, proxy.ts: 7ms, render: 94ms)
+ GET /verify-ui 200 in 6.7s (compile: 5.8s, proxy.ts: 210ms, render: 661ms)
+ GET /verify-ui 200 in 185ms (compile: 14ms, proxy.ts: 17ms, render: 154ms)
