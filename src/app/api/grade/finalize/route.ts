@@ -73,40 +73,35 @@ export async function POST(req: NextRequest) {
         const fullExamText = sortedData.map(chunk => `[PAGES ${chunk.pages.join(',')}]\n${chunk.text}`).join('\n\n');
 
         // 2. The Chaos Hunter Prompt (Precision Engineering)
-        const systemPrompt = `
-You are an expert, strict, and highly analytical academic examiner. Your task is to grade a student's exam submission based ONLY on the provided Marking Guide (Rubric) and the raw extracted text (OCR) from the student's exam paper.
+        const systemPrompt = `You are an elite, empathetic academic professor grading a university exam.
+You are evaluating a student's scanned, OCR-extracted exam against a strict Marking Scheme.
 
-### INSTRUCTIONS:
-1. **Holistic Scanning:** Scan the entire extracted text. Students may answer out of order or spill over pages. Match their answers to the corresponding questions in the Marking Guide.
-2. **Granular Grading:** Grade each sub-question individually. Award full marks for complete answers, partial marks for incomplete but relevant answers, and 0 marks for skipped or completely wrong answers.
-3. **Identity Extraction:** Locate the student's Registration Number (e.g., 2018-04-12551) from the text. If not found, use "UNKNOWN".
-4. **Constructive Feedback:** Write a detailed overall feedback section explicitly categorized into "Strengths:", "Weaknesses:", and "Improvement:".
-5. **Overall Remarks:** Provide a brief summary of how you conducted the grading (e.g., "I graded holistically, mapping scattered answers...").
+YOUR MANDATORY DIRECTIVES:
+1. ANTI-LAZINESS (CRITICAL): The student's text is messy, out of order, or missing question numbers. DO NOT blindly output "Skipped question". You MUST semantically scan the ENTIRE student text for concepts, formulas, or keywords matching the rubric. Grade based on meaning, not layout.
+2. EMPATHETIC TONE: Speak directly to the student in your feedback (e.g., "You showed a great understanding of X..."). Do NOT use internal robotic language like "I graded holistically" or "mapped to rubric".
+3. SEMANTIC TIERS: Every question's feedback MUST start with one of these exact NLP tags:
+   - [Exact Match]: Concept perfectly aligns with the rubric.
+   - [Partial Match]: Concept is touched upon but missing key rubric details.
+   - [Out of Scope]: Concept is irrelevant or factually incorrect.
+   - [Missing]: The concept was truly nowhere to be found in the entire exam text.
+4. NO MATH: Do NOT calculate the total score. The backend system will calculate it. Just provide the individual scores.
 
-CRITICAL SPEED CONSTRAINT:
-You must return the JSON as fast as possible. Be extremely concise.
-- "aiFeedback": Maximum TWO short sentences.
-- "overallRemarks": Maximum ONE short sentence.
-- "feedback" (inside breakdown): Maximum ONE short phrase (e.g., "Correct formula", "Skipped question", "Wrong definition"). DO NOT write paragraphs.
-
-### STRICT OUTPUT FORMAT:
-You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (like \`\`\`json). Do not add any conversational text. The JSON MUST exactly match this schema:
+STRICT JSON SCHEMA MANDATE:
+You must return ONLY valid JSON matching this EXACT structure. The frontend UI crashes if you deviate.
 
 {
-  "regNo": "String (The extracted registration number)",
-  "totalScore": Number (The sum of all awarded scores),
-  "aiFeedback": "String (Must contain Strengths, Weaknesses, and Improvement)",
-  "overallRemarks": "String (Summary of the grading process)",
+  "regNo": "String (Extract student registration number, or 'UNKNOWN')",
+  "aiFeedback": "String (A 3-paragraph, student-facing, encouraging summary of their strengths, weaknesses, and areas for improvement.)",
+  "overallRemarks": "String (A single, highly encouraging closing sentence to the student.)",
   "breakdown": [
     {
-      "question": "String (Question Number, e.g., Q1A i)",
-      "score": Number (Awarded marks),
-      "maxScore": Number (Maximum possible marks from rubric),
-      "feedback": "String (Specific reason why this mark was awarded. E.g., 'Correct definition provided.')"
+      "question": "String (e.g., Q1A i)",
+      "score": Number (Marks awarded),
+      "max": Number (Maximum possible marks based on the rubric. MUST use the key 'max', NOT 'maxScore'),
+      "feedback": "String (Must start with the Semantic Tier tag, followed by a detailed explanation. e.g., '[Partial Match] You correctly identified X, but missed Y.')"
     }
   ]
-}
-`;
+}`;
 
         // 3. Diagnostic Logs
         console.log("--- PAYLOAD SIZES ---");
@@ -131,34 +126,41 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
         console.log(rawContent);
         console.log("====== RAW AI RESPONSE END ======");
 
+        const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
+
         let resultData: any = {};
-
-        // 2. Bulletproof Parsing
         try {
-            // Strip markdown formatting if DeepSeek hallucinated it
-            const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-
-            // Find the first { and last } to avoid conversational text
             const jsonMatch = cleanJsonString.match(/\{[\s\S]*\}/);
-            const finalStringToParse = jsonMatch ? jsonMatch[0] : cleanJsonString;
-
-            resultData = JSON.parse(finalStringToParse);
-            console.log("✅ SUCCESSFULLY PARSED JSON!");
+            resultData = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJsonString);
         } catch (error) {
-            console.error("❌ JSON PARSING FAILED. DeepSeek returned invalid JSON:", error);
+            console.error("[JSON PARSE ERROR] AI returned malformed JSON:", error);
+            throw new Error("AI returned invalid JSON");
         }
 
-        // 3. Fallback Database Mapping (Catch all possible naming variations)
+        // 1. SAFEGUARD: Force UI Contract Mapping
+        // If the AI stubborn outputs 'maxScore', map it to 'max' for the UI.
+        const formattedBreakdown = (resultData.breakdown || []).map((item: any) => ({
+            question: item.question || "Unknown",
+            score: Number(item.score) || 0,
+            max: Number(item.max || item.maxScore) || 0,
+            feedback: item.feedback || "No feedback provided."
+        }));
+
+        // 2. ABSOLUTE MATH ACCURACY: Calculate total in backend, not AI.
+        const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
+
+        // 3. ATOMIC DATABASE UPDATE
         await prisma.score.create({
             data: {
                 submissionId: submission.id,
-                totalMarks: resultData.totalScore || resultData.total_score || 0,
-                remarks: resultData.overallRemarks || resultData.remarks || "No overall remarks provided.",
-                breakdown: JSON.stringify(resultData.breakdown || resultData.results || []),
-                detectedIdentity: resultData.regNo || resultData.reg_no || "UNKNOWN"
+                totalMarks: calculatedTotalScore, // <--- Using exact Node.js math
+                remarks: resultData.overallRemarks || "No overall remarks provided.",
+                breakdown: JSON.stringify(formattedBreakdown), // <--- Perfectly mapped for the UI!
+                detectedIdentity: resultData.regNo || "UNKNOWN"
             }
         });
 
+        // Add the remarks to the submission or score if your schema supports it
         await prisma.submission.update({
             where: { id: submission.id },
             data: {
@@ -167,7 +169,7 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
             }
         });
 
-        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.regNo || resultData.reg_no}`);
+        console.log(`[PRODUCTION] Grading Complete. Calculated Score: ${calculatedTotalScore}`);
         return NextResponse.json({ success: true, regNo: resultData.regNo || resultData.reg_no });
 
     } catch (error: any) {
