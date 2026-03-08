@@ -48,64 +48,65 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
 
             {/* Final Score Section */}
             {isReleased && submission.score !== null ? (
-                <div className="flex items-center justify-between p-6 bg-muted/30 rounded-xl border shadow-sm">
-                    <div>
-                        <div className="text-xs uppercase tracking-wider font-bold text-muted-foreground mb-1">Final Grade</div>
-                        <div className="text-4xl font-extrabold text-primary">
-                            {submission.score}
-                            <span className="text-lg text-muted-foreground font-medium ml-1">/ {submission.totalMarks}</span>
+                <div className="flex items-center justify-between p-6 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100/50 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                    <div className="relative z-10">
+                        <div className="text-xs uppercase tracking-widest font-bold text-emerald-600/80 mb-1">Final Grade</div>
+                        <div className="text-5xl font-black text-emerald-700 tracking-tight">
+                            {typeof submission.score === 'object' ? submission.score?.totalMarks : submission.score}
+                            <span className="text-xl text-emerald-600/50 font-bold ml-1">/ {submission.totalMarks}</span>
                         </div>
                     </div>
                     {/* Appeal Button */}
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="flex flex-col items-end gap-2 relative z-10">
                         {canAppeal && (
                             <AppealModal submissionId={submission.id} onSuccess={() => window.location.reload()} />
                         )}
                         {submission.allowAppeals && appealDeadlinePassed && (
-                            <div className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-1 rounded">
+                            <div className="text-xs font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-full border border-rose-100">
                                 Appeal window closed
                             </div>
                         )}
                          {submission.allowAppeals && !appealDeadlinePassed && submission.appealDeadline && (
-                            <div className="text-[10px] text-muted-foreground">
-                                Appeals close: {new Date(submission.appealDeadline).toLocaleString()}
+                            <div className="text-[10px] font-medium text-emerald-600/70 bg-emerald-100/50 px-2 py-1 rounded-full">
+                                Appeals close: {new Date(submission.appealDeadline).toLocaleDateString()}
                             </div>
                         )}
                     </div>
                 </div>
             ) : (
-                <div className="bg-amber-50 text-amber-900 p-4 rounded-lg text-sm border border-amber-100 flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 shrink-0" />
+                <div className="bg-amber-50 text-amber-900 p-4 rounded-2xl text-sm border border-amber-100 flex items-start gap-3 shadow-sm">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
                     <div>
-                        <div className="font-semibold mb-1">Processing / Waiting for Release</div>
-                        <p>Your submission has been received. Grades will be available once released by the lecturer.</p>
+                        <div className="font-bold mb-1">Processing / Waiting for Release</div>
+                        <p className="text-amber-800/80">Your submission has been received. Grades will be available once released by the lecturer.</p>
                     </div>
                 </div>
             )}
 
             {/* Script Link */}
             {submission.filePath && (
-                <div>
-                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                        <FileText className="h-4 w-4" /> Original Submission
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-slate-400" /> Original Submission
                     </h3>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                         <a
                             href={`/api/download?url=${encodeURIComponent(submission.filePath)}&inline=true`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 flex items-center justify-center p-3 border rounded-lg hover:bg-accent transition-colors group"
+                            className="flex-1 flex items-center justify-center py-2.5 px-4 bg-white border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all group shadow-sm text-slate-600 font-medium text-sm"
                         >
-                            <span className="text-sm text-blue-600 group-hover:underline">View Document</span>
-                            <Eye className="ml-2 h-4 w-4 text-blue-500" />
+                            <Eye className="mr-2 h-4 w-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                            View Document
                         </a>
                         <a
                             href={`/api/download?url=${encodeURIComponent(submission.filePath)}`}
                             download
-                            className="flex-1 flex items-center justify-center p-3 border rounded-lg hover:bg-accent transition-colors group"
+                            className="flex-1 flex items-center justify-center py-2.5 px-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all group shadow-sm text-slate-600 font-medium text-sm"
                         >
-                            <span className="text-sm text-muted-foreground group-hover:text-foreground">Download</span>
-                            <Download className="ml-2 h-4 w-4 text-muted-foreground" />
+                            <Download className="mr-2 h-4 w-4 text-slate-400" />
+                            Download
                         </a>
                     </div>
                 </div>
@@ -131,36 +132,45 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                     {/* 2. Detailed Assessment (Expected vs Actual) */}
                     {breakdown.length > 0 && (
                         <div>
-                             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                                2. Detailed Assessment
+                             <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-emerald-500" /> Detailed Assessment
                              </h3>
                              <div className="space-y-4">
                                 {breakdown.map((item: any, i: number) => (
-                                    <div key={i} className="border rounded-lg p-4 bg-card shadow-sm transition-all hover:shadow-md">
-                                        <div className="flex justify-between items-start mb-3 border-b pb-2">
-                                            <span className="font-semibold text-sm">{item.question || `Question ${i+1}`}</span>
-                                            <span className={`font-bold text-sm px-2 py-0.5 rounded ${item.score === item.max ? 'bg-green-100 text-green-700' : 'bg-muted text-foreground'}`}>
-                                                {item.score} / {item.max}
-                                            </span>
+                                    <div key={i} className="border border-slate-100 rounded-2xl p-5 bg-white shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] transition-all hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-slate-100 text-slate-700 font-bold text-xs px-2.5 py-1 rounded-md">
+                                                    {item.question || `Q${i+1}`}
+                                                </div>
+                                            </div>
+
+                                            <div className={`flex items-center justify-center font-bold text-sm px-3 py-1 rounded-full shadow-sm border ${item.score === item.max ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                                                {item.score} <span className="mx-1 text-xs font-normal opacity-50">/</span> {item.max}
+                                            </div>
                                         </div>
 
                                         <div className="grid gap-3 sm:grid-cols-2">
                                             {/* Expected / Rubric Reference */}
                                             {item.rubricReference && (
-                                                <div className="text-xs p-2 bg-muted/20 rounded">
-                                                    <span className="font-bold text-muted-foreground uppercase tracking-wider text-[10px] block mb-1">Expected / Criteria</span>
-                                                    <p className="text-muted-foreground leading-relaxed">{item.rubricReference}</p>
+                                                <div className="text-xs p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <span className="font-bold text-slate-400 uppercase tracking-widest text-[9px] block mb-1.5 flex items-center gap-1">
+                                                        <FileText className="h-3 w-3" /> Criteria
+                                                    </span>
+                                                    <p className="text-slate-600 leading-relaxed font-medium">{item.rubricReference}</p>
                                                 </div>
                                             )}
 
                                             {/* Feedback */}
-                                            <div className="text-xs p-2 bg-blue-50/50 rounded border-blue-100 border sm:col-span-2">
-                                                <span className="font-bold text-blue-700 uppercase tracking-wider text-[10px] block mb-1">AI Feedback</span>
-                                                <p className="text-foreground leading-relaxed">
-                                                    {item.feedback?.includes('[Exact Match]') ? <span className="text-green-600 font-semibold">[Exact Match] </span> :
-                                                     item.feedback?.includes('[Partial Match]') ? <span className="text-amber-600 font-semibold">[Partial Match] </span> :
-                                                     item.feedback?.includes('[Out of Scope]') ? <span className="text-red-600 font-semibold">[Out of Scope] </span> :
-                                                     item.feedback?.includes('[Missing]') ? <span className="text-gray-500 font-semibold">[Missing] </span> : null}
+                                            <div className="text-xs p-3 bg-blue-50/30 rounded-xl border border-blue-100 sm:col-span-2">
+                                                <span className="font-bold text-blue-400 uppercase tracking-widest text-[9px] block mb-1.5 flex items-center gap-1">
+                                                    <ArrowUpCircle className="h-3 w-3" /> AI Feedback
+                                                </span>
+                                                <p className="text-slate-700 leading-relaxed font-medium">
+                                                    {item.feedback?.includes('[Exact Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold mr-1 border border-emerald-200/50">Exact Match</span> :
+                                                     item.feedback?.includes('[Partial Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 font-bold mr-1 border border-amber-200/50">Partial Match</span> :
+                                                     item.feedback?.includes('[Out of Scope]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 font-bold mr-1 border border-rose-200/50">Out of Scope</span> :
+                                                     item.feedback?.includes('[Missing]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold mr-1 border border-slate-200/50">Missing</span> : null}
                                                     {item.feedback?.replace(/\[.*?\]\s*/, '')}
                                                 </p>
                                             </div>
@@ -174,10 +184,11 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                     {/* 3. Overall Feedback (Remarks) */}
                     {feedback && (
                         <div>
-                             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                                3. Overall Feedback & Remarks
+                             <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                                <span className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                                Overall Feedback
                              </h3>
-                             <div className="p-4 bg-muted/20 rounded-lg text-sm leading-relaxed border border-muted">
+                             <div className="p-5 bg-gradient-to-br from-slate-50 to-white rounded-2xl text-sm leading-relaxed border border-slate-200 shadow-sm text-slate-700 font-medium">
                                  {feedback}
                              </div>
                         </div>
@@ -185,8 +196,10 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
 
                     {/* Remarks */}
                     {submission.remarks && (
-                        <div className="p-4 bg-muted/10 rounded-lg italic text-sm text-muted-foreground border-l-4 border-primary/20">
-                            " {submission.remarks} "
+                        <div className="p-5 bg-teal-50/50 rounded-2xl italic text-sm text-teal-800 border border-teal-100 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1 h-full bg-teal-400"></div>
+                            <span className="text-teal-300 font-serif text-2xl absolute top-2 left-4 opacity-50">"</span>
+                            <div className="pl-4 pt-1 font-medium relative z-10">{submission.remarks}</div>
                         </div>
                     )}
                 </>
