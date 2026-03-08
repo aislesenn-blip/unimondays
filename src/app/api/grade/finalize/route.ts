@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
+import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import { readFile } from '@/lib/storage';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -19,16 +21,49 @@ export async function POST(req: NextRequest) {
 
         if (!submission) throw new Error("Submission not found");
 
-        // FALLBACK CASCADE: Check all possible rubric fields
-        const actualRubric = submission.workSession.rubric || submission.workSession.markingScheme || "";
+        let finalRubricText = submission.workSession.rubric;
 
-        if (!actualRubric || actualRubric.trim().length === 0) {
+        // 2. THE SELF-HEALING CACHE
+        if ((!finalRubricText || finalRubricText.trim().length === 0) && submission.workSession.markingScheme) {
+            console.log("[ARCHITECTURE] Missing Rubric Text. Extracting from PDF URL...");
+            try {
+                const urlOrText = submission.workSession.markingScheme;
+
+                // If it's a Supabase file path
+                if (urlOrText.includes('/') || urlOrText.toLowerCase().endsWith('.pdf') || urlOrText.toLowerCase().endsWith('.png')) {
+                    const buffer = await readFile(urlOrText, 'exam_pdfs');
+                    if (urlOrText.toLowerCase().endsWith('.pdf')) {
+                        const pages = await extractPagesMultimodal(buffer);
+                        finalRubricText = pages.map(p => p.text).join('\n\n');
+                    } else {
+                        const mimeType = urlOrText.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
+                        finalRubricText = await ocrDocument(buffer, mimeType);
+                    }
+                } else {
+                    finalRubricText = urlOrText;
+                }
+
+                // PERMANENTLY CACHE IT: Save it back to the WorkSession!
+                await prisma.workSession.update({
+                    where: { id: submission.workSession.id },
+                    data: { rubric: finalRubricText }
+                });
+                console.log("[ARCHITECTURE] Rubric successfully extracted and cached!");
+
+            } catch (error) {
+                console.error("[CRITICAL] Failed to extract Rubric PDF:", error);
+                throw new Error("Rubric Extraction Failed");
+            }
+        }
+
+        // 3. HARD STOP IF STILL EMPTY
+        if (!finalRubricText || finalRubricText.trim().length === 0) {
             console.error("[CRITICAL] No Rubric or Marking Scheme found. Halting grading.");
             await prisma.submission.update({
                 where: { id: submission.id },
-                data: { status: 'FAILED', feedback: 'Missing Marking Scheme' } // Map gradingError to feedback for Prisma
+                data: { status: 'FAILED', feedback: 'Missing Marking Scheme' }
             });
-            return NextResponse.json({ error: "Missing Rubric" }, { status: 400 });
+            throw new Error("Fatal: Rubric text is entirely missing. Cannot grade.");
         }
 
         // 1. Sort the chaotic chunks back into logical page order
@@ -76,14 +111,14 @@ You MUST return ONLY a valid JSON object. Do not include markdown blockquotes (l
         // 3. Diagnostic Logs
         console.log("--- PAYLOAD SIZES ---");
         console.log("OCR Text Length:", fullExamText ? fullExamText.length : 0);
-        console.log("Marking Guide Length:", submission.workSession.rubric ? submission.workSession.rubric.length : 0);
+        console.log("Marking Guide Length:", finalRubricText ? finalRubricText.length : 0);
 
         // 4. Native DeepSeek Call
         const completion = await deepSeekClient.chat.completions.create({
             model: "deepseek-chat",
             messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: `MARKING SCHEME:\n${actualRubric}\n\nSTUDENT EXAM:\n${fullExamText}` }
+                { role: "user", content: `MARKING SCHEME:\n${finalRubricText}\n\nSTUDENT EXAM:\n${fullExamText}` }
             ],
             response_format: { type: "json_object" },
             temperature: 0.0,
