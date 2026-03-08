@@ -13,11 +13,11 @@ export async function POST() {
     console.log("[QUEUE] Wakeup: Project 1000 - Sequential Mode");
 
     try {
-        // STRICT LIMIT 3 (Never exceed or lambda dies)
+        // STRICT LIMIT 1 (Never exceed or lambda dies, deepseek timeouts require lower concurrency)
         const jobs = await prisma.job.findMany({
             where: { status: 'PENDING' },
             orderBy: { createdAt: 'asc' },
-            take: 3
+            take: 1
         });
 
         if (jobs.length === 0) {
