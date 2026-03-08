@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 
+export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
+
 // STRICT: Must be Native DeepSeek API, not OpenRouter.
 const deepSeekClient = new OpenAI({ baseURL: "https://api.deepseek.com", apiKey: process.env.DEEPSEEK_API_KEY || 'dummy' });
-export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
     try {
@@ -17,6 +19,18 @@ export async function POST(req: NextRequest) {
 
         if (!submission) throw new Error("Submission not found");
 
+        // FALLBACK CASCADE: Check all possible rubric fields
+        const actualRubric = submission.workSession.rubric || submission.workSession.markingScheme || "";
+
+        if (!actualRubric || actualRubric.trim().length === 0) {
+            console.error("[CRITICAL] No Rubric or Marking Scheme found. Halting grading.");
+            await prisma.submission.update({
+                where: { id: submission.id },
+                data: { status: 'FAILED', feedback: 'Missing Marking Scheme' } // Map gradingError to feedback for Prisma
+            });
+            return NextResponse.json({ error: "Missing Rubric" }, { status: 400 });
+        }
+
         // 1. Sort the chaotic chunks back into logical page order
         const sortedData = (submission.extractedData as any[])
             .sort((a, b) => a.pages[0] - b.pages[0]);
@@ -24,18 +38,31 @@ export async function POST(req: NextRequest) {
         const fullExamText = sortedData.map(chunk => `[PAGES ${chunk.pages.join(',')}]\n${chunk.text}`).join('\n\n');
 
         // 2. The Chaos Hunter Prompt (Precision Engineering)
-        const systemPrompt = `You are a strict, expert academic grader. The following text is raw, chaotic, and assembled from multiple scanned pages of a student's exam.
+        const systemPrompt = `You are a strict, elite academic grader at a university level.
 
 YOUR MANDATE:
-1. IDENTITY HUNT: First, hunt for the student's Registration Number or Name. If missing, output "UNKNOWN_STUDENT".
-2. HOLISTIC GRADING: Grade strictly against the marking scheme. Do not penalize for answers written out of order or on the wrong page. Find the answer wherever it is.
-3. PERSONALIZED REMARKS: Provide detailed, accurate, and personalized feedback for each question explaining exactly why marks were awarded or lost.
-4. STRICT JSON FORMAT: You MUST return ONLY this exact JSON structure. Do not wrap it in markdown block quotes.
+1. IDENTITY HUNT: Extract the student's Registration Number. If missing, output "UNKNOWN".
+2. SEMANTIC MATCHING TIERS: You MUST evaluate the student's text against the Marking Scheme using these exact NLP semantic tiers:
+   - [Same As]: The student's answer semantically matches the rubric point (even if paraphrased). Award full marks.
+   - [Partial Match]: The student touched on the core concept but missed key details required by the rubric. Award partial marks.
+   - [Out of Scope]: The student provided information that is irrelevant to the rubric or question. Award 0 marks for this point.
+   - [Contradiction / Incorrect]: The student's answer directly opposes the rubric or is factually wrong. Award 0 marks.
+3. GRANULARITY: Grade strictly against the MARKING SCHEME. Do not invent marks.
+
+STRICT JSON SCHEMA MANDATE:
+You must return ONLY valid JSON matching this exact structure. Do not use markdown blockquotes.
+
 {
-  "reg_no": "String",
-  "total_score": Number,
-  "results": [
-    {"q": "QuestionNum", "score": Number, "remark": "String"}
+  "regNo": "String",
+  "totalScore": Number (Sum of all awarded scores),
+  "aiFeedback": "String (A detailed, 3-paragraph summary covering Strengths, Weaknesses, and Improvements)",
+  "breakdown": [
+    {
+      "question": "String (e.g., Q1A i)",
+      "score": Number (Marks awarded),
+      "max": Number (Maximum possible marks for this question based on the rubric),
+      "feedback": "String (Start with the Semantic Tier. Example: '[Partial Match] The student correctly defined X, but missed Y. [Out of Scope] The explanation of Z was irrelevant.')"
+    }
   ]
 }`;
 
@@ -44,21 +71,33 @@ YOUR MANDATE:
             model: "deepseek-chat",
             messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: `MARKING SCHEME:\n${submission.workSession.rubric}\n\nSTUDENT EXAM:\n${fullExamText}` }
+                { role: "user", content: `MARKING SCHEME:\n${actualRubric}\n\nSTUDENT EXAM:\n${fullExamText}` }
             ],
             response_format: { type: "json_object" },
             temperature: 0.0,
         });
 
-        const resultData = JSON.parse(completion.choices[0]?.message?.content || '{}');
+        // 4. BULLETPROOF PARSING & DB MAPPING
+        let rawContent = completion.choices[0]?.message?.content || '{}';
+        const cleanJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        // 4. Atomic Database Finalization
+        let resultData;
+        try {
+            const jsonMatch = cleanJsonString.match(/\{[\s\S]*\}/);
+            resultData = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJsonString);
+        } catch (error) {
+            console.error("[JSON PARSE ERROR]", error);
+            throw new Error("AI returned invalid JSON");
+        }
+
+        // ATOMIC DATABASE UPDATE
         await prisma.score.create({
             data: {
                 submissionId: submission.id,
-                totalMarks: resultData.total_score || 0,
-                breakdown: JSON.stringify(resultData.results || []),
-                detectedIdentity: resultData.reg_no || "UNKNOWN"
+                totalMarks: resultData.totalScore || 0,
+                remarks: resultData.aiFeedback || "No general feedback generated.", // Map aiFeedback to remarks for Prisma
+                breakdown: JSON.stringify(resultData.breakdown || []), // Perfectly matches UI Contract!
+                detectedIdentity: resultData.regNo || "UNKNOWN"
             }
         });
 
@@ -67,14 +106,14 @@ YOUR MANDATE:
             data: { status: 'GRADED' }
         });
 
-        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.reg_no}`);
-        return NextResponse.json({ success: true, regNo: resultData.reg_no });
+        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.regNo}`);
+        return NextResponse.json({ success: true, regNo: resultData.regNo });
 
     } catch (error: any) {
         console.error(`[REDUCER FATAL ERROR]:`, error);
         const { submissionId } = await req.json().catch(()=>({}));
         if(submissionId) {
-            await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
+            await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED', feedback: error.message } });
         }
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
