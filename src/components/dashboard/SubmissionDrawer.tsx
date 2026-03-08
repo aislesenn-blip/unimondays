@@ -206,17 +206,17 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
             {breakdown.length > 0 && (
                 <div className="pb-6">
                     <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-4">Grading Breakdown</h3>
-                    <div className="space-y-0">
+                    <div className="space-y-4">
                         {breakdown.map((item: any, i: number) => (
-                            <div key={i} className="flex flex-col py-3 border-b border-foreground/5 last:border-0 group">
+                            <div key={i} className="border border-slate-200 rounded-lg p-4 mb-4 bg-white shadow-sm flex flex-col group">
                                 <div className="flex justify-between items-start gap-4">
                                     <div className="flex-1">
                                         <span className="font-medium text-sm text-foreground">{item.question}</span>
-                                        <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
-                                            {item.feedback?.includes('[Exact Match]') ? <span className="text-emerald-600 font-medium">[Exact Match] </span> :
-                                             item.feedback?.includes('[Partial Match]') ? <span className="text-amber-600 font-medium">[Partial Match] </span> :
-                                             item.feedback?.includes('[Out of Scope]') ? <span className="text-rose-600 font-medium">[Out of Scope] </span> :
-                                             item.feedback?.includes('[Missing]') ? <span className="text-slate-400 font-medium">[Missing] </span> : null}
+                                        <p className="text-slate-700 text-sm mt-1 leading-relaxed">
+                                            {item.feedback?.includes('[Exact Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold mr-1">Exact Match</span> :
+                                             item.feedback?.includes('[Partial Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-cyan-100 text-cyan-800 border border-cyan-200 font-bold mr-1">Partial Match</span> :
+                                             item.feedback?.includes('[Out of Scope]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Out of Scope</span> :
+                                             item.feedback?.includes('[Missing]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Missing</span> : null}
                                             {item.feedback?.replace(/\[.*?\]\s*/, '')}
                                         </p>
                                     </div>
