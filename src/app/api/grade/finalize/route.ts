@@ -66,30 +66,32 @@ export async function POST(req: NextRequest) {
         const fullExamText = sortedData.map(chunk => `[PAGES ${chunk.pages.join(',')}]\n${chunk.text}`).join('\n\n');
 
         // 2. The Chaos Hunter Prompt (Precision Engineering)
-        const systemPrompt = `You are a strict, elite academic grader at a university level.
+        const systemPrompt = `You are an elite, empathetic academic professor grading a university exam.
+You are evaluating a student's scanned, OCR-extracted exam against a strict Marking Scheme.
 
-YOUR MANDATE:
-1. IDENTITY HUNT: Extract the student's Registration Number. If missing, output "UNKNOWN".
-2. SEMANTIC MATCHING TIERS: You MUST evaluate the student's text against the Marking Scheme using these exact NLP semantic tiers:
-   - [Same As]: The student's answer semantically matches the rubric point (even if paraphrased). Award full marks.
-   - [Partial Match]: The student touched on the core concept but missed key details required by the rubric. Award partial marks.
-   - [Out of Scope]: The student provided information that is irrelevant to the rubric or question. Award 0 marks for this point.
-   - [Contradiction / Incorrect]: The student's answer directly opposes the rubric or is factually wrong. Award 0 marks.
-3. GRANULARITY: Grade strictly against the MARKING SCHEME. Do not invent marks.
+YOUR MANDATORY DIRECTIVES:
+1. ANTI-LAZINESS (CRITICAL): The student's text is messy, out of order, or missing question numbers. DO NOT blindly output "Skipped question". You MUST semantically scan the ENTIRE student text for concepts, formulas, or keywords matching the rubric. Grade based on meaning, not layout.
+2. EMPATHETIC TONE: Speak directly to the student in your feedback (e.g., "You showed a great understanding of X..."). Do NOT use internal robotic language like "I graded holistically" or "mapped to rubric".
+3. SEMANTIC TIERS: Every question's feedback MUST start with one of these exact NLP tags:
+   - [Exact Match]: Concept perfectly aligns with the rubric.
+   - [Partial Match]: Concept is touched upon but missing key rubric details.
+   - [Out of Scope]: Concept is irrelevant or factually incorrect.
+   - [Missing]: The concept was truly nowhere to be found in the entire exam text.
+4. NO MATH: Do NOT calculate the total score. The backend system will calculate it. Just provide the individual scores.
 
 STRICT JSON SCHEMA MANDATE:
-You must return ONLY valid JSON matching this exact structure. Do not use markdown blockquotes.
+You must return ONLY valid JSON matching this EXACT structure. The frontend UI crashes if you deviate.
 
 {
-  "regNo": "String",
-  "totalScore": Number (Sum of all awarded scores),
-  "aiFeedback": "String (A detailed, 3-paragraph summary covering Strengths, Weaknesses, and Improvements)",
+  "regNo": "String (Extract student registration number, or 'UNKNOWN')",
+  "aiFeedback": "String (A 3-paragraph, student-facing, encouraging summary of their strengths, weaknesses, and areas for improvement.)",
+  "overallRemarks": "String (A single, highly encouraging closing sentence to the student.)",
   "breakdown": [
     {
       "question": "String (e.g., Q1A i)",
       "score": Number (Marks awarded),
-      "max": Number (Maximum possible marks for this question based on the rubric),
-      "feedback": "String (Start with the Semantic Tier. Example: '[Partial Match] The student correctly defined X, but missed Y. [Out of Scope] The explanation of Z was irrelevant.')"
+      "max": Number (Maximum possible marks based on the rubric. MUST use the key 'max', NOT 'maxScore'),
+      "feedback": "String (Must start with the Semantic Tier tag, followed by a detailed explanation. e.g., '[Partial Match] You correctly identified X, but missed Y.')"
     }
   ]
 }`;
@@ -114,27 +116,44 @@ You must return ONLY valid JSON matching this exact structure. Do not use markdo
             const jsonMatch = cleanJsonString.match(/\{[\s\S]*\}/);
             resultData = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJsonString);
         } catch (error) {
-            console.error("[JSON PARSE ERROR]", error);
+            console.error("[JSON PARSE ERROR] AI returned malformed JSON:", error);
             throw new Error("AI returned invalid JSON");
         }
 
-        // ATOMIC DATABASE UPDATE
+        // 1. SAFEGUARD: Force UI Contract Mapping
+        // If the AI stubborn outputs 'maxScore', map it to 'max' for the UI.
+        const formattedBreakdown = (resultData.breakdown || []).map((item: any) => ({
+            question: item.question || "Unknown",
+            score: Number(item.score) || 0,
+            max: Number(item.max || item.maxScore) || 0,
+            feedback: item.feedback || "No feedback provided."
+        }));
+
+        // 2. ABSOLUTE MATH ACCURACY: Calculate total in backend, not AI.
+        const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
+
+        // 3. ATOMIC DATABASE UPDATE
         await prisma.score.create({
             data: {
                 submissionId: submission.id,
-                totalMarks: resultData.totalScore || 0,
-                remarks: resultData.aiFeedback || "No general feedback generated.", // Map aiFeedback to remarks for Prisma
-                breakdown: JSON.stringify(resultData.breakdown || []), // Perfectly matches UI Contract!
+                totalMarks: calculatedTotalScore, // <--- Using exact Node.js math
+                remarks: resultData.aiFeedback || "Grading completed.",
+                breakdown: JSON.stringify(formattedBreakdown), // <--- Perfectly mapped for the UI!
                 detectedIdentity: resultData.regNo || "UNKNOWN"
             }
         });
 
+        // Add the remarks to the submission or score if your schema supports it
         await prisma.submission.update({
             where: { id: submission.id },
-            data: { status: 'GRADED' }
+            data: {
+                status: 'GRADED',
+                // Map the overall closing sentence to feedback
+                feedback: resultData.overallRemarks || null
+            }
         });
 
-        console.log(`[REDUCER] Successfully graded submission ${submission.id}. Reg: ${resultData.regNo}`);
+        console.log(`[PRODUCTION] Grading Complete. Calculated Score: ${calculatedTotalScore}. Reg: ${resultData.regNo}`);
         return NextResponse.json({ success: true, regNo: resultData.regNo });
 
     } catch (error: any) {
