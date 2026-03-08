@@ -25,13 +25,13 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
     const base64Data = imageBuffer.toString("base64");
     const dataUrl = `data:image/jpeg;base64,${base64Data}`;
 
-    // MANDATORY FIX: Enforce Registration Number extraction and an "Unlabelled" bucket for loose text.
+    // ARCHITECTURE FIX: Extract Reg No and FULL RAW TEXT. Do not attempt to map questions here to prevent data loss.
     const textPrompt = isStructuralOcr
-        ? "Extract the student's text. You MUST extract the Registration Number or Name at the top of the page. Then, categorize the answers by question numbers (e.g., Q1A, Q2, etc.). If you find text but cannot explicitly determine the question number, put it in the 'UNLABELLED' key. Return STRICTLY this JSON format: {\"registration_number\": \"...\", \"answers\": {\"Q1A\": \"...\", \"UNLABELLED\": \"...\"}}."
+        ? "Extract all handwritten and printed text. You MUST find the Registration Number at the top. Return STRICTLY this JSON format: {\"registration_number\": \"...\", \"full_text\": \"...all extracted text from the page...\"}."
         : "Extract all handwritten and printed text from this document. Return it as clean markdown.";
 
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.5-flash", // Use Flash for maximum mapping speed
+      model: "google/gemini-2.5-flash",
       messages: [
         {
           role: "user",
@@ -39,7 +39,10 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
             { type: "text", text: textPrompt },
             {
               type: "image_url",
-              image_url: { url: dataUrl, detail: "high" }
+              image_url: {
+                url: dataUrl,
+                detail: "high"
+              }
             }
           ],
         },
@@ -58,7 +61,7 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
     if (!process.env.OPENROUTER_API_KEY) {
         throw new Error("OPENROUTER_API_KEY is not set. OCR service unavailable.");
     }
-    return callGeminiVisionAPI(buffer, false);
+    return callGeminiVisionAPI(buffer);
 }
 
 export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise<Record<string, string>> {
@@ -137,7 +140,7 @@ export async function analyzePdfStructure(pdfBuffer: Buffer): Promise<PdfSplit[]
     return [];
 }
 
-export async function extractPagesMultimodal(pdfBuffer: Buffer, isStructuralOcr: boolean = false): Promise<PageData[]> {
+export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageData[]> {
     console.log("[GEMINI] Starting Memory-Safe PDF Extraction...");
     const pagesData = [];
 
@@ -150,7 +153,7 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer, isStructuralOcr:
         console.log(`[GEMINI] Processing Page ${pageNum}...`);
 
         // Use existing OpenRouter Gemini Vision API call logic
-        const extractedText = await callGeminiVisionAPI(imageBuffer, isStructuralOcr);
+        const extractedText = await callGeminiVisionAPI(imageBuffer);
 
         pagesData.push({
             pageNumber: pageNum,
