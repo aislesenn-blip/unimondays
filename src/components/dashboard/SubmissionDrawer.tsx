@@ -32,15 +32,9 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   // Parsing JSON fields if they are strings
-  let feedback: any = {};
+  let feedback: string = typeof submission.feedback === 'string' ? submission.feedback : "";
   let breakdown: any[] = [];
   let appealReason: string | null = null;
-
-  try {
-      feedback = typeof submission.feedback === 'string' ? JSON.parse(submission.feedback) : (submission.feedback || {});
-  } catch (e) {
-      console.warn("Failed to parse feedback JSON", e);
-  }
 
   try {
       breakdown = submission.score?.breakdown
@@ -208,21 +202,9 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
             {feedback && (
                 <div className="space-y-3">
                     <h3 className="text-sm font-medium">AI Feedback</h3>
-                    {feedback.strengths?.length > 0 && (
-                        <div className="text-sm">
-                            <span className="font-semibold text-green-600">Strengths:</span> {feedback.strengths.join(", ")}
-                        </div>
-                    )}
-                    {feedback.weaknesses?.length > 0 && (
-                        <div className="text-sm">
-                            <span className="font-semibold text-amber-600">Weaknesses:</span> {feedback.weaknesses.join(", ")}
-                        </div>
-                    )}
-                    {feedback.improvement && (
-                        <div className="text-sm bg-blue-50 p-3 rounded text-blue-800">
-                            <span className="font-semibold">Improvement:</span> {feedback.improvement}
-                        </div>
-                    )}
+                    <div className="text-sm p-3 bg-muted/20 border rounded-md leading-relaxed whitespace-pre-wrap">
+                        {feedback}
+                    </div>
                 </div>
             )}
 
@@ -236,10 +218,16 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                                 <div className="flex justify-between items-start">
                                     <div className="flex-1 pr-4">
                                         <span className="font-medium text-foreground">{item.question}</span>
-                                        <p className="text-muted-foreground text-xs mt-1">{item.feedback}</p>
+                                        <p className="text-muted-foreground text-xs mt-1">
+                                            {item.feedback?.includes('[Exact Match]') ? <span className="text-green-600 font-semibold">[Exact Match] </span> :
+                                             item.feedback?.includes('[Partial Match]') ? <span className="text-amber-600 font-semibold">[Partial Match] </span> :
+                                             item.feedback?.includes('[Out of Scope]') ? <span className="text-red-600 font-semibold">[Out of Scope] </span> :
+                                             item.feedback?.includes('[Missing]') ? <span className="text-gray-500 font-semibold">[Missing] </span> : null}
+                                            {item.feedback?.replace(/\[.*?\]\s*/, '')}
+                                        </p>
                                     </div>
-                                    <div className="font-mono font-medium text-right shrink-0 ml-4">
-                                        {item.score}/{item.max}
+                                    <div className="font-mono font-medium text-right shrink-0 ml-4 bg-muted px-2 py-1 rounded">
+                                        {item.score} / {item.max}
                                     </div>
                                 </div>
                                 {item.evidenceSnippet && (

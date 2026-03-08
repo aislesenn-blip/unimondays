@@ -15,15 +15,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function StudentResultDrawer({ submission }: { submission: any }) {
   // Parse logic
-  let feedback: any = {};
+  let feedback: any = submission.feedback;
   let breakdown: any[] = [];
   try {
-      feedback = typeof submission.feedback === 'string' ? JSON.parse(submission.feedback) : (submission.feedback || {});
-      breakdown = submission.breakdown
-        ? (typeof submission.breakdown === 'string' ? JSON.parse(submission.breakdown) : submission.breakdown)
+      breakdown = submission.score?.breakdown
+        ? (typeof submission.score.breakdown === 'string' ? JSON.parse(submission.score.breakdown) : submission.score.breakdown)
         : [];
       if (!Array.isArray(breakdown)) breakdown = [];
-  } catch (e) { console.warn(e); }
+  } catch (e) { console.warn("Failed to parse breakdown", e); }
 
   const isReleased = submission.isReleased; // Assuming API returns this flag or based on status
   // Allow appeal if grades are released, appeals are allowed, and not already appealed/pending
@@ -155,9 +154,15 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                                             )}
 
                                             {/* Feedback */}
-                                            <div className="text-xs p-2 bg-blue-50/50 rounded border-blue-100 border">
+                                            <div className="text-xs p-2 bg-blue-50/50 rounded border-blue-100 border sm:col-span-2">
                                                 <span className="font-bold text-blue-700 uppercase tracking-wider text-[10px] block mb-1">AI Feedback</span>
-                                                <p className="text-foreground leading-relaxed">{item.feedback}</p>
+                                                <p className="text-foreground leading-relaxed">
+                                                    {item.feedback?.includes('[Exact Match]') ? <span className="text-green-600 font-semibold">[Exact Match] </span> :
+                                                     item.feedback?.includes('[Partial Match]') ? <span className="text-amber-600 font-semibold">[Partial Match] </span> :
+                                                     item.feedback?.includes('[Out of Scope]') ? <span className="text-red-600 font-semibold">[Out of Scope] </span> :
+                                                     item.feedback?.includes('[Missing]') ? <span className="text-gray-500 font-semibold">[Missing] </span> : null}
+                                                    {item.feedback?.replace(/\[.*?\]\s*/, '')}
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -172,36 +177,9 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                                 3. Overall Feedback & Remarks
                              </h3>
-                            <div className="space-y-3">
-                                {feedback.strengths?.length > 0 && (
-                                    <div className="text-sm bg-green-50 p-4 rounded-lg border border-green-100 text-green-900">
-                                        <div className="flex items-center gap-2 font-semibold mb-2">
-                                            <CheckCircle className="h-4 w-4" /> Strengths
-                                        </div>
-                                        <ul className="list-disc list-inside space-y-1 text-xs">
-                                            {feedback.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}
-                                        </ul>
-                                    </div>
-                                )}
-                                {feedback.weaknesses?.length > 0 && (
-                                    <div className="text-sm bg-amber-50 p-4 rounded-lg border border-amber-100 text-amber-900">
-                                        <div className="flex items-center gap-2 font-semibold mb-2">
-                                            <AlertTriangle className="h-4 w-4" /> Areas for Improvement
-                                        </div>
-                                        <ul className="list-disc list-inside space-y-1 text-xs">
-                                            {feedback.weaknesses.map((w: string, i: number) => <li key={i}>{w}</li>)}
-                                        </ul>
-                                    </div>
-                                )}
-                                {feedback.improvement && (
-                                    <div className="text-sm bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-900">
-                                        <div className="flex items-center gap-2 font-semibold mb-2">
-                                            <ArrowUpCircle className="h-4 w-4" /> Actionable Advice
-                                        </div>
-                                        <p className="text-xs leading-relaxed">{feedback.improvement}</p>
-                                    </div>
-                                )}
-                            </div>
+                             <div className="p-4 bg-muted/20 rounded-lg text-sm leading-relaxed border border-muted">
+                                 {feedback}
+                             </div>
                         </div>
                     )}
 
