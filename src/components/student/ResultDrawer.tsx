@@ -137,7 +137,7 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                              </h3>
                              <div className="space-y-4">
                                 {breakdown.map((item: any, i: number) => (
-                                    <div key={i} className="border border-slate-100 rounded-2xl p-5 bg-white shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] transition-all hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]">
+                                    <div key={i} className="border border-slate-200 rounded-lg p-4 mb-4 bg-white shadow-sm">
                                         <div className="flex justify-between items-center mb-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="bg-slate-100 text-slate-700 font-bold text-xs px-2.5 py-1 rounded-md">
@@ -167,10 +167,10 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                                                     <ArrowUpCircle className="h-3 w-3" /> AI Feedback
                                                 </span>
                                                 <p className="text-slate-700 leading-relaxed font-medium">
-                                                    {item.feedback?.includes('[Exact Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold mr-1 border border-emerald-200/50">Exact Match</span> :
-                                                     item.feedback?.includes('[Partial Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 font-bold mr-1 border border-amber-200/50">Partial Match</span> :
-                                                     item.feedback?.includes('[Out of Scope]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 font-bold mr-1 border border-rose-200/50">Out of Scope</span> :
-                                                     item.feedback?.includes('[Missing]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold mr-1 border border-slate-200/50">Missing</span> : null}
+                                                    {item.feedback?.includes('[Exact Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold mr-1">Exact Match</span> :
+                                                     item.feedback?.includes('[Partial Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-cyan-100 text-cyan-800 border border-cyan-200 font-bold mr-1">Partial Match</span> :
+                                                     item.feedback?.includes('[Out of Scope]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Out of Scope</span> :
+                                                     item.feedback?.includes('[Missing]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Missing</span> : null}
                                                     {item.feedback?.replace(/\[.*?\]\s*/, '')}
                                                 </p>
                                             </div>
