@@ -21,9 +21,13 @@ const openai = new OpenAI({
 });
 
 // Helper: Existing OpenRouter/Gemini fetch logic
-async function callGeminiVisionAPI(imageBuffer: Buffer) {
+async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean = false) {
     const base64Data = imageBuffer.toString("base64");
     const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+
+    const textPrompt = isStructuralOcr
+        ? "Extract the student's text and categorize it by question numbers (Q1, Q2, Q3...). If a student answers a question across multiple pages, concatenate them. Return strictly a JSON: {\"Q1\": \"text...\", \"Q2\": \"text...\"}. Do not lose a single word of the student's response."
+        : "Extract all handwritten and printed text from this document. Return it as clean markdown.";
 
     const response = await openai.chat.completions.create({
       model: "google/gemini-2.5-flash",
@@ -31,7 +35,7 @@ async function callGeminiVisionAPI(imageBuffer: Buffer) {
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract all handwritten and printed text from this document. Return it as clean markdown." },
+            { type: "text", text: textPrompt },
             {
               type: "image_url",
               image_url: {
@@ -42,7 +46,8 @@ async function callGeminiVisionAPI(imageBuffer: Buffer) {
           ],
         },
       ],
-      max_tokens: 2000,
+      response_format: isStructuralOcr ? { type: "json_object" } : undefined,
+      max_tokens: 8192,
     });
 
     const text = response.choices[0]?.message?.content;
@@ -55,7 +60,7 @@ export async function ocrDocument(buffer: Buffer, mimeType: string = "applicatio
     if (!process.env.OPENROUTER_API_KEY) {
         throw new Error("OPENROUTER_API_KEY is not set. OCR service unavailable.");
     }
-    return callGeminiVisionAPI(buffer);
+    return callGeminiVisionAPI(buffer, false);
 }
 
 // Memory-Safe Sequential PDF Extraction
@@ -80,7 +85,7 @@ export async function analyzePdfStructure(pdfBuffer: Buffer): Promise<PdfSplit[]
     return [];
 }
 
-export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageData[]> {
+export async function extractPagesMultimodal(pdfBuffer: Buffer, isStructuralOcr: boolean = false): Promise<PageData[]> {
     console.log("[GEMINI] Starting Memory-Safe PDF Extraction...");
     const pagesData = [];
 
@@ -93,7 +98,7 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageDat
         console.log(`[GEMINI] Processing Page ${pageNum}...`);
 
         // Use existing OpenRouter Gemini Vision API call logic
-        const extractedText = await callGeminiVisionAPI(imageBuffer);
+        const extractedText = await callGeminiVisionAPI(imageBuffer, isStructuralOcr);
 
         pagesData.push({
             pageNumber: pageNum,
