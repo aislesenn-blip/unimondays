@@ -140,33 +140,33 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
       <CardContent className="p-4 flex flex-col gap-4">
 
         {/* Top Action Bar (Premium UX) */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-border/50">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border/50">
             <div className="flex items-center gap-2">
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground font-medium tracking-wide">
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground font-medium tracking-wide -ml-2">
                             <BookOpen className="w-4 h-4 mr-2 text-primary" />
                             Playbook Marking Guide
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-0 border-none shadow-2xl">
-                        <div className="bg-muted/30 px-8 py-6 border-b">
+                        <div className="bg-muted/30 px-6 sm:px-8 py-6 border-b">
                             <DialogHeader>
-                                <DialogTitle className="text-3xl font-light tracking-tight text-foreground">Playbook AI Marking Scheme Documentation</DialogTitle>
-                                <DialogDescription className="text-base mt-2 max-w-2xl leading-relaxed">
+                                <DialogTitle className="text-2xl sm:text-3xl font-light tracking-tight text-foreground">Playbook AI Marking Scheme Documentation</DialogTitle>
+                                <DialogDescription className="text-sm sm:text-base mt-2 max-w-2xl leading-relaxed">
                                     This documentation guides teachers on how to create and structure marking schemes so that Playbook AI can grade accurately, fairly, and deterministically. Every rubric point, mark allocation, and tier logic must be clear for the AI to function correctly.
                                 </DialogDescription>
                             </DialogHeader>
                         </div>
 
-                        <div className="p-8 space-y-10">
+                        <div className="p-6 sm:p-8 space-y-10">
                             {/* Core Principles Section */}
                             <section>
-                                <h3 className="text-xl font-medium tracking-tight mb-4 flex items-center gap-2">
+                                <h3 className="text-lg sm:text-xl font-medium tracking-tight mb-4 flex items-center gap-2">
                                     <BookOpen className="w-5 h-5 text-primary" />
                                     1. Core Principles
                                 </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <Card className="p-4 bg-background shadow-sm border-border/50">
                                         <h4 className="font-semibold text-sm mb-1">Deterministic Scoring</h4>
                                         <p className="text-sm text-muted-foreground leading-relaxed">AI always grades the same answer with the same score. No improvisation or guessing beyond the rubric.</p>
@@ -192,19 +192,21 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
 
                             {/* Example Templates Section */}
                             <section>
-                                <h3 className="text-xl font-medium tracking-tight mb-4 flex items-center gap-2">
+                                <h3 className="text-lg sm:text-xl font-medium tracking-tight mb-4 flex items-center gap-2">
                                     <FileBarChart className="w-5 h-5 text-primary" />
                                     2. Example Marking Scheme Templates
                                 </h3>
                                 <Tabs defaultValue="essay" className="w-full">
-                                    <TabsList className="grid w-full grid-cols-4 mb-4 bg-muted/50">
-                                        <TabsTrigger value="essay">Essay / Short Answer</TabsTrigger>
-                                        <TabsTrigger value="calc">Calculations</TabsTrigger>
-                                        <TabsTrigger value="diagram">Diagrams</TabsTrigger>
-                                        <TabsTrigger value="mcq">MCQs</TabsTrigger>
-                                    </TabsList>
+                                    <div className="overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+                                        <TabsList className="inline-flex min-w-max bg-muted/50 mb-4 h-10 items-center justify-center rounded-md p-1 text-muted-foreground">
+                                            <TabsTrigger value="essay" className="px-3">Essay / Short Answer</TabsTrigger>
+                                            <TabsTrigger value="calc" className="px-3">Calculations</TabsTrigger>
+                                            <TabsTrigger value="diagram" className="px-3">Diagrams</TabsTrigger>
+                                            <TabsTrigger value="mcq" className="px-3">MCQs</TabsTrigger>
+                                        </TabsList>
+                                    </div>
 
-                                    <TabsContent value="essay" className="bg-muted/20 p-5 rounded-lg border">
+                                    <TabsContent value="essay" className="bg-muted/20 p-4 sm:p-5 rounded-lg border mt-0">
                                         <div className="font-medium text-sm mb-2 text-primary">Question: Explain the process of photosynthesis in green plants.</div>
                                         <div className="text-sm space-y-3">
                                             <div>
@@ -223,7 +225,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent value="calc" className="bg-muted/20 p-5 rounded-lg border">
+                                    <TabsContent value="calc" className="bg-muted/20 p-4 sm:p-5 rounded-lg border mt-0">
                                         <div className="font-medium text-sm mb-2 text-primary">Question: Calculate the area of a triangle with base = 8 cm and height = 5 cm.</div>
                                         <div className="text-sm space-y-3">
                                             <div>
@@ -240,7 +242,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent value="diagram" className="bg-muted/20 p-5 rounded-lg border">
+                                    <TabsContent value="diagram" className="bg-muted/20 p-4 sm:p-5 rounded-lg border mt-0">
                                         <div className="font-medium text-sm mb-2 text-primary">Question: Draw and label the structure of a leaf showing parts involved in photosynthesis.</div>
                                         <div className="text-sm space-y-3">
                                             <div>
@@ -258,7 +260,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent value="mcq" className="bg-muted/20 p-5 rounded-lg border">
+                                    <TabsContent value="mcq" className="bg-muted/20 p-4 sm:p-5 rounded-lg border mt-0">
                                         <div className="font-medium text-sm mb-2 text-primary">Question: Which gas is released during photosynthesis? A) CO₂ B) O₂ C) N₂ D) H₂O</div>
                                         <div className="text-sm space-y-3">
                                             <div>
@@ -278,7 +280,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 {/* Guidelines */}
                                 <section>
-                                    <h3 className="text-xl font-medium tracking-tight mb-4">3. Upload Guidelines</h3>
+                                    <h3 className="text-lg sm:text-xl font-medium tracking-tight mb-4">3. Upload Guidelines</h3>
                                     <ul className="space-y-3 text-sm text-muted-foreground">
                                         <li className="flex items-start gap-2">
                                             <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
@@ -297,7 +299,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
 
                                 {/* Key Takeaways */}
                                 <section>
-                                    <h3 className="text-xl font-medium tracking-tight mb-4">4. Key Takeaways</h3>
+                                    <h3 className="text-lg sm:text-xl font-medium tracking-tight mb-4">4. Key Takeaways</h3>
                                     <ul className="space-y-3 text-sm text-muted-foreground">
                                         <li className="flex items-start gap-2">
                                             <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5"/>
@@ -319,7 +321,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 </Dialog>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                 <input
                     type="file"
                     accept="application/pdf"
@@ -330,7 +332,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 <Button
                     variant="outline"
                     size="sm"
-                    className="border-dashed"
+                    className="border-dashed w-full sm:w-auto justify-center"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={!!loading}
                 >
@@ -341,7 +343,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 <Button
                     variant="default"
                     size="sm"
-                    className="bg-primary text-primary-foreground shadow-sm transition-all"
+                    className="bg-primary text-primary-foreground shadow-sm transition-all w-full sm:w-auto justify-center"
                     onClick={handleBatchRegrade}
                     disabled={!!loading || areGradesReleased}
                 >
