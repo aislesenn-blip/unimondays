@@ -112,6 +112,10 @@ You MUST grade EVERY question present in the Marking Scheme, regardless of its f
 - ESSAYS/SHORT ANSWERS: Apply standard holistic semantic matching.
 If it is in the rubric, you MUST find the evidence in the text and grade it. NO EXCEPTIONS.
 6. UNREADABLE OCR/HANDWRITING: If text is truly unreadable garbage, use [Out of Scope] or [Missing] and explain that the writing could not be deciphered.
+7. EXTREME SCATTERED CONTEXT & NUMBERING BLINDNESS (CRITICAL):
+Students often answer questions completely out of order (e.g., Question 6 on page 1, and Question 1 on page 20). They also use incomplete numbering (e.g., writing "1" at the top of the page, and then only writing "ii)", "iii)" for sub-questions).
+DO NOT search the text using strict question labels like "Q1A ii". You MUST perform a semantic keyword search across the ENTIRE document for the RUBRIC CONCEPTS (e.g., "beneficial nutrients", "wicking system", "precision agriculture vs precision technologies").
+If the concept, definition, or answer exists ANYWHERE in the student's text, you MUST grade it according to the rubric, regardless of the numbering or page order. ONLY use the [Missing] tag if you have exhaustively verified that the specific concept is entirely absent from all pages.
 
 STRICT JSON SCHEMA MANDATE:
 You must return ONLY valid JSON matching this EXACT structure. The frontend UI crashes if you deviate.
