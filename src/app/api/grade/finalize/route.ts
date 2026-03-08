@@ -7,8 +7,27 @@ import { readFile } from '@/lib/storage';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
+// Universal Retry Wrapper for async functions
+async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await fn();
+        } catch (error: any) {
+            console.warn(`[NETWORK RETRY] Operation failed: ${error.message}. Retrying in ${delayMs}ms... (Attempt ${i + 1} of ${retries})`);
+            if (i === retries - 1) throw error; // Throw on final failure
+            await new Promise(res => setTimeout(res, delayMs)); // Wait before retry
+        }
+    }
+    throw new Error("Unreachable");
+}
+
 // STRICT: Must be Native DeepSeek API, not OpenRouter.
-const deepSeekClient = new OpenAI({ baseURL: "https://api.deepseek.com", apiKey: process.env.DEEPSEEK_API_KEY || 'dummy' });
+const deepSeekClient = new OpenAI({
+    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
+    apiKey: process.env.DEEPSEEK_API_KEY || 'dummy',
+    timeout: 300000, // FORCE 5-MINUTE SOCKET TIMEOUT (Do not drop at 60s)
+    maxRetries: 4,   // WORLD-CLASS FAULT TOLERANCE: Retry up to 4 times automatically on ECONNRESET or 502s
+});
 
 export async function POST(req: NextRequest) {
     try {
@@ -31,13 +50,13 @@ export async function POST(req: NextRequest) {
 
                 // If it's a Supabase file path
                 if (urlOrText.includes('/') || urlOrText.toLowerCase().endsWith('.pdf') || urlOrText.toLowerCase().endsWith('.png')) {
-                    const buffer = await readFile(urlOrText, 'exam_pdfs');
+                    const buffer = await withRetries(() => readFile(urlOrText, 'exam_pdfs'));
                     if (urlOrText.toLowerCase().endsWith('.pdf')) {
-                        const pages = await extractPagesMultimodal(buffer);
+                        const pages = await withRetries(() => extractPagesMultimodal(buffer));
                         finalRubricText = pages.map(p => p.text).join('\n\n');
                     } else {
                         const mimeType = urlOrText.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-                        finalRubricText = await ocrDocument(buffer, mimeType);
+                        finalRubricText = await withRetries(() => ocrDocument(buffer, mimeType));
                     }
                 } else {
                     finalRubricText = urlOrText;
@@ -85,6 +104,14 @@ YOUR MANDATORY DIRECTIVES:
    - [Out of Scope]: Concept is irrelevant or factually incorrect.
    - [Missing]: The concept was truly nowhere to be found in the entire exam text.
 4. NO MATH: Do NOT calculate the total score. The backend system will calculate it. Just provide the individual scores.
+5. OMNI-FORMAT GRADING MANDATE (CRITICAL - DO NOT SKIP):
+You MUST grade EVERY question present in the Marking Scheme, regardless of its format. Do not skip a question because it looks complex in the OCR text. Apply the Semantic Tiers strictly across all formats:
+- CALCULATIONS & MATH: Follow the step-by-step logic in the rubric. Grade intermediate steps, formulas, and final answers.
+- DIAGRAMS & SKETCHES: The OCR has converted the student's drawings into descriptive text. You MUST read these textual descriptions of the diagrams. If the OCR text describes the shapes, labels, or processes required by the rubric diagram, award the exact marks.
+- MULTIPLE CHOICE (MCQs): Scan the text for the exact option letter (e.g., A, B, C, D) OR the exact text of the chosen option.
+- ESSAYS/SHORT ANSWERS: Apply standard holistic semantic matching.
+If it is in the rubric, you MUST find the evidence in the text and grade it. NO EXCEPTIONS.
+6. UNREADABLE OCR/HANDWRITING: If text is truly unreadable garbage, use [Out of Scope] or [Missing] and explain that the writing could not be deciphered.
 
 STRICT JSON SCHEMA MANDATE:
 You must return ONLY valid JSON matching this EXACT structure. The frontend UI crashes if you deviate.
@@ -115,8 +142,9 @@ You must return ONLY valid JSON matching this EXACT structure. The frontend UI c
                 { role: "system", content: systemPrompt },
                 { role: "user", content: `MARKING SCHEME:\n${finalRubricText}\n\nSTUDENT EXAM:\n${fullExamText}` }
             ],
+            max_tokens: 8192, // <--- CRITICAL: Allow massive JSON output so it never truncates
             response_format: { type: "json_object" },
-            temperature: 0.0,
+            temperature: 0.1, // Keep it deterministic
         });
 
         let rawContent = completion.choices[0]?.message?.content || '{}';
