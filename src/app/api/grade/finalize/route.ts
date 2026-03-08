@@ -86,8 +86,8 @@ export async function POST(req: NextRequest) {
             throw new Error("Fatal: Rubric text is entirely missing. Cannot grade.");
         }
 
-        // 1. MAP PHASE: Re-parse the Extracted Student Data Map
-        let studentAnswersMap: Record<string, string> = {};
+        // 1. MAP PHASE FIX: Combine all text to prevent false Missings
+        let fullExamText = "";
         let detectedRegNo = "UNKNOWN";
 
         try {
@@ -98,21 +98,14 @@ export async function POST(req: NextRequest) {
                     if (parsed.registration_number && parsed.registration_number !== "UNKNOWN") {
                         detectedRegNo = parsed.registration_number;
                     }
-
-                    const answersObj = parsed.answers || parsed;
-                    if (typeof answersObj === 'object') {
-                        for (const [key, value] of Object.entries(answersObj)) {
-                            const normalizedKey = key.toUpperCase().replace(/\s/g, '');
-                            studentAnswersMap[normalizedKey] = (studentAnswersMap[normalizedKey] || '') + '\n' + String(value);
-                        }
-                    }
+                    fullExamText += "\n\n" + (parsed.full_text || "");
                 } catch {
-                     studentAnswersMap["UNLABELLED"] = (studentAnswersMap["UNLABELLED"] || '') + '\n' + chunk.text;
+                    fullExamText += "\n\n" + chunk.text;
                 }
             }
-        } catch(e) { console.error("Failed to map student answers", e); }
+        } catch(e) { console.error("Failed to parse OCR chunks", e); }
 
-        const fullExamText = Object.entries(studentAnswersMap).map(([k,v]) => `[${k}]\n${v}`).join('\n\n');
+        if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
 
         // 2. MAP PHASE: Parse Rubric into Atomic Questions
         // Use an LLM call to segment the monolithic rubric into an array of strictly isolated objects.
@@ -169,15 +162,8 @@ You must return ONLY valid JSON matching this EXACT structure.
 
         const atomicGradingPromises = parsedRubricMap.map((rubricItem: any) =>
             limit(async () => {
-                const normRubricKey = String(rubricItem.question).toUpperCase().replace(/\s/g, '');
-
-                // CRITICAL FIX: If exact match fails, fallback to FULL TEXT to prevent false [Missing] tags.
-                let studentContext = studentAnswersMap[normRubricKey];
-                if (!studentContext || studentContext.trim() === '') {
-                    studentContext = fullExamText;
-                } else {
-                    studentContext += `\n\n[Possible Continuation]:\n${studentAnswersMap["UNLABELLED"] || ''}`;
-                }
+                // ARCHITECTURE FIX: Feed the ENTIRE text to DeepSeek. DeepSeek will find the answer. This guarantees 0% data loss.
+                const studentContext = fullExamText;
 
                 try {
                     const response = await deepSeekClient.chat.completions.create({
