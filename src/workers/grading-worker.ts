@@ -88,15 +88,16 @@ export async function handleAiGrade(job: any) {
         }
         if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
 
-        // 3. SEGMENT RUBRIC
+        // 3. SEGMENT RUBRIC (HARDENED AGAINST TRUNCATION)
         const rubricParseResponse = await deepSeekClient.chat.completions.create({
             model: "deepseek-chat",
             messages: [
-                { role: "system", content: `Parse this Marking Scheme into a JSON array: { "rubric": [ { "question": "Q1", "rubric_segment": "criteria text", "max_score": 10 } ] }` },
+                { role: "system", content: `You are an expert exam rubric parser. Parse this ENTIRE Marking Scheme into a JSON array. You MUST extract EVERY SINGLE question. DO NOT truncate. Format: { "rubric": [ { "question": "Q1", "rubric_segment": "criteria text", "max_score": 10 } ] }` },
                 { role: "user", content: finalRubricText }
             ],
             response_format: { type: "json_object" },
             temperature: 0.1,
+            max_tokens: 8000 // STRICT: Ensures full generation of all 39+ questions
         });
 
         let parsedRubricMap: any[] = [];
@@ -108,22 +109,26 @@ export async function handleAiGrade(job: any) {
             parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
         }
 
-        // 4. ATOMIC GRADING (pLimit)
+        // 4. ATOMIC GRADING (BULLETPROOF CONCURRENCY & RETRIES)
         console.log(`[WORKER] Initiating Atomic Grading for ${parsedRubricMap.length} Questions...`);
-        const limit = pLimit(10);
+        const limit = pLimit(3); // STRICT: Reduced to 3 to prevent DeepSeek ECONNRESET
 
         const atomicGradingPromises = parsedRubricMap.map((rubricItem: any) =>
             limit(async () => {
-                try {
+                // Wrap the API call in withRetries to survive network blips
+                return await withRetries(async () => {
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are a grader. Evaluate ONE question against ONE rubric segment.
-MANDATORY DIRECTIVES:
-1. Extract exact evidence first.
-2. Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
-3. DO NOT penalize for missing sketches/diagrams as OCR cannot read them.
-JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences" }` },
+                            { role: "system", content: `You are an elite, empathetic university grader evaluating ONE question against ONE rubric segment.
+MANDATORY RULES FOR ALL EXAM FORMATS:
+1. TRUE SEMANTIC EQUIVALENCE: Evaluate meaning, not exact wording. Be highly flexible with unstructured text, poor OCR, messy handwriting artifacts, and diverse phrasing. If the student captures the core concept, AWARD MARKS.
+2. EMPATHY & FLEXIBILITY: Look for reasons to award points. If partial understanding is shown, give a [Partial Match].
+3. MISSING SKETCHES/MATH: DO NOT penalize for missing diagrams (OCR cannot read them). For math, award partial marks for correct logic/steps.
+4. EXTRACT EVIDENCE: Always provide a short quote from the student's text.
+5. TIERS: Start feedback strictly with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+
+JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences of clear explanation" }` },
                             { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
@@ -141,9 +146,11 @@ JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier
                         feedback: result.feedback || "No feedback provided.",
                         evidenceSnippet: result.extracted_evidence || "None found"
                     };
-                } catch (e) {
-                    return { question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine failed.", evidenceSnippet: "ERROR" };
-                }
+                }, 3, 3000).catch((error: any) => {
+                    // Fallback if all retries fail: do not crash the entire map-reduce job
+                    console.error(`[WORKER] Final retry failed for ${rubricItem.question}:`, error.message);
+                    return { question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine timeout after retries.", evidenceSnippet: "ERROR" };
+                });
             })
         );
 
