@@ -109,56 +109,77 @@ export async function handleAiGrade(job: any) {
             parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
         }
 
-        // 4. ATOMIC GRADING (BULLETPROOF CONCURRENCY & RETRIES)
-        console.log(`[WORKER] Initiating Atomic Grading for ${parsedRubricMap.length} Questions...`);
-        const limit = pLimit(3); // STRICT: Reduced to 3 to prevent DeepSeek ECONNRESET
+        // 4. ATOMIC GRADING (BATCHED TO PREVENT TOKEN HEMORRHAGE)
+        console.log(`[WORKER] Initiating Batched Map-Reduce Grading for ${parsedRubricMap.length} Questions...`);
+        const limit = pLimit(3);
 
-        const atomicGradingPromises = parsedRubricMap.map((rubricItem: any) =>
+        // Chunk parsedRubricMap into arrays of 5
+        const batchedRubrics = [];
+        for (let i = 0; i < parsedRubricMap.length; i += 5) {
+            batchedRubrics.push(parsedRubricMap.slice(i, i + 5));
+        }
+
+        const atomicGradingPromises = batchedRubrics.map((batch: any[]) =>
             limit(async () => {
-                // Wrap the API call in withRetries to survive network blips
                 return await withRetries(async () => {
+                    const batchQuestionsStr = batch.map(r => `QUESTION: ${r.question}\nMAX SCORE: ${r.max_score}\nRUBRIC SEGMENT: ${r.rubric_segment}`).join('\n\n---\n\n');
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are a fast grader. Evaluate ONE question against ONE rubric segment.
+                            { role: "system", content: `You are a fast grader. Evaluate MULTIPLE questions against their respective rubric segments.
 MANDATORY DIRECTIVES:
 1. SEMANTIC EQUIVALENCE: Grade based on MEANING. Ignore OCR layout errors.
 2. EXTRACT EVIDENCE: Provide a short quote.
 3. TIERS: Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
 4. SPEED: Feedback must be MAXIMUM 1-2 short sentences.
-JSON FORMAT: { "extracted_evidence": "short quote", "score": number, "feedback": "tier + short explanation" }` },
-                            { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
+JSON FORMAT MUST BE AN ARRAY OF OBJECTS: { "results": [ { "question": "Q1", "extracted_evidence": "short quote", "score": number, "feedback": "tier + short explanation" } ] }` },
+                            { role: "user", content: `RUBRIC BATCH:\n${batchQuestionsStr}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
                         temperature: 0.1,
                     });
 
-                    const raw = response.choices[0]?.message?.content || '{}';
+                    const raw = response.choices[0]?.message?.content || '{"results":[]}';
                     const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const result = JSON.parse(clean);
+                    const parsed = JSON.parse(clean);
 
-                    return {
-                        question: rubricItem.question,
-                        score: Number(result.score) || 0,
-                        max: Number(rubricItem.max_score) || 0,
-                        feedback: result.feedback || "No feedback provided.",
-                        evidenceSnippet: result.extracted_evidence || "None found"
-                    };
+                    const resultsArray = parsed.results || [];
+
+                    return batch.map(rubricItem => {
+                        const result = resultsArray.find((r: any) => r.question === rubricItem.question) || {};
+                        return {
+                            question: rubricItem.question,
+                            score: Number(result.score) || 0,
+                            max: Number(rubricItem.max_score) || 0,
+                            feedback: result.feedback || "No feedback provided.",
+                            evidenceSnippet: result.extracted_evidence || "None found"
+                        };
+                    });
                 }, 4, 2000).catch((error: any) => {
-                    // Fallback if all retries fail: do not crash the entire map-reduce job
-                    console.error(`[WORKER] Final retry failed for ${rubricItem.question}:`, error.message);
-                    return { question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine timeout after retries.", evidenceSnippet: "ERROR" };
+                    console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] DeepSeek API Failed on Batch. Check API Credits. Reason: ${error.message}`);
+                    return batch.map(rubricItem => ({
+                        question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine timeout.", evidenceSnippet: "ERROR"
+                    }));
                 });
             })
         );
 
-        const formattedBreakdown = await Promise.all(atomicGradingPromises);
+        const nestedBreakdown = await Promise.all(atomicGradingPromises);
+        const formattedBreakdown = nestedBreakdown.flat();
 
-        // 5. SAVE TO DB
+        // 5. SAVE TO DB (IDEMPOTENT)
+        console.log(`[PLAYBOOK-TRACE] [ENGINE] Initiating Map-Reduce. Writing atomic scores to DB...`);
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
-        await prisma.score.create({
-            data: {
+        await prisma.score.upsert({
+            where: { submissionId: submission.id },
+            update: {
+                totalMarks: calculatedTotalScore,
+                remarks: "Graded via Atomic Map-Reduce.",
+                breakdown: JSON.stringify(formattedBreakdown),
+                detectedIdentity: detectedRegNo
+            },
+            create: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
                 remarks: "Graded via Atomic Map-Reduce.",
@@ -166,6 +187,7 @@ JSON FORMAT: { "extracted_evidence": "short quote", "score": number, "feedback":
                 detectedIdentity: detectedRegNo
             }
         });
+        console.log(`[PLAYBOOK-TRACE] [ENGINE-SUCCESS] DB Upsert complete. Total Score: ${calculatedTotalScore}.`);
 
         await prisma.submission.update({
             where: { id: submission.id },
