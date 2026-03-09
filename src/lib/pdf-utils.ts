@@ -20,7 +20,8 @@ export async function extractSinglePageImage(filePathOrUrl: string | null, targe
     const buffer = await readFile(filePathOrUrl, 'exam_pdfs');
 
     // Iterate until we find the target page using pdf-to-img
-    const document = await pdf(buffer, { scale: 2.0 }); // Scale 2.0 for higher clarity for the OCR map phase
+    const document = await pdf(buffer, { scale: 1.5 }); // Scale 1.5 for memory safety
+    console.log(`[PLAYBOOK-TRACE] [OCR-PREP] PDF buffer converted to images at memory-safe scale 1.5.`);
 
     let currentPage = 1;
     for await (const imageBuffer of document) {

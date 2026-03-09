@@ -19,7 +19,25 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid Session' }, { status: 401 });
     }
 
-    // 2. Fetch Submissions
+        // 2.5 DLQ / Zombie Recovery
+        const staleThreshold = new Date(Date.now() - 15 * 60 * 1000); // 15 minutes ago
+        const zombieSubmissions = await prisma.submission.updateMany({
+            where: {
+                userId,
+                status: 'PROCESSING',
+                submittedAt: { lt: staleThreshold }
+            },
+            data: {
+                status: 'FAILED',
+                feedback: '[SYSTEM TIMEOUT] The AI engine encountered an unrecoverable network error. Please ask instructor to regrade.'
+            }
+        });
+
+        if (zombieSubmissions.count > 0) {
+            console.warn(`[PLAYBOOK-TRACE] [DLQ] Swept ${zombieSubmissions.count} zombie submissions to FAILED state.`);
+        }
+
+    // 3. Fetch Submissions
     const submissions = await prisma.submission.findMany({
         where: { userId },
         select: {

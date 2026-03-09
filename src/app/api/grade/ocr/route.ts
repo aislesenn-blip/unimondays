@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { Client } from "@upstash/qstash";
+import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { extractSinglePageImage } from '@/lib/pdf-utils';
 
 const qstash = new Client({ token: process.env.QSTASH_TOKEN || 'dummy' });
 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
 export const maxDuration = 60;
 
-export async function POST(req: NextRequest) {
+export const POST = verifySignatureAppRouter(async (req: NextRequest) => {
     try {
+        console.log(`[PLAYBOOK-TRACE] [SECURITY] QStash Signature Verified for payload.`);
         const { submissionId, pages, pdfUrl } = await req.json(); // pages is an array: [1, 2, 3, 4]
 
         // 1. Build Multimodal Content Array
@@ -53,7 +55,8 @@ export async function POST(req: NextRequest) {
         }
 
         return NextResponse.json({ success: true, pages });
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (aiError: any) {
+        console.error(`[PLAYBOOK-TRACE] [FATAL-OCR] OpenRouter API Failed. Check API Credits/Network. Reason: ${aiError.message}`);
+        throw aiError; // Trigger QStash retry
     }
-}
+}, { currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || "dummy", nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || "dummy" });
