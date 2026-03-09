@@ -182,19 +182,7 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. ENTERPRISE QUEUE PATTERN (V3.0)
-    // Instead of directly invoking the webhook, we insert a persistent Job record.
-    // This allows for robust retries, rate-limiting, and 100k burst handling.
-
-    await prisma.job.create({
-        data: {
-            type: 'AI_GRADE_SUBMISSION',
-            payload: JSON.stringify({ submissionId: submission.id }),
-            status: 'PENDING'
-        }
-    });
-
-    // 9. MAP-REDUCE QSTASH DISPATCH (Bypassing external trigger)
+    // 8. MAP-REDUCE QSTASH DISPATCH (OCR Phase First)
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;

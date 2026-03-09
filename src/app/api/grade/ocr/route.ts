@@ -77,10 +77,20 @@ export async function POST(req: NextRequest) {
             const protocol = req.headers.get('x-forwarded-proto') || 'https';
             const host = req.headers.get('host') || 'localhost:3000';
             const baseUrl = `${protocol}://${host}`;
-            await qstash.publishJSON({
-                url: `${baseUrl}/api/queue/process`,
-                body: { type: 'AI_GRADE_SUBMISSION', payload: { submissionId } }
+
+            // ARCHITECTURE FIX: Option B. Create Job post-OCR, then wake queue.
+            await prisma.job.create({
+                data: {
+                    type: 'AI_GRADE_SUBMISSION',
+                    payload: JSON.stringify({ submissionId }),
+                    status: 'PENDING',
+                    retryCount: 0
+                }
             });
+
+            // Detached Wake-Up Ping (Fire and Forget)
+            fetch(`${baseUrl}/api/queue/process`, { method: 'POST' })
+                .catch(e => console.error("[OCR_WAKE_ERROR] Failed to ping queue:", e));
         }
 
         return NextResponse.json({ success: true, pages });
