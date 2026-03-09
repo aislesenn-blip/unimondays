@@ -110,15 +110,22 @@ export async function handleAiGrade(job: any) {
 
         // 4. ATOMIC GRADING (pLimit)
         console.log(`[WORKER] Initiating Atomic Grading for ${parsedRubricMap.length} Questions...`);
-        const limit = pLimit(10);
+        const limit = pLimit(3);
 
-        const atomicGradingPromises = parsedRubricMap.map((rubricItem: any) =>
+        const chunks: any[][] = [];
+        for (let i = 0; i < parsedRubricMap.length; i += 5) {
+            chunks.push(parsedRubricMap.slice(i, i + 5));
+        }
+
+        const atomicGradingPromises = chunks.map((chunk) =>
             limit(async () => {
                 try {
+                    const chunkPrompts = chunk.map(r => `QUESTION: ${r.question}\nMAX SCORE: ${r.max_score}\nRUBRIC SEGMENT:\n${r.rubric_segment}`).join('\n\n---\n\n');
+
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are an empathetic professor. Grade ONE question against ONE rubric segment.
+                            { role: "system", content: `You are an empathetic professor. Grade MULTIPLE questions against their rubric segments.
 RULES:
 1. SEMANTIC MATCH: Grade based on MEANING, not exact words. Award marks for core concepts.
 2. EMPATHY: Always seek reasons to give points. Use [Partial Match] for incomplete but relevant answers.
@@ -126,56 +133,69 @@ RULES:
 4. TIERS: Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
 5. MATH/DIAGRAMS: Award full/partial marks based on text explanation; ignore OCR's inability to see sketches.
 
-JSON: { "extracted_evidence": "short quote", "score": number, "feedback": "tier + short explanation" }` },
-                            { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
+Return a JSON object containing an array "results", where each element is:
+{ "question": "Q1", "extracted_evidence": "short quote", "score": number, "feedback": "tier + short explanation" }` },
+                            { role: "user", content: `QUESTIONS TO GRADE:\n${chunkPrompts}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
                         temperature: 0.1,
                     });
 
-                    const raw = response.choices[0]?.message?.content || '{}';
+                    const raw = response.choices[0]?.message?.content || '{"results": []}';
                     const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
                     const result = JSON.parse(clean);
 
-                    return {
-                        question: rubricItem.question,
-                        score: Number(result.score) || 0,
-                        max: Number(rubricItem.max_score) || 0,
-                        feedback: result.feedback || "No feedback provided.",
-                        evidenceSnippet: result.extracted_evidence || "None found"
-                    };
+                    const resultsArray = result.results || [];
+
+                    return chunk.map(r => {
+                        const matched = resultsArray.find((res: any) => res.question === r.question) || {};
+                        return {
+                            question: r.question,
+                            score: Number(matched.score) || 0,
+                            max: Number(r.max_score) || 0,
+                            feedback: matched.feedback || "No feedback provided.",
+                            evidenceSnippet: matched.extracted_evidence || "None found"
+                        };
+                    });
+
                 } catch (e: any) {
-                    console.error(`[WORKER] Atomic grading failed for question ${rubricItem.question}:`, e.message);
-                    throw new Error(`Engine failed during atomic grading for question: ${rubricItem.question}`);
+                    const failedQuestions = chunk.map(r => r.question).join(", ");
+                    console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] DeepSeek API Failed on Questions: ${failedQuestions}. Check API Credits. Reason: ${e.message}`);
+                    // FATAL FAILURE: Do not return 0 scores, throw error to trigger QStash retry instead
+                    throw new Error(`Engine failed during atomic grading for questions: ${failedQuestions}. Reason: ${e.message}`);
                 }
             })
         );
 
-        const formattedBreakdown = await Promise.all(atomicGradingPromises);
+        const nestedBreakdown = await Promise.all(atomicGradingPromises);
+        const formattedBreakdown = nestedBreakdown.flat();
 
         // VALIDATION: Ensure no partial/failed results are saved
         const hasFailures = formattedBreakdown.some((item: any) =>
-            item.feedback?.includes("Engine failed") || item.evidenceSnippet === "ERROR"
+            item.feedback?.includes("Engine failed") ||
+            item.feedback?.includes("Engine timeout") ||
+            item.evidenceSnippet === "ERROR"
         );
         if (hasFailures) {
             throw new Error("ABORT SAVE: formattedBreakdown contains 'Engine failed' items. Job must retry.");
         }
 
         // 5. SAVE TO DB
+        console.log(`[PLAYBOOK-TRACE] [ENGINE] Initiating Map-Reduce. Writing atomic scores to DB...`);
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
         await prisma.score.upsert({
             where: { submissionId: submission.id },
             update: {
                 totalMarks: calculatedTotalScore,
-                remarks: "Assessment complete. Please review your specific feedback below.",
+                remarks: "Graded via Atomic Map-Reduce.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             },
             create: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
-                remarks: "Assessment complete. Please review your specific feedback below.",
+                remarks: "Graded via Atomic Map-Reduce.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             }
@@ -187,7 +207,7 @@ JSON: { "extracted_evidence": "short quote", "score": number, "feedback": "tier 
         });
 
         let calculatedTotalScoreLog = calculatedTotalScore; // Fix variable scope for logging
-        console.log(`[WORKER] Mission Accomplished for Submission ${submission.id}. Score: ${calculatedTotalScoreLog}`);
+        console.log(`[PLAYBOOK-TRACE] [ENGINE-SUCCESS] DB Upsert complete. Total Score: ${calculatedTotalScoreLog}.`);
 
     } catch (fatalError: any) {
         console.error(`[WORKER] Error:`, fatalError.message);
