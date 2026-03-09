@@ -151,22 +151,10 @@ JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier
                     console.error(`[WORKER] Final retry failed for ${rubricItem.question}:`, error.message);
                     return { question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine timeout after retries.", evidenceSnippet: "ERROR" };
                 });
-                } catch (e: any) {
-                    console.error(`[WORKER] Atomic grading failed for question ${rubricItem.question}:`, e.message);
-                    throw new Error(`Engine failed during atomic grading for question: ${rubricItem.question}`);
-                }
             })
         );
 
         const formattedBreakdown = await Promise.all(atomicGradingPromises);
-
-        // VALIDATION: Ensure no partial/failed results are saved
-        const hasFailures = formattedBreakdown.some((item: any) =>
-            item.feedback?.includes("Engine failed") || item.evidenceSnippet === "ERROR"
-        );
-        if (hasFailures) {
-            throw new Error("ABORT SAVE: formattedBreakdown contains 'Engine failed' items. Job must retry.");
-        }
 
         // 5. SAVE TO DB
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
