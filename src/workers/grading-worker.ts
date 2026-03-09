@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
 import pLimit from 'p-limit';
+import { parseFullExamTextIntoMap } from '@/lib/ai/chunker';
 
 // Universal Retry Wrapper
 async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
@@ -112,67 +113,88 @@ export async function handleAiGrade(job: any) {
             parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
         }
 
-        // 4. ATOMIC GRADING (BATCHED TO PREVENT TOKEN HEMORRHAGE)
-        console.log(`[WORKER] Initiating Batched Map-Reduce Grading for ${parsedRubricMap.length} Questions...`);
-        const limit = pLimit(3);
+        // 4. MAP PHASE: Parse student text into isolated question snippets
+        console.log(`[WORKER] Parsing raw text into isolated question chunks...`);
+        const questionTextMap = parseFullExamTextIntoMap(fullExamText, parsedRubricMap);
 
-        // Chunk parsedRubricMap into arrays of 5
-        const batchedRubrics = [];
-        for (let i = 0; i < parsedRubricMap.length; i += 5) {
-            batchedRubrics.push(parsedRubricMap.slice(i, i + 5));
-        }
+        // 5. ATOMIC GRADING (REDUCE PHASE)
+        console.log(`[WORKER] Initiating True Atomic 1-to-1 Grading for ${parsedRubricMap.length} Questions...`);
+        const limit = pLimit(10);
 
-        const atomicGradingPromises = batchedRubrics.map((batch: any[]) =>
+        const atomicGradingPromises = parsedRubricMap.map(rubricItem =>
             limit(async () => {
+                const studentAnswerSnippet = questionTextMap[rubricItem.question] || "NONE";
+
                 return await withRetries(async () => {
-                    const batchQuestionsStr = batch.map(r => `QUESTION: ${r.question}\nMAX SCORE: ${r.max_score}\nRUBRIC SEGMENT: ${r.rubric_segment}`).join('\n\n---\n\n');
+                    const systemPrompt = `You are a world-class, perfectly fair academic professor. You are grading EXACTLY ONE isolated question snippet.
+
+THE 'WORLD-CLASS WISE GRADER' DIRECTIVE (TIERED SEMANTIC EVALUATION):
+Tier 1: [Exact Match] (Full Marks): The student hits the exact keywords, facts, or mathematical formulas required.
+Tier 2: [Semantic Match] (Full/High Partial Marks): The student uses synonyms or demonstrates clear conceptual understanding and correct trajectory. Grade MEANING, not just keywords.
+Tier 3: [Partial Match] (Partial Marks): Depth Mismatch. e.g. Student 'Mentions' instead of 'Explains'. Award proportional credit. Do not give a 0.
+Tier 4: [Benefit of Doubt] (Minor Partial Credit): Genuine, logically sound attempt or correct factual point that slightly misses the core prompt.
+Tier 5: [Missing] / [Out of Scope] (0 Marks): Do NOT invent pity marks if completely wrong or blank.
+
+GLOBAL EMPATHY CAP & MATH DIRECTIVE:
+- Mathematical/numerical final answers MUST be precise for full marks (method/formula can earn partial).
+- Be fair with grammar, spelling, and formatting.
+- NEVER give marks for answers not present in the isolated snippet.
+
+MANDATORY JSON SCHEMA (ZOD-STRICT):
+You must output ONLY JSON. You MUST populate \`raw_evidence_extracted\` BEFORE deciding the score.
+{
+  "evaluations": [
+    {
+      "question_id": "${rubricItem.question}",
+      "raw_evidence_extracted": "string (Exact quote from student OCR text. Use 'NONE' if missing)",
+      "score": number,
+      "match_status": "Exact Match | Semantic Match | Partial Match | Missing | Out of Scope",
+      "feedback": "string (Start with Tier Tag, e.g. '[Partial Match] You correctly identified X...'. Max 3 sentences)"
+    }
+  ]
+}`;
+
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are a highly empathetic and flexible educational grader. Evaluate MULTIPLE questions against their respective rubric segments.
-CRITICAL DIRECTIVE: The student's exam text is highly unstructured and over 20 pages long. Answers may be scattered or out of order. Before grading, you MUST internally scan the ENTIRE document. For each question in the batch, you must explicitly extract and output the 'raw_student_text_found' FIRST. Only after extracting the text should you evaluate the score. NEVER mark a question as [Missing] unless you have scanned all pages and found zero relevant context.
-
-GRADING PHILOSOPHY & MANDATORY RULES:
-1. SEMANTIC GRADING: NEVER demand exact keyword matches. Grade based on MEANING and INTENT. If the student's explanation conceptually matches the rubric, award FULL MARKS. Ignore spelling, grammar, and ESL (English as a Second Language) phrasing errors.
-2. STEP-BY-STEP CALCULATIONS: For math and calculation questions, be empathetic. Trace the student's logic, formulas, and rough work. If they use the correct formula or logical approach but make a minor arithmetic error at the end, you MUST award PARTIAL MARKS. Do not give a 0 if the logic is sound.
-3. DIAGRAMS & SKETCHES: Students may use diagrams, arrows, or visual sketches to explain their answers. Treat these visual cues as valid explanations. Give them the benefit of the doubt.
-4. BENEFIT OF THE DOUBT: If a student's answer is ambiguous but leans towards the correct scientific or logical concept, be lenient and award the marks.
-5. TIERS: Start feedback strictly with [Exact Match], [Partial Match], [Out of Scope], or [Missing]. Keep feedback to MAXIMUM 1-2 short sentences.
-
-JSON FORMAT MUST BE AN ARRAY OF OBJECTS: { "results": [ { "question": "Q1", "raw_student_text_found": "exact quote from text", "score": number, "feedback": "tier + short explanation" } ] }` },
-                            { role: "user", content: `RUBRIC BATCH:\n${batchQuestionsStr}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nISOLATED STUDENT ANSWER SNIPPET:\n${studentAnswerSnippet}` }
                         ],
                         response_format: { type: "json_object" },
-                        temperature: 0.1,
+                        temperature: 0.0,
+                        top_p: 0.1,
                     });
 
-                    const raw = response.choices[0]?.message?.content || '{"results":[]}';
+                    const raw = response.choices[0]?.message?.content || '{"evaluations":[]}';
                     const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
                     const parsed = JSON.parse(clean);
 
-                    const resultsArray = parsed.results || [];
+                    const result = parsed.evaluations?.[0] || {};
 
-                    return batch.map(rubricItem => {
-                        const result = resultsArray.find((r: any) => r.question === rubricItem.question) || {};
-                        return {
-                            question: rubricItem.question,
-                            score: Number(result.score) || 0,
-                            max: Number(rubricItem.max_score) || 0,
-                            feedback: result.feedback || "No feedback provided.",
-                            evidenceSnippet: result.raw_student_text_found || result.extracted_evidence || "None found"
-                        };
-                    });
-                }, 4, 2000).catch((error: any) => {
-                    console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] DeepSeek API Failed on Batch. Check API Credits. Reason: ${error.message}`);
-                    return batch.map(rubricItem => ({
-                        question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine timeout.", evidenceSnippet: "ERROR"
-                    }));
+                    return {
+                        question: rubricItem.question,
+                        score: Number(result.score) || 0,
+                        max: Number(rubricItem.max_score) || 0,
+                        feedback: result.feedback || "No feedback provided.",
+                        evidenceSnippet: result.raw_evidence_extracted || "NONE",
+                        isRelevant: true
+                    };
+                }, 3, 2000).catch((error: any) => {
+                    console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Atomic Grading Failed for ${rubricItem.question}: ${error.message}`);
+                    return {
+                        question: rubricItem.question,
+                        score: 0,
+                        max: Number(rubricItem.max_score) || 0,
+                        feedback: "[Out of Scope] Engine timeout.",
+                        evidenceSnippet: "ERROR",
+                        isRelevant: false // Silently flag error for filtering if needed
+                    };
                 });
             })
         );
 
         const nestedBreakdown = await Promise.all(atomicGradingPromises);
-        const formattedBreakdown = nestedBreakdown.flat();
+        const formattedBreakdown = nestedBreakdown.filter(item => item.isRelevant !== false); // Filter out absolute failures to prevent UI pollution
 
         // 5. SAVE TO DB (IDEMPOTENT)
         console.log(`[PLAYBOOK-TRACE] [ENGINE] Initiating Map-Reduce. Writing atomic scores to DB...`);
