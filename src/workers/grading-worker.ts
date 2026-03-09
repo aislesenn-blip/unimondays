@@ -97,7 +97,7 @@ export async function handleAiGrade(job: any) {
             ],
             response_format: { type: "json_object" },
             temperature: 0.1,
-            max_tokens: 8000 // STRICT: Ensures full generation of all 39+ questions
+            max_tokens: 8192 // STRICT: Ensures full generation of all 39+ questions per L8 Blueprint
         });
 
         let parsedRubricMap: any[] = [];
@@ -120,15 +120,13 @@ export async function handleAiGrade(job: any) {
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: `You are an elite, empathetic university grader evaluating ONE question against ONE rubric segment.
-MANDATORY RULES FOR ALL EXAM FORMATS:
-1. TRUE SEMANTIC EQUIVALENCE: Evaluate meaning, not exact wording. Be highly flexible with unstructured text, poor OCR, messy handwriting artifacts, and diverse phrasing. If the student captures the core concept, AWARD MARKS.
-2. EMPATHY & FLEXIBILITY: Look for reasons to award points. If partial understanding is shown, give a [Partial Match].
-3. MISSING SKETCHES/MATH: DO NOT penalize for missing diagrams (OCR cannot read them). For math, award partial marks for correct logic/steps.
-4. EXTRACT EVIDENCE: Always provide a short quote from the student's text.
-5. TIERS: Start feedback strictly with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
-
-JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences of clear explanation" }` },
+                            { role: "system", content: `You are a fast grader. Evaluate ONE question against ONE rubric segment.
+MANDATORY DIRECTIVES:
+1. SEMANTIC EQUIVALENCE: Grade based on MEANING. Ignore OCR layout errors.
+2. EXTRACT EVIDENCE: Provide a short quote.
+3. TIERS: Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+4. SPEED: Feedback must be MAXIMUM 1-2 short sentences.
+JSON FORMAT: { "extracted_evidence": "short quote", "score": number, "feedback": "tier + short explanation" }` },
                             { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
@@ -146,7 +144,7 @@ JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier
                         feedback: result.feedback || "No feedback provided.",
                         evidenceSnippet: result.extracted_evidence || "None found"
                     };
-                }, 3, 3000).catch((error: any) => {
+                }, 4, 2000).catch((error: any) => {
                     // Fallback if all retries fail: do not crash the entire map-reduce job
                     console.error(`[WORKER] Final retry failed for ${rubricItem.question}:`, error.message);
                     return { question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine timeout after retries.", evidenceSnippet: "ERROR" };
