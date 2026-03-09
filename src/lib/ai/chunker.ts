@@ -1,90 +1,73 @@
-import { PageData } from './gemini';
+export function parseFullExamTextIntoMap(fullExamText: string, rubricQuestions: { question: string }[]): Record<string, string> {
+    const questionMap: Record<string, string> = {};
 
-export interface QuestionChunk {
-  questionId: string; // e.g., "Q1", "Q6", or "GLOBAL_METADATA"
-  combinedText: string;
-  associatedImagesBase64: string[];
-}
-
-export function detectAndChunkQuestions(pages: PageData[]): QuestionChunk[] {
-  // Use a Map to easily retrieve and update existing chunks by questionId
-  const chunkMap = new Map<string, QuestionChunk>();
-
-  // Ensure GLOBAL_METADATA exists from the start
-  chunkMap.set("GLOBAL_METADATA", {
-    questionId: "GLOBAL_METADATA",
-    combinedText: "",
-    associatedImagesBase64: []
-  });
-
-  // State Machine Tracker
-  let activeQuestionId = "GLOBAL_METADATA";
-
-  /**
-   * ROBUST REGEX EXPLANATION:
-   * - ^\s*(?:\*\*)? : Allows leading whitespace and optional bold markdown (**)
-   * - (?:Q(?:uestion|n)?\.?\s*|(\d+)\.\s*) : Non-capturing group matching variants like "Question 1", "Q1", "Qn 2.", or just "1."
-   * - (\d+[A-Za-z]?) : The core capture group grabbing the number and optional sub-part (e.g., "1", "1A", "6b")
-   * - \s*(?:\(continued\))? : Allows optional "(continued)" text
-   * - (?:\*\*)?\s*(?:[:\-\.)])? : Optional closing bold markdown and trailing punctuation/spacing
-   */
-  const questionHeaderRegex = /^\s*(?:\*\*)?(?:Q(?:uestion|n)?\.?\s*|(\d+)\.\s*)?(\d+[A-Za-z]?)\s*(?:\(continued\))?(?:\*\*)?\s*(?:[:\-\.)])?/i;
-
-  for (const page of pages) {
-    if (!page.extractedText || page.extractedText === "BLANK_PAGE" || page.extractedText === "EXTRACTION_FAILED") {
-      continue;
+    // Initialize all expected questions with 'NONE'
+    for (const rubricItem of rubricQuestions) {
+        questionMap[rubricItem.question] = "NONE";
     }
 
-    const lines = page.extractedText.split('\n');
-    let currentImageAddedToActiveChunk = false;
+    // Fallback: If no text, return all NONEs.
+    if (!fullExamText || fullExamText.trim() === "" || fullExamText.includes("No readable text extracted")) {
+        return questionMap;
+    }
+
+    // Split text into lines for parsing
+    const lines = fullExamText.split('\n');
+    let currentQuestionId: string | null = null;
+    let currentBuffer: string[] = [];
+
+    // Regex to detect question headers. e.g., "Q1", "Question 1", "1.", "1a."
+    const headerRegex = /^(?:Q(?:uestion|n)?\.?\s*|)(\d+[a-zA-Z]?)(?:\.|\)|:|-|\s*$)/i;
+
+    const commitBuffer = () => {
+        if (currentQuestionId && currentBuffer.length > 0) {
+            // Find the closest matching question ID from the rubric
+            const normalizedFoundId = currentQuestionId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            // Try to match "1" to "Q1" or "Q1" to "Q1"
+            const matchingRubricQ = rubricQuestions.find(rq => {
+                const normalizedRubricId = rq.question.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                return normalizedRubricId === normalizedFoundId || normalizedRubricId === `Q${normalizedFoundId}`;
+            });
+
+            const targetId = matchingRubricQ ? matchingRubricQ.question : `Q${normalizedFoundId}`;
+
+            const joinedText = currentBuffer.join('\n').trim();
+            if (joinedText) {
+                if (questionMap[targetId] && questionMap[targetId] !== "NONE") {
+                    questionMap[targetId] += "\n\n" + joinedText;
+                } else {
+                    questionMap[targetId] = joinedText;
+                }
+            }
+        }
+        currentBuffer = [];
+    };
 
     for (const line of lines) {
-      const match = line.match(questionHeaderRegex);
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
 
-      if (match) {
-        // match[1] is the number from the "1. " format, match[2] is the core number from the "Q1" format.
-        // We normalize the ID to a standard "Q#" format.
-        const rawNumber = match[2] || match[1];
-        const newQuestionId = `Q${rawNumber.toUpperCase()}`;
+        const match = trimmedLine.match(headerRegex);
 
-        // State Transition
-        activeQuestionId = newQuestionId;
-        currentImageAddedToActiveChunk = false; // Reset for the new chunk on this page
-
-        // Stitching Logic: Create if missing, otherwise we append to existing
-        if (!chunkMap.has(activeQuestionId)) {
-          chunkMap.set(activeQuestionId, {
-            questionId: activeQuestionId,
-            combinedText: "",
-            associatedImagesBase64: []
-          });
+        // If a new question header is found and it's short enough to not be an accidental match in a paragraph
+        if (match && trimmedLine.length < 50) {
+            commitBuffer(); // Save previous question data
+            currentQuestionId = match[1]; // e.g. "1" or "1a"
+            currentBuffer.push(trimmedLine); // keep the header for context
+        } else {
+            // If we haven't found a question yet, we attach it to a GLOBAL context (or the first question later if needed, but best to discard/ignore preamble unless requested)
+            if (currentQuestionId) {
+                currentBuffer.push(trimmedLine);
+            } else {
+                // If it's preamble/metadata, we could store it, but for strict 1-to-1 grading, we need it assigned to a question.
+                // We'll keep it in a temporary 'PREAMBLE' key just in case.
+                if (!questionMap["PREAMBLE"]) questionMap["PREAMBLE"] = "NONE";
+                if (questionMap["PREAMBLE"] === "NONE") questionMap["PREAMBLE"] = trimmedLine;
+                else questionMap["PREAMBLE"] += "\n" + trimmedLine;
+            }
         }
-      }
-
-      // Append text to the currently active chunk
-      const activeChunk = chunkMap.get(activeQuestionId)!;
-      // Only append non-empty lines to keep it clean, or append all to preserve formatting
-      if (line.trim() !== "") {
-          activeChunk.combinedText += (activeChunk.combinedText ? "\n" : "") + line.trim();
-      }
-
-      // Image Association & Deduplication
-      if (!currentImageAddedToActiveChunk && page.pageImageBase64) {
-        // Prevent duplicate images in the same chunk
-        if (!activeChunk.associatedImagesBase64.includes(page.pageImageBase64)) {
-          activeChunk.associatedImagesBase64.push(page.pageImageBase64);
-        }
-        currentImageAddedToActiveChunk = true;
-      }
     }
-  }
+    commitBuffer(); // commit the final question
 
-  // Cleanup: Remove GLOBAL_METADATA if it ended up completely empty
-  const globalMeta = chunkMap.get("GLOBAL_METADATA");
-  if (globalMeta && globalMeta.combinedText.trim() === "" && globalMeta.associatedImagesBase64.length === 0) {
-    chunkMap.delete("GLOBAL_METADATA");
-  }
-
-  // Convert the Map back to an array
-  return Array.from(chunkMap.values());
+    return questionMap;
 }
