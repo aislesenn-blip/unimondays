@@ -16,11 +16,11 @@ export const POST = verifySignatureAppRouter(
         console.log("[QUEUE] Wakeup: Project 1000 - Sequential Mode");
 
         try {
-            // STRICT LIMIT 3 (Never exceed or lambda dies)
+            // STRICTLY 1 JOB PER LAMBDA TO AVOID 300s TIMEOUT
             const jobs = await prisma.job.findMany({
                 where: { status: 'PENDING' },
                 orderBy: { createdAt: 'asc' },
-                take: 3
+                take: 1
             });
 
             if (jobs.length === 0) {
