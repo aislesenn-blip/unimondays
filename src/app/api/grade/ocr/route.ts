@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { Client } from "@upstash/qstash";
+import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { extractMultiplePageImagesFromBuffer } from '@/lib/pdf-utils';
 import { supabase } from '@/lib/supabase'; // Using the admin client
 
@@ -9,8 +10,10 @@ const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
 export const maxDuration = 60;
 
-export async function POST(req: NextRequest) {
-    try {
+export const POST = verifySignatureAppRouter(
+    async (req: NextRequest) => {
+        console.log("[PLAYBOOK-TRACE] [SECURITY] QStash Signature Verified for payload.");
+        try {
         const { submissionId, pages, pdfUrl } = await req.json(); // pages is an array: [1, 2, 3, 4]
 
         // 1. Download PDF Buffer Exactly ONCE using robust Supabase Admin SDK
@@ -58,8 +61,8 @@ export async function POST(req: NextRequest) {
             });
             extractedText = completion.choices[0]?.message?.content || "";
         } catch (aiError: any) {
-            console.error(`[OCR_AI_ERROR] OpenRouter failed for submission ${submissionId}, pages ${pages.join(',')}:`, aiError);
-            throw aiError; // Rethrow to let QStash retry the chunk if applicable
+            console.error(`[PLAYBOOK-TRACE] [FATAL-OCR] OpenRouter API Failed. Check API Credits/Network. Reason: ${aiError.message}`);
+            throw aiError; // Trigger QStash retry
         }
         const chunkData = { pages, text: extractedText };
 
@@ -88,13 +91,18 @@ export async function POST(req: NextRequest) {
                 }
             });
 
-            // Detached Wake-Up Ping (Fire and Forget)
-            fetch(`${baseUrl}/api/queue/process`, { method: 'POST' })
-                .catch(e => console.error("[OCR_WAKE_ERROR] Failed to ping queue:", e));
+            // Detached Wake-Up Ping using QStash to provide valid signatures
+            await qstash.publish({ url: `${baseUrl}/api/queue/process` })
+                .catch(e => console.error("[OCR_WAKE_ERROR] Failed to ping queue via QStash:", e));
         }
 
-        return NextResponse.json({ success: true, pages });
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ success: true, pages });
+        } catch (error: any) {
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+    },
+    {
+        currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || 'dummy_current_key',
+        nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || 'dummy_next_key'
     }
-}
+);

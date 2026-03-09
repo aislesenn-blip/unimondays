@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Client } from "@upstash/qstash";
 
 export async function POST(
   req: NextRequest,
@@ -36,7 +37,8 @@ export async function POST(
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
     const triggerUrl = `${baseUrl}/api/queue/process`;
 
-    fetch(triggerUrl, { method: 'POST' }).catch(e => console.error("Failed to ping queue via fetch:", e));
+    const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+    await qstash.publish({ url: triggerUrl }).catch(e => console.error("Failed to ping queue via QStash:", e));
 
     return NextResponse.json({ success: true, message: "Triggered Map-Reduce." });
   } catch (error: any) {
