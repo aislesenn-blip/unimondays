@@ -3,7 +3,6 @@ import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
 import pLimit from 'p-limit';
-import { parseFullExamTextIntoMap } from '@/lib/ai/chunker';
 
 // Universal Retry Wrapper
 async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
@@ -113,9 +112,48 @@ export async function handleAiGrade(job: any) {
             parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
         }
 
-        // 4. MAP PHASE: Parse student text into isolated question snippets
-        console.log(`[WORKER] Parsing raw text into isolated question chunks...`);
-        const questionTextMap = parseFullExamTextIntoMap(fullExamText, parsedRubricMap);
+        // 4. PHASE 1: SEQUENTIAL EXTRACTOR (Map Phase via Fast LLM)
+        console.log(`[WORKER] Initiating Phase 1: Sequential Extractor (High Context)...`);
+        const extractorSystemPrompt = `You are a Sequential Data Extraction Engine. Read this highly unstructured, handwritten OCR exam from start to finish.
+The student answers questions chronologically, but answers may be scattered (e.g., Q1 continues on page 18).
+You MUST scan the ENTIRE document sequentially. Aggregate ALL text corresponding to a specific Question ID from the provided Rubric outline, regardless of where it appears.
+Preserve their exact words. Do NOT grade or evaluate.
+
+CRITICAL INSTRUCTIONS:
+- Combine all fragmented parts of a single question into one unified snippet.
+- If an answer is truly missing or you cannot find any text for a question, output "NONE".
+- Return ONLY a strictly valid JSON Map where keys are the Question IDs and values are the extracted snippets.
+
+JSON FORMAT REQUIRED:
+{
+  "Q1": "exact text from student...",
+  "Q2": "NONE",
+  "Q3A": "student answer..."
+}`;
+
+        const rubricOutline = parsedRubricMap.map(r => r.question).join(", ");
+
+        let questionTextMap: Record<string, string> = {};
+        try {
+            const extractorResponse = await deepSeekClient.chat.completions.create({
+                model: "deepseek-chat", // DeepSeek is highly capable and cost-effective for large context Map tasks
+                messages: [
+                    { role: "system", content: extractorSystemPrompt },
+                    { role: "user", content: `RUBRIC QUESTION IDs TO FIND:\n${rubricOutline}\n\nFULL UNSTRUCTURED STUDENT EXAM TEXT:\n${fullExamText}` }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.0,
+                max_tokens: 8192
+            });
+
+            const rawExtractor = extractorResponse.choices[0]?.message?.content || '{}';
+            const cleanExtractor = rawExtractor.replace(/```json/g, '').replace(/```/g, '').trim();
+            questionTextMap = JSON.parse(cleanExtractor);
+            console.log(`[WORKER] Phase 1 Extractor Complete. Successfully mapped ${Object.keys(questionTextMap).length} questions.`);
+        } catch (e: any) {
+            console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Phase 1 Sequential Extractor Failed. Reason: ${e.message}`);
+            throw new Error("Phase 1 Extractor Failed: " + e.message);
+        }
 
         // 5. ATOMIC GRADING (REDUCE PHASE)
         console.log(`[WORKER] Initiating True Atomic 1-to-1 Grading for ${parsedRubricMap.length} Questions...`);
