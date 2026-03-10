@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
 import pLimit from 'p-limit';
+import { parseFullExamTextIntoMap } from '@/lib/ai/chunker';
 
 // Universal Retry Wrapper
 async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
@@ -112,51 +113,63 @@ export async function handleAiGrade(job: any) {
             parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
         }
 
-        // 4. PHASE 1: SEQUENTIAL EXTRACTOR (Map Phase via Fast LLM)
-        console.log(`[WORKER] Initiating Phase 1: Sequential Extractor (High Context)...`);
-        const extractorSystemPrompt = `You are a Sequential Data Extraction Engine. Read this highly unstructured, handwritten OCR exam from start to finish.
-The student answers questions chronologically, but answers may be scattered (e.g., Q1 continues on page 18).
-You MUST scan the ENTIRE document sequentially. Aggregate ALL text corresponding to a specific Question ID from the provided Rubric outline, regardless of where it appears.
-Preserve their exact words. Do NOT grade or evaluate.
+        // 4. PHASE 1: STRICT STRUCTURAL NUMBER CHUNKER (Map Phase via Regex)
+        console.log(`[WORKER] Initiating Phase 1: Strict Structural Number Chunker (Deterministic)...`);
+        let questionTextMap = parseFullExamTextIntoMap(fullExamText, parsedRubricMap);
 
-CRITICAL INSTRUCTIONS:
-- Combine all fragmented parts of a single question into one unified snippet.
-- If an answer is truly missing or you cannot find any text for a question, output "NONE".
-- Return ONLY a strictly valid JSON Map where keys are the Question IDs and values are the extracted snippets.
+        // 5. PHASE 2: LLM RESCUE EXTRACTOR (Batched Fallback)
+        const missingQuestions = parsedRubricMap
+            .map(r => r.question)
+            .filter(qId => !questionTextMap[qId] || questionTextMap[qId] === "NONE");
 
-JSON FORMAT REQUIRED:
+        if (missingQuestions.length > 0) {
+            console.log(`[WORKER] Phase 2: Triggering Batched Rescue Extractor for missing IDs: ${missingQuestions.join(', ')}...`);
+            const rescueSystemPrompt = `You are an LLM Rescue Extractor. Read this unstructured OCR exam from start to finish.
+Your task is to locate student answers corresponding ONLY to the missing Question IDs provided.
+Students may have forgotten to write the question numbers next to their answers.
+Identify text likely answering the missing questions based on context.
+Preserve exact wording. Do NOT summarize. Do NOT grade.
+
+If no relevant text is found for a question, output "NONE".
+
+Return a strict JSON Map. Example:
 {
-  "Q1": "exact text from student...",
-  "Q2": "NONE",
-  "Q3A": "student answer..."
+  "Q3": "student answer text...",
+  "Q7": "NONE"
 }`;
 
-        const rubricOutline = parsedRubricMap.map(r => r.question).join(", ");
+            try {
+                const rescueResponse = await deepSeekClient.chat.completions.create({
+                    model: "deepseek-chat", // DeepSeek for cost-effective fallback
+                    messages: [
+                        { role: "system", content: rescueSystemPrompt },
+                        { role: "user", content: `MISSING QUESTION IDs TO FIND:\n${missingQuestions.join(', ')}\n\nFULL UNSTRUCTURED STUDENT EXAM TEXT:\n${fullExamText}` }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.0,
+                    max_tokens: 4096
+                });
 
-        let questionTextMap: Record<string, string> = {};
-        try {
-            const extractorResponse = await deepSeekClient.chat.completions.create({
-                model: "deepseek-chat", // DeepSeek is highly capable and cost-effective for large context Map tasks
-                messages: [
-                    { role: "system", content: extractorSystemPrompt },
-                    { role: "user", content: `RUBRIC QUESTION IDs TO FIND:\n${rubricOutline}\n\nFULL UNSTRUCTURED STUDENT EXAM TEXT:\n${fullExamText}` }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0,
-                max_tokens: 8192
-            });
+                const rawRescue = rescueResponse.choices[0]?.message?.content || '{}';
+                const cleanRescue = rawRescue.replace(/```json/g, '').replace(/```/g, '').trim();
+                const rescuedSnippets = JSON.parse(cleanRescue);
 
-            const rawExtractor = extractorResponse.choices[0]?.message?.content || '{}';
-            const cleanExtractor = rawExtractor.replace(/```json/g, '').replace(/```/g, '').trim();
-            questionTextMap = JSON.parse(cleanExtractor);
-            console.log(`[WORKER] Phase 1 Extractor Complete. Successfully mapped ${Object.keys(questionTextMap).length} questions.`);
-        } catch (e: any) {
-            console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Phase 1 Sequential Extractor Failed. Reason: ${e.message}`);
-            throw new Error("Phase 1 Extractor Failed: " + e.message);
+                // Merge rescued snippets back into the deterministic map
+                for (const qId of missingQuestions) {
+                    if (rescuedSnippets[qId] && rescuedSnippets[qId] !== "NONE") {
+                        questionTextMap[qId] = rescuedSnippets[qId];
+                    }
+                }
+                console.log(`[WORKER] Phase 2 Rescue Complete.`);
+            } catch (e: any) {
+                console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Phase 2 Rescue Extractor Failed. Proceeding with deterministic map. Reason: ${e.message}`);
+            }
+        } else {
+            console.log(`[WORKER] Phase 2: Skipped. No missing questions detected.`);
         }
 
-        // 5. ATOMIC GRADING (REDUCE PHASE)
-        console.log(`[WORKER] Initiating True Atomic 1-to-1 Grading for ${parsedRubricMap.length} Questions...`);
+        // 6. PHASE 3: ATOMIC GRADING (REDUCE PHASE)
+        console.log(`[WORKER] Initiating Phase 3: True Atomic 1-to-1 Grading for ${parsedRubricMap.length} Questions...`);
         const limit = pLimit(10);
 
         const atomicGradingPromises = parsedRubricMap.map(rubricItem =>
@@ -167,15 +180,14 @@ JSON FORMAT REQUIRED:
                     const systemPrompt = `You are a world-class, perfectly fair academic professor. You are grading EXACTLY ONE isolated question snippet.
 
 THE 'WORLD-CLASS WISE GRADER' DIRECTIVE (TIERED SEMANTIC EVALUATION):
-Tier 1: [Exact Match] (Full Marks): The student hits the exact keywords, facts, or mathematical formulas required.
-Tier 2: [Semantic Match] (Full/High Partial Marks): The student uses synonyms or demonstrates clear conceptual understanding and correct trajectory. Grade MEANING, not just keywords.
-Tier 3: [Partial Match] (Partial Marks): Depth Mismatch. e.g. Student 'Mentions' instead of 'Explains'. Award proportional credit. Do not give a 0.
-Tier 4: [Benefit of Doubt] (Minor Partial Credit): Genuine, logically sound attempt or correct factual point that slightly misses the core prompt.
-Tier 5: [Missing] / [Out of Scope] (0 Marks): Do NOT invent pity marks if completely wrong or blank.
+Tier 1 — Exact Match: Award full marks when keywords, formulas, or definitions match exactly.
+Tier 2 — Semantic Match: Award marks when the concept is correct using different wording.
+Tier 3 — Depth Mismatch: Award partial marks when the student lists points but does not fully explain.
+Tier 4 — Benefit of Doubt: Award minor credit for logically correct attempts.
+Tier 5 — Missing / Out of Scope: Score = 0 only when the answer is absent or irrelevant.
 
 GLOBAL EMPATHY CAP & MATH DIRECTIVE:
-- Mathematical/numerical final answers MUST be precise for full marks (method/formula can earn partial).
-- Be fair with grammar, spelling, and formatting.
+- Mathematical/numerical final answers MUST be precise for full marks.
 - NEVER give marks for answers not present in the isolated snippet.
 
 MANDATORY JSON SCHEMA (ZOD-STRICT):
@@ -184,13 +196,16 @@ You must output ONLY JSON. You MUST populate \`raw_evidence_extracted\` BEFORE d
   "evaluations": [
     {
       "question_id": "${rubricItem.question}",
-      "raw_evidence_extracted": "string (Exact quote from student OCR text. Use 'NONE' if missing)",
+      "raw_evidence_extracted": "short quote from student answer",
       "score": number,
       "match_status": "Exact Match | Semantic Match | Partial Match | Missing | Out of Scope",
-      "feedback": "string (Start with Tier Tag, e.g. '[Partial Match] You correctly identified X...'. Max 3 sentences)"
+      "feedback": "short direct explanation"
     }
   ]
-}`;
+}
+Constraints:
+- raw_evidence_extracted must be 1-2 sentences only
+- feedback must be concise and direct. No verbose commentary.`;
 
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
@@ -234,22 +249,40 @@ You must output ONLY JSON. You MUST populate \`raw_evidence_extracted\` BEFORE d
         const nestedBreakdown = await Promise.all(atomicGradingPromises);
         const formattedBreakdown = nestedBreakdown.filter(item => item.isRelevant !== false); // Filter out absolute failures to prevent UI pollution
 
-        // 5. SAVE TO DB (IDEMPOTENT)
-        console.log(`[PLAYBOOK-TRACE] [ENGINE] Initiating Map-Reduce. Writing atomic scores to DB...`);
+        // 7. PHASE 4: ACTIONABLE INSIGHT GENERATOR
+        console.log(`[WORKER] Initiating Phase 4: Actionable Insight Generator...`);
+        let actionableInsight = "Grading complete.";
+        try {
+            const insightResponse = await deepSeekClient.chat.completions.create({
+                model: "deepseek-chat", // Fast model for summarization
+                messages: [
+                    { role: "system", content: `You are an insightful educational assistant. Review the student's evaluation array and provide a 1-2 sentence Actionable Insight summarizing their performance. Focus on strengths and specific areas for improvement. Be concise and direct. Do not use verbose commentary.` },
+                    { role: "user", content: `EVALUATIONS:\n${JSON.stringify(formattedBreakdown)}` }
+                ],
+                temperature: 0.1,
+                max_tokens: 150
+            });
+            actionableInsight = insightResponse.choices[0]?.message?.content?.trim() || actionableInsight;
+        } catch (e: any) {
+            console.warn(`[PLAYBOOK-TRACE] [INSIGHT-WARN] Failed to generate actionable insight. Falling back. Reason: ${e.message}`);
+        }
+
+        // 8. SAVE TO DB (IDEMPOTENT)
+        console.log(`[PLAYBOOK-TRACE] [ENGINE] Writing atomic scores and insights to DB...`);
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
         await prisma.score.upsert({
             where: { submissionId: submission.id },
             update: {
                 totalMarks: calculatedTotalScore,
-                remarks: "Playbook",
+                remarks: actionableInsight,
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             },
             create: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
-                remarks: "Playbook",
+                remarks: actionableInsight,
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             }
