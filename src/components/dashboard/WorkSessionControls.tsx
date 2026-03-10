@@ -188,6 +188,32 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                                         <p className="text-sm text-muted-foreground leading-relaxed">AI ignores extra knowledge not in rubric. Output = structured breakdown with points scored and exact quotes.</p>
                                     </Card>
                                 </div>
+
+                                    <div className="mt-4 mb-6 p-4 bg-white rounded-lg border border-slate-200 shadow-sm text-sm text-slate-700">
+                                        <p className="font-semibold text-slate-900 mb-2">Examples of 10 Different Valid Responses for Same Question</p>
+                                        <p className="mb-1"><strong>Question:</strong> “Explain photosynthesis.”</p>
+                                        <p className="mb-3 text-emerald-700"><strong>Rubric:</strong> Plants use sunlight to make food.</p>
+                                        <p className="font-semibold mb-2">Student responses:</p>
+                                        <ul className="list-disc pl-5 space-y-1 text-slate-600 mb-3">
+                                            <li>“Plants manufacture glucose using sunlight.”</li>
+                                            <li>“Leaves convert light energy into chemical energy.”</li>
+                                            <li>“Photosynthesis produces food from sunlight.”</li>
+                                            <li>“Green plants use chlorophyll to make sugar using sunlight.”</li>
+                                            <li>“Plants synthesize carbohydrates from sunlight energy.”</li>
+                                            <li>“Sunlight is converted into food in plants.”</li>
+                                            <li>“Through chlorophyll, plants capture sunlight to create energy-rich compounds.”</li>
+                                            <li>“Sunlight drives the formation of organic molecules in leaves.”</li>
+                                            <li>“Plants produce energy-rich sugars from sunlight.”</li>
+                                            <li>“Glucose is synthesized in plants using light energy.”</li>
+                                        </ul>
+                                        <p className="text-emerald-700 font-medium mb-4">All recognized correctly by AI → Tier 2. Ensures full marks fairly.</p>
+
+                                        <p className="font-semibold text-slate-900 mb-2">🔟 Example of Correct but Out-of-Scope Answer (Tier 3)</p>
+                                        <ul className="list-disc pl-5 space-y-1 text-slate-600 mb-2">
+                                            <li>“Plants are important for oxygen production.”</li>
+                                        </ul>
+                                        <p className="text-amber-700 font-medium">Factually true, but does not answer photosynthesis mechanism → 0 marks. Ensures AI doesn’t reward irrelevant knowledge.</p>
+                                    </div>
                             </section>
 
                             {/* Example Templates Section */}
