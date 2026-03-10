@@ -3,7 +3,6 @@ import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
 import pLimit from 'p-limit';
-import { extractPageParallelMap, OcrPage } from '@/lib/ai/chunker';
 
 // Universal Retry Wrapper
 async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
@@ -71,9 +70,8 @@ export async function handleAiGrade(job: any) {
 
         if (!finalRubricText || finalRubricText.trim() === '') throw new Error("Fatal: Rubric text is entirely missing.");
 
-        // 2. OCR NORMALIZATION & PAGE LEVEL INDEXING
-        const ocrPages: OcrPage[] = [];
-        let fullExamTextForIdentity = "";
+        // 2. OCR RECONSTRUCTION (Single Intact String)
+        let fullExamText = "";
 
         const sortedData = (submission.extractedData as any[]).sort((a, b) => a.pages[0] - b.pages[0]);
         for (const chunk of sortedData) {
@@ -85,20 +83,17 @@ export async function handleAiGrade(job: any) {
                 chunkText = chunk.text || "";
             }
 
-            // Map strictly to the Page-Level Indexing format
-            ocrPages.push({
-                page: chunk.pages[0],
-                text: chunkText
-            });
-
-            fullExamTextForIdentity += "\n\n" + chunkText;
+            // Preserve the entire document as one intact string for Prompt Caching
+            fullExamText += `\n\n--- PAGE ${chunk.pages[0]} ---\n\n` + chunkText;
         }
 
+        if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
+
         // REG NO & NAME EXTRACTION (Zero-Cost Regex)
-        const regNoMatch = fullExamTextForIdentity.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
+        const regNoMatch = fullExamText.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
         const detectedRegNo = regNoMatch ? regNoMatch[1].trim() : "UNKNOWN";
 
-        const nameMatch = fullExamTextForIdentity.match(/(?:Student Name|Name)[\s:]*([A-Za-z\s]+)(?:\n|Reg)/i);
+        const nameMatch = fullExamText.match(/(?:Student Name|Name)[\s:]*([A-Za-z\s]+)(?:\n|Reg)/i);
         const detectedName = nameMatch ? nameMatch[1].trim() : "UNKNOWN";
 
         // 3. SEGMENT RUBRIC (HARDENED AGAINST TRUNCATION)
@@ -122,20 +117,27 @@ export async function handleAiGrade(job: any) {
             parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
         }
 
-        // 4. PHASE 1 & 2: PAGE-PARALLEL MAP-REDUCE & COMPILER
-        console.log(`[WORKER] Initiating Phase 1 & 2: Page-Parallel Extraction and Aggregation...`);
-        const questionTextMap = await extractPageParallelMap(ocrPages, parsedRubricMap);
-
-        // 5. PHASE 3: ATOMIC GRADING (REDUCE PHASE)
-        console.log(`[WORKER] Initiating Phase 3: True Atomic 1-to-1 Grading for ${parsedRubricMap.length} Questions...`);
+        // 4. THE PARALLEL SNIPER LOOP (Prompt Caching Optimization)
+        console.log(`[WORKER] Initiating Full-Document Parallel Sniper Architecture for ${parsedRubricMap.length} Questions...`);
         const limit = pLimit(10);
 
         const atomicGradingPromises = parsedRubricMap.map(rubricItem =>
             limit(async () => {
-                const studentAnswerSnippet = questionTextMap[rubricItem.question] || "NONE";
-
                 return await withRetries(async () => {
-                    const systemPrompt = `You are a world-class, perfectly fair academic professor. You are grading EXACTLY ONE isolated question snippet.
+                    // Place fullExamText at the VERY TOP of the System Prompt to trigger DeepSeek Prompt Caching
+                    const systemPrompt = `=== FULL EXAM TEXT (CACHE PREFIX) ===\n${fullExamText}\n=====================================\n
+You are an Elite Enterprise Grading AI. Above is the FULL unstructured OCR text of a student's exam.
+The student may use chaotic formatting (dashes, missing numbers) and their answers may be scattered across multiple pages.
+
+YOUR ONLY MISSION:
+Find, extract, and grade the student's answer for this ONE specific question ONLY: ${rubricItem.question}
+
+RULES:
+1. Do an exhaustive semantic search across the entire document for this specific concept.
+2. If the answer spans multiple pages, aggregate it internally before grading.
+3. Do NOT grade any other questions.
+4. Extract the exact student words (1-2 sentences) as evidence. If truly missing from the entire 20+ pages, output "NONE".
+5. Grade strictly based on the provided rubric using the Tiered Semantic logic.
 
 THE 'WORLD-CLASS WISE GRADER' DIRECTIVE (TIERED SEMANTIC EVALUATION):
 Tier 1 — Exact Match: Award full marks when keywords, formulas, or definitions match exactly.
@@ -144,32 +146,25 @@ Tier 3 — Depth Mismatch: Award partial marks when the student lists points but
 Tier 4 — Benefit of Doubt: Award minor credit for logically correct attempts.
 Tier 5 — Missing / Out of Scope: Score = 0 only when the answer is absent or irrelevant.
 
-GLOBAL EMPATHY CAP & MATH DIRECTIVE:
-- Mathematical/numerical final answers MUST be precise for full marks.
-- NEVER give marks for answers not present in the isolated snippet.
-
 MANDATORY JSON SCHEMA (ZOD-STRICT):
 You must output ONLY JSON. You MUST populate \`raw_evidence_extracted\` BEFORE deciding the score.
 {
   "evaluations": [
     {
       "question_id": "${rubricItem.question}",
-      "raw_evidence_extracted": "short quote from student answer",
+      "raw_evidence_extracted": "string",
       "score": number,
       "match_status": "Exact Match | Semantic Match | Partial Match | Missing | Out of Scope",
-      "feedback": "short direct explanation"
+      "feedback": "string (Short, concise, direct)"
     }
   ]
-}
-Constraints:
-- raw_evidence_extracted must be 1-2 sentences only
-- feedback must be concise and direct. No verbose commentary.`;
+}`;
 
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
                             { role: "system", content: systemPrompt },
-                            { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nISOLATED STUDENT ANSWER SNIPPET:\n${studentAnswerSnippet}` }
+                            { role: "user", content: `RUBRIC SEGMENT FOR ${rubricItem.question} (MAX SCORE: ${rubricItem.max_score}):\n${rubricItem.rubric_segment}` }
                         ],
                         response_format: { type: "json_object" },
                         temperature: 0.0,
