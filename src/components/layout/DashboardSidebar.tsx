@@ -92,6 +92,7 @@ export function DashboardSidebar({ className, collapsed = false, onToggleCollaps
                        <TooltipTrigger asChild>
                          <Link
                           href={item.href}
+                          prefetch={true}
                           className={cn(
                             "flex items-center justify-center p-3 rounded-xl transition-all duration-200",
                             isActive
@@ -113,6 +114,7 @@ export function DashboardSidebar({ className, collapsed = false, onToggleCollaps
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200",
                     isActive
