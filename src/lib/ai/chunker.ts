@@ -40,25 +40,39 @@ export async function extractPageParallelMap(
                 return {};
             }
 
-            const extractionSystemPrompt = `You are a strict Data Extraction Engine. Your ONLY job is to extract text explicitly matching the provided Question IDs.
-Do not infer answers. Do not guess meaning. Do not hallucinate.
-Extract the EXACT text the student wrote for each Question ID found ON THIS SPECIFIC PAGE.
-Preserve exact wording, spacing, and sequence.
-Handle sub-question numerals carefully to avoid collisions (e.g., Q1(iii) vs Q6(iii)).
-If a Question ID is NOT explicitly present on this page, map it to "NONE".
+            const extractionSystemPrompt = `You are an extraction AI.
 
-OUTPUT FORMAT: Strict JSON only.
+Below is ONE page from a student's exam.
+
+Your task is to identify any answers written by the student on this page and associate them with the correct question from the rubric.
+
+Important rules:
+
+1. Copy the student's words exactly.
+2. Do NOT summarize.
+3. Do NOT grade.
+4. Ignore formatting chaos such as:
+   - missing numbers
+   - dashes (-)
+   - bullet points
+   - paragraphs
+5. Determine the correct question by meaning and context.
+
+Return ONLY JSON in this format:
+
 {
-  "Q1": "exact text from this page or 'NONE'",
-  "Q2": "exact text from this page or 'NONE'"
-}`;
+  "Q1": "exact student words...",
+  "Q2A": "exact student words..."
+}
+
+If a question is not present on this page, do not include it in the JSON.`;
 
             try {
                 const response = await deepSeekClient.chat.completions.create({
                     model: "deepseek-chat", // Fast, cheap model for Map phase
                     messages: [
                         { role: "system", content: extractionSystemPrompt },
-                        { role: "user", content: `RUBRIC QUESTION IDs TO EXTRACT:\n${rubricOutline}\n\nPAGE ${pageObj.page} TEXT:\n${pageObj.text}` }
+                        { role: "user", content: `RUBRIC QUESTIONS TO MATCH:\n${rubricOutline}\n\n--- PAGE ${pageObj.page} ---\n${pageObj.text}` }
                     ],
                     response_format: { type: "json_object" },
                     temperature: 0.0,
