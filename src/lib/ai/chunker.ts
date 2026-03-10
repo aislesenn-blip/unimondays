@@ -16,29 +16,37 @@ export function parseFullExamTextIntoMap(fullExamText: string, rubricQuestions: 
     let currentQuestionId: string | null = null;
     let currentBuffer: string[] = [];
 
-    // Regex to detect question headers. e.g., "Q1", "Question 1", "1.", "1a."
-    const headerRegex = /^(?:Q(?:uestion|n)?\.?\s*|)(\d+[a-zA-Z]?)(?:\.|\)|:|-|\s*$)/i;
+    // Robust regex to detect question headers. Matches formats: "1", "01", "1.", "Q1", "Question 1", "1)", "1(a)", "A)", "i)", "ii)"
+    const headerRegex = /^\s*(?:Q(?:uestion|n)?\.?\s*)?(?:0*)?(\d+|[a-zA-Z]|i{1,3})(?:\s*\(?[a-zA-Z0-9]+\)?)?(?:\.|\)|:|-|\s*$)/i;
 
     const commitBuffer = () => {
         if (currentQuestionId && currentBuffer.length > 0) {
-            // Find the closest matching question ID from the rubric
+            // Normalize the extracted ID for comparison
             const normalizedFoundId = currentQuestionId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-            // Try to match "1" to "Q1" or "Q1" to "Q1"
+
+            // Try to match the parsed header against known rubric question IDs
             const matchingRubricQ = rubricQuestions.find(rq => {
                 const normalizedRubricId = rq.question.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                return normalizedRubricId === normalizedFoundId || normalizedRubricId === `Q${normalizedFoundId}`;
+                return normalizedRubricId === normalizedFoundId ||
+                       normalizedRubricId === `Q${normalizedFoundId}` ||
+                       `Q${normalizedRubricId}` === normalizedFoundId;
             });
 
-            const targetId = matchingRubricQ ? matchingRubricQ.question : `Q${normalizedFoundId}`;
+            // If a valid rubric question is matched, append the text.
+            if (matchingRubricQ) {
+                const targetId = matchingRubricQ.question;
+                const joinedText = currentBuffer.join('\n').trim();
 
-            const joinedText = currentBuffer.join('\n').trim();
-            if (joinedText) {
-                if (questionMap[targetId] && questionMap[targetId] !== "NONE") {
-                    questionMap[targetId] += "\n\n" + joinedText;
-                } else {
-                    questionMap[targetId] = joinedText;
+                if (joinedText) {
+                    if (questionMap[targetId] && questionMap[targetId] !== "NONE") {
+                        // Handle Multi-Page Continuation: append additional text to same snippet
+                        questionMap[targetId] += "\n\n" + joinedText;
+                    } else {
+                        questionMap[targetId] = joinedText;
+                    }
                 }
             }
+            // Discard unstructured text that does not map to a rubric ID (No Number -> No Grade)
         }
         currentBuffer = [];
     };
@@ -52,22 +60,20 @@ export function parseFullExamTextIntoMap(fullExamText: string, rubricQuestions: 
         // If a new question header is found and it's short enough to not be an accidental match in a paragraph
         if (match && trimmedLine.length < 50) {
             commitBuffer(); // Save previous question data
-            currentQuestionId = match[1]; // e.g. "1" or "1a"
+            currentQuestionId = match[1]; // e.g. "1" or "a" or "i"
             currentBuffer.push(trimmedLine); // keep the header for context
         } else {
-            // If we haven't found a question yet, we attach it to a GLOBAL context (or the first question later if needed, but best to discard/ignore preamble unless requested)
+            // Append to the active question buffer.
             if (currentQuestionId) {
                 currentBuffer.push(trimmedLine);
-            } else {
-                // If it's preamble/metadata, we could store it, but for strict 1-to-1 grading, we need it assigned to a question.
-                // We'll keep it in a temporary 'PREAMBLE' key just in case.
-                if (!questionMap["PREAMBLE"]) questionMap["PREAMBLE"] = "NONE";
-                if (questionMap["PREAMBLE"] === "NONE") questionMap["PREAMBLE"] = trimmedLine;
-                else questionMap["PREAMBLE"] += "\n" + trimmedLine;
             }
+            // Unstructured preamble text (before any question ID is found) is discarded.
         }
     }
     commitBuffer(); // commit the final question
+
+    // Clean up temporary internal state if any
+    delete questionMap["PREAMBLE"];
 
     return questionMap;
 }
