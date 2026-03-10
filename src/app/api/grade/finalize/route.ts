@@ -146,7 +146,7 @@ Return strictly a JSON object: {"Q1": "Rubric text for Q1...", "Q2": "Rubric tex
                 const rubricSegment = rubricItem.segment;
 
                 try {
-                    const result = await withRetries(() => gradeAtomicSegment(questionId, studentContext, rubricSegment));
+                    const result = await gradeAtomicSegment(questionId, studentContext, rubricSegment);
                     return {
                         ...result,
                         q: result.q || questionId
