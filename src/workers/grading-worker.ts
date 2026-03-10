@@ -2,8 +2,6 @@ import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
-import pLimit from 'p-limit';
-
 // Universal Retry Wrapper
 async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
     for (let i = 0; i < retries; i++) {
@@ -70,10 +68,9 @@ export async function handleAiGrade(job: any) {
 
         if (!finalRubricText || finalRubricText.trim() === '') throw new Error("Fatal: Rubric text is entirely missing.");
 
-        // 2. STEP 1: PAGE SPLITTING (Isolated Array)
-        console.log("[WORKER] Executing Step 1: Page Splitting...");
-        const ocrPages: { page: number; text: string }[] = [];
-        let fullExamTextForIdentity = ""; // Only used for fast Regex RegNo extraction
+        // 2. CONSTRUCT HOLISTIC FULL EXAM TEXT
+        console.log("[WORKER] Reconstructing complete OCR exam payload...");
+        let fullExamText = "";
 
         const sortedData = (submission.extractedData as any[]).sort((a, b) => a.pages[0] - b.pages[0]);
         for (const chunk of sortedData) {
@@ -84,197 +81,59 @@ export async function handleAiGrade(job: any) {
             } catch {
                 chunkText = chunk.text || "";
             }
-
-            ocrPages.push({
-                page: chunk.pages[0],
-                text: chunkText
-            });
-
-            fullExamTextForIdentity += "\n\n" + chunkText;
+            fullExamText += `\n\n--- PAGE ${chunk.pages[0]} ---\n\n` + chunkText;
         }
 
-        // REG NO & NAME EXTRACTION (Zero-Cost Regex)
-        const regNoMatch = fullExamTextForIdentity.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
+        if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
+
+        // REG NO EXTRACTION (Zero-Cost Regex)
+        const regNoMatch = fullExamText.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
         const detectedRegNo = regNoMatch ? regNoMatch[1].trim() : "UNKNOWN";
 
-        // 3. SEGMENT RUBRIC (HARDENED AGAINST TRUNCATION)
-        const rubricParseResponse = await deepSeekClient.chat.completions.create({
-            model: "deepseek-chat",
-            messages: [
-                { role: "system", content: `You are an expert exam rubric parser. Parse this ENTIRE Marking Scheme into a JSON array. You MUST extract EVERY SINGLE question. DO NOT truncate. Format: { "rubric": [ { "question": "Q1", "rubric_segment": "criteria text", "max_score": 10 } ] }` },
-                { role: "user", content: finalRubricText }
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.1,
-            max_tokens: 8192
-        });
+        // 3. THE ONE-SHOT HOLISTIC GRADING ENGINE
+        console.log(`[WORKER] Initiating ONE-SHOT Holistic Grading Engine...`);
+        const systemPrompt = `You are an expert academic grader with 100% accuracy.
+MANDATE 1: NON-SEQUENTIAL HUNTING. Find the answers regardless of page order. The document is messy OCR; scan the ENTIRE text for meaning.
+MANDATE 2: THE PHOTOSYNTHESIS PROTOCOL. Grade strictly based on the marking scheme. Do not assume or use external knowledge. If the scheme says 'non-essential' and the student says 'essential', award 0.
+MANDATE 3: JSON DIET (CRITICAL). You MUST output the absolute minimum text to prevent token exhaustion. Output a single JSON array with exact keys: {"results": [{"q": "QuestionID", "s": Score, "f": "Max 5 words feedback"}]}. DO NOT write long extracts.`;
 
-        let parsedRubricMap: any[] = [];
+        let formattedBreakdown: any[] = [];
         try {
-            const raw = rubricParseResponse.choices[0]?.message?.content || '{"rubric":[]}';
+            const gradeResponse = await deepSeekClient.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: `MARKING SCHEME (RUBRIC):\n${finalRubricText}\n\n====================\n\nSTUDENT EXAM (MESSY OCR):\n${fullExamText}` }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.0, // KILL-HALLUCINATION
+                top_p: 0.1,       // KILL-HALLUCINATION
+                max_tokens: 8192
+            });
+
+            const raw = gradeResponse.choices[0]?.message?.content || '{"results":[]}';
             const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-            parsedRubricMap = JSON.parse(clean).rubric || [];
-        } catch (e) {
-            parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
+            const parsed = JSON.parse(clean);
+
+            const results = parsed.results || [];
+
+            formattedBreakdown = results.map((item: any) => ({
+                question: item.q || "Unknown",
+                score: Number(item.s) || 0,
+                max: 0, // Legacy fallback, to be mapped or resolved dynamically on frontend if needed, or extracted from rubric earlier. We will set to 0 and let UI handle or refine later if exact Max is needed.
+                feedback: item.f || "No feedback",
+                evidenceSnippet: "See full text.", // Not required in JSON diet
+                isRelevant: true
+            }));
+            console.log(`[WORKER] Holistic grading mapped ${formattedBreakdown.length} results.`);
+
+        } catch (error: any) {
+            console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Holistic Grading Failed: ${error.message}`);
+            throw new Error(`Holistic Grading Engine Error: ${error.message}`);
         }
 
-        const rubricOutline = parsedRubricMap.map(r => r.question).join(", ");
-
-        // 4. PHASE 1 (THE TAGGER): Semantic Locator Mapping
-        console.log(`[WORKER] Executing Phase 1: Semantic Locator for ${ocrPages.length} pages...`);
-        const mapLimit = pLimit(15);
-
-        const pageExtractionPromises = ocrPages.map(pageObj =>
-            mapLimit(async () => {
-                if (!pageObj.text || pageObj.text.trim() === '') return { page: pageObj.page, questions: [], text: pageObj.text };
-
-                const taggerSystemPrompt = `You are a strict Semantic Locator.
-Your ONLY job is to identify which Question IDs from the Rubric are present on this specific page.
-
-RULES:
-1. Scan the page text.
-2. Determine if the student is answering any of the provided Rubric Question IDs.
-3. Return ONLY a JSON array containing the Question IDs present.
-4. DO NOT EXTRACT TEXT. DO NOT GRADE. DO NOT INFER.
-
-Return ONLY this strict JSON format:
-{
-  "present_questions": ["Q1A", "Q2"]
-}`;
-
-                try {
-                    const response = await deepSeekClient.chat.completions.create({
-                        model: "deepseek-chat",
-                        messages: [
-                            { role: "system", content: taggerSystemPrompt },
-                            { role: "user", content: `RUBRIC QUESTION IDs:\n${rubricOutline}\n\n--- PAGE ${pageObj.page} ---\n${pageObj.text}` }
-                        ],
-                        response_format: { type: "json_object" },
-                        temperature: 0.0,
-                        max_tokens: 150 // Micro output guarantees no laziness
-                    });
-
-                    const raw = response.choices[0]?.message?.content || '{"present_questions":[]}';
-                    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const parsed = JSON.parse(clean);
-                    return {
-                        page: pageObj.page,
-                        questions: Array.isArray(parsed.present_questions) ? parsed.present_questions : [],
-                        text: pageObj.text
-                    };
-                } catch (error: any) {
-                    console.warn(`[WORKER] Semantic Locator failed on page ${pageObj.page}: ${error.message}`);
-                    return { page: pageObj.page, questions: [], text: pageObj.text };
-                }
-            })
-        );
-
-        const locatedPages = await Promise.all(pageExtractionPromises);
-
-        // 5. PHASE 2 (THE COMPILER): Invert Map (Question ID -> Concatenated Raw Page Strings)
-        console.log(`[WORKER] Executing Phase 2: Programmatic Compiler...`);
-        const routedPagesMap: Record<string, string> = {};
-
-        // Initialize with 'NONE'
-        for (const rubricItem of parsedRubricMap) {
-            routedPagesMap[rubricItem.question] = "NONE";
-        }
-
-        // Invert map: If page contains Q1, append the raw page text to Q1's map.
-        for (const locator of locatedPages) {
-            for (const qId of locator.questions) {
-                // Ensure the AI didn't hallucinate a question ID not in the rubric
-                if (routedPagesMap[qId] !== undefined) {
-                    const pageString = `--- PAGE ${locator.page} ---\n${locator.text}\n`;
-                    if (routedPagesMap[qId] === "NONE") {
-                        routedPagesMap[qId] = pageString;
-                    } else {
-                        routedPagesMap[qId] += "\n" + pageString;
-                    }
-                }
-            }
-        }
-
-        // 6. PHASE 3 (THE SNIPER GRADER): Atomic grading with micro-inputs
-        console.log(`[WORKER] Executing Phase 3: Sniper Grader for ${parsedRubricMap.length} Questions...`);
-        const gradingLimit = pLimit(10);
-
-        const atomicGradingPromises = parsedRubricMap.map(rubricItem =>
-            gradingLimit(async () => {
-                const routedContext = routedPagesMap[rubricItem.question] || "NONE";
-
-                return await withRetries(async () => {
-                    const gradeSystemPrompt = `You are a world-class, perfectly fair academic professor. You are grading EXACTLY ONE specific question based on routed page context.
-
-THE 'WORLD-CLASS WISE GRADER' DIRECTIVE (TIERED SEMANTIC EVALUATION):
-1. Exact Match -> Full Marks
-2. Semantic / Synonym Match -> Full/Partial Marks
-3. Partial Attempt / Point Recognition -> Proportional Marks
-4. Benefit of Doubt -> Minor Partial Marks
-5. Missing / Out of Scope -> 0 (never hallucinate)
-
-GLOBAL EMPATHY CAP & MATH DIRECTIVE:
-- Mathematical/numerical final answers MUST be precise for full marks.
-- NEVER give marks for answers not explicitly present in the provided routed page context.
-
-MANDATORY JSON SCHEMA (ZOD-STRICT):
-You must output ONLY JSON. You MUST extract the exact evidence BEFORE deciding the score.
-{
-  "evaluations": [
-    {
-      "question_id": "${rubricItem.question}",
-      "raw_evidence_extracted": "1-2 sentence concise exact quote of the student's answer",
-      "score": number,
-      "match_status": "Exact Match | Semantic Match | Partial Match | Missing | Out of Scope",
-      "feedback": "direct, concise, actionable"
-    }
-  ]
-}`;
-
-                    const response = await deepSeekClient.chat.completions.create({
-                        model: "deepseek-chat",
-                        messages: [
-                            { role: "system", content: gradeSystemPrompt },
-                            { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nROUTED PAGE CONTEXT:\n${routedContext}` }
-                        ],
-                        response_format: { type: "json_object" },
-                        temperature: 0.0,
-                        top_p: 0.1,
-                    });
-
-                    const raw = response.choices[0]?.message?.content || '{"evaluations":[]}';
-                    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const parsed = JSON.parse(clean);
-
-                    const result = parsed.evaluations?.[0] || {};
-
-                    return {
-                        question: rubricItem.question,
-                        score: Number(result.score) || 0,
-                        max: Number(rubricItem.max_score) || 0,
-                        feedback: result.feedback || "No feedback provided.",
-                        evidenceSnippet: result.raw_evidence_extracted || "NONE",
-                        isRelevant: true
-                    };
-                }, 3, 2000).catch((error: any) => {
-                    console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Atomic Grading Failed for ${rubricItem.question}: ${error.message}`);
-                    return {
-                        question: rubricItem.question,
-                        score: 0,
-                        max: Number(rubricItem.max_score) || 0,
-                        feedback: "[Out of Scope] Engine timeout.",
-                        evidenceSnippet: "ERROR",
-                        isRelevant: false // Silently flag error for filtering if needed
-                    };
-                });
-            })
-        );
-
-        const nestedBreakdown = await Promise.all(atomicGradingPromises);
-        const formattedBreakdown = nestedBreakdown.filter(item => item.isRelevant !== false); // Filter out absolute failures to prevent UI pollution
-
-        // 6. PHASE 4: ACTIONABLE INSIGHT GENERATOR
-        console.log(`[WORKER] Initiating Phase 4: Actionable Insight Generator...`);
+        // 4. ACTIONABLE INSIGHT GENERATOR
+        console.log(`[WORKER] Initiating Actionable Insight Generator...`);
         let actionableInsight = "Grading complete.";
         try {
             const insightResponse = await deepSeekClient.chat.completions.create({
