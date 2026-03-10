@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Download, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable"; // New Client Component
+import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable";
 import { WorkSessionControls } from "@/components/dashboard/WorkSessionControls";
 
 export default async function WorkSessionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -60,7 +60,7 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
       <div className="flex items-center justify-between border-b pb-6">
         <div>
             <div className="flex items-center gap-2 mb-1">
-                <Link href={`/dashboard/classes/${session.classId}`} className="text-sm text-muted-foreground hover:underline">
+                <Link href={`/dashboard/classes/${session.classId}`} prefetch={true} className="text-sm text-muted-foreground hover:underline">
                     {session.class?.code}
                 </Link>
                 <span className="text-muted-foreground">/</span>

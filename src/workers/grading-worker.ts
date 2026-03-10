@@ -121,10 +121,11 @@ export async function handleAiGrade(job: any) {
 
         const systemPrompt = `You are an expert academic grader with 100% accuracy.
 MANDATE 1: NON-SEQUENTIAL HUNTING. Find the answers regardless of page order. The document is messy OCR; scan the ENTIRE text for meaning.
-MANDATE 2: THE PHOTOSYNTHESIS PROTOCOL. Grade strictly based on the marking scheme. Do not assume or use external knowledge. If the scheme says 'non-essential' and the student says 'essential', award 0.
+MANDATE 2: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
 MANDATE 3: EXHAUSTIVE CHECKLIST. You are provided with exactly ${expectedQuestionCount} Question IDs. You MUST return a JSON object containing exactly ${expectedQuestionCount} results. You are FORBIDDEN from skipping any ID. Search the entire text exhaustively before ever declaring 'missing'.
 MANDATE 4: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output a JSON array. Use this exact format: {"results": [{"q": "Exact_Question_ID_From_Rubric", "s": Score, "f": "Feedback"}]}
-CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculation' or 'See full text'. Write exactly 1 to 2 highly analytical sentences comparing the student's specific answer to the rubric requirements. Explain EXACTLY WHY the student got that score.`;
+CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculation' or 'See full text'. Write exactly 1 to 2 highly analytical sentences comparing the student's specific answer to the rubric requirements. Explain EXACTLY WHY the student got that score.
+MANDATE 5: THE PARTIAL CREDIT RULE. If a question is worth multiple marks (e.g., Explain 5 reasons), and the student only correctly MENTIONS the points without fully explaining them, or only gets half the points right, you MUST award PARTIAL MARKS proportionally. NEVER award 0 if the student has provided partially correct, relevant concepts.`;
 
         let formattedBreakdown: any[] = [];
         try {
@@ -157,7 +158,7 @@ CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculat
                     score: Number(item.s) || 0,
                     max: matchedRubricItem ? (Number(matchedRubricItem.max_score) || 0) : 0,
                     feedback: item.f || "No feedback provided.",
-                    evidenceSnippet: "Feedback generated analytically.", // Replacing "See full text" blind spot
+                    evidenceSnippet: "", // Redundant string removed per CTO request
                     isRelevant: true
                 };
             });

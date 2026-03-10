@@ -46,7 +46,7 @@ export default async function DashboardPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {classes.map((cls) => (
-                <Link key={cls.id} href={`/dashboard/classes/${cls.id}`}>
+                <Link key={cls.id} href={`/dashboard/classes/${cls.id}`} prefetch={true}>
                     <Card className="hover:bg-accent/50 transition-colors cursor-pointer h-full border-l-4 border-l-primary group">
                         <CardHeader>
                             <div className="flex justify-between items-start">
