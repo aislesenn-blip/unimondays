@@ -90,12 +90,36 @@ export async function handleAiGrade(job: any) {
         const regNoMatch = fullExamText.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
         const detectedRegNo = regNoMatch ? regNoMatch[1].trim() : "UNKNOWN";
 
-        // 3. THE ONE-SHOT HOLISTIC GRADING ENGINE
+        // 3. PARSE RUBRIC (For accurate max_score and question IDs mapping)
+        const rubricParseResponse = await deepSeekClient.chat.completions.create({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: `You are an expert exam rubric parser. Parse this ENTIRE Marking Scheme into a JSON array. You MUST extract EVERY SINGLE question. Format: { "rubric": [ { "question": "Q1", "rubric_segment": "criteria", "max_score": 10 } ] }` },
+                { role: "user", content: finalRubricText }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+            max_tokens: 8192
+        });
+
+        let masterRubricArray: any[] = [];
+        try {
+            const rawRubric = rubricParseResponse.choices[0]?.message?.content || '{"rubric":[]}';
+            const cleanRubric = rawRubric.replace(/```json/g, '').replace(/```/g, '').trim();
+            masterRubricArray = JSON.parse(cleanRubric).rubric || [];
+        } catch (e) {
+            masterRubricArray = [];
+        }
+
+        // Fuzzy matcher helper
+        const normalizeId = (id: string) => (id || "").replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+        // 4. THE ONE-SHOT HOLISTIC GRADING ENGINE
         console.log(`[WORKER] Initiating ONE-SHOT Holistic Grading Engine...`);
         const systemPrompt = `You are an expert academic grader with 100% accuracy.
 MANDATE 1: NON-SEQUENTIAL HUNTING. Find the answers regardless of page order. The document is messy OCR; scan the ENTIRE text for meaning.
 MANDATE 2: THE PHOTOSYNTHESIS PROTOCOL. Grade strictly based on the marking scheme. Do not assume or use external knowledge. If the scheme says 'non-essential' and the student says 'essential', award 0.
-MANDATE 3: JSON DIET (CRITICAL). You MUST output the absolute minimum text to prevent token exhaustion. Output a single JSON array with exact keys: {"results": [{"q": "QuestionID", "s": Score, "f": "Max 5 words feedback"}]}. DO NOT write long extracts.`;
+MANDATE 3: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output a minified JSON array. Use this exact format: {"results": [{"q": "Exact_Question_ID_From_Rubric", "s": Score, "f": "Feedback"}]} CRITICAL RULE FOR 'f' (Feedback): DO NOT write generic robotic phrases like 'Incorrect calculation' or 'Correct definition'. Write 1 to 2 concise, highly analytical sentences explaining EXACTLY WHY the student got that score. Mention the student's specific gap or error compared to the rubric. Be direct and educational.`;
 
         let formattedBreakdown: any[] = [];
         try {
@@ -117,14 +141,20 @@ MANDATE 3: JSON DIET (CRITICAL). You MUST output the absolute minimum text to pr
 
             const results = parsed.results || [];
 
-            formattedBreakdown = results.map((item: any) => ({
-                question: item.q || "Unknown",
-                score: Number(item.s) || 0,
-                max: 0, // Legacy fallback, to be mapped or resolved dynamically on frontend if needed, or extracted from rubric earlier. We will set to 0 and let UI handle or refine later if exact Max is needed.
-                feedback: item.f || "No feedback",
-                evidenceSnippet: "See full text.", // Not required in JSON diet
-                isRelevant: true
-            }));
+            formattedBreakdown = results.map((item: any) => {
+                const normItemQ = normalizeId(item.q);
+                // Fuzzy match against master rubric
+                const matchedRubricItem = masterRubricArray.find(r => normalizeId(r.question) === normItemQ);
+
+                return {
+                    question: matchedRubricItem ? matchedRubricItem.question : (item.q || "Unknown"),
+                    score: Number(item.s) || 0,
+                    max: matchedRubricItem ? (Number(matchedRubricItem.max_score) || 0) : 0,
+                    feedback: item.f || "No feedback",
+                    evidenceSnippet: "See full text.", // Not requested to be fixed in this prompt iteration, but keeping DB contract satisfied
+                    isRelevant: true
+                };
+            });
             console.log(`[WORKER] Holistic grading mapped ${formattedBreakdown.length} results.`);
 
         } catch (error: any) {
