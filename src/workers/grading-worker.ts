@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
 import pLimit from 'p-limit';
-import { parsePagesIntoMap, OcrPage } from '@/lib/ai/chunker';
+import { extractPageParallelMap, OcrPage } from '@/lib/ai/chunker';
 
 // Universal Retry Wrapper
 async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
@@ -122,12 +122,12 @@ export async function handleAiGrade(job: any) {
             parsedRubricMap = [{ question: "Global", rubric_segment: finalRubricText, max_score: 100 }];
         }
 
-        // 4. PHASE 1: PAGE-LEVEL INDEXING & CHUNKING (Deterministic Programmatic Map Phase)
-        console.log(`[WORKER] Initiating Phase 1: Page-Level Indexing & Stateful Question Detection...`);
-        let questionTextMap = parsePagesIntoMap(ocrPages, parsedRubricMap);
+        // 4. PHASE 1 & 2: PAGE-PARALLEL MAP-REDUCE & COMPILER
+        console.log(`[WORKER] Initiating Phase 1 & 2: Page-Parallel Extraction and Aggregation...`);
+        const questionTextMap = await extractPageParallelMap(ocrPages, parsedRubricMap);
 
-        // 5. PHASE 2: ATOMIC GRADING (REDUCE PHASE)
-        console.log(`[WORKER] Initiating Phase 2: True Atomic 1-to-1 Grading for ${parsedRubricMap.length} Questions...`);
+        // 5. PHASE 3: ATOMIC GRADING (REDUCE PHASE)
+        console.log(`[WORKER] Initiating Phase 3: True Atomic 1-to-1 Grading for ${parsedRubricMap.length} Questions...`);
         const limit = pLimit(10);
 
         const atomicGradingPromises = parsedRubricMap.map(rubricItem =>
@@ -207,8 +207,8 @@ Constraints:
         const nestedBreakdown = await Promise.all(atomicGradingPromises);
         const formattedBreakdown = nestedBreakdown.filter(item => item.isRelevant !== false); // Filter out absolute failures to prevent UI pollution
 
-        // 6. PHASE 3: ACTIONABLE INSIGHT GENERATOR
-        console.log(`[WORKER] Initiating Phase 3: Actionable Insight Generator...`);
+        // 6. PHASE 4: ACTIONABLE INSIGHT GENERATOR
+        console.log(`[WORKER] Initiating Phase 4: Actionable Insight Generator...`);
         let actionableInsight = "Grading complete.";
         try {
             const insightResponse = await deepSeekClient.chat.completions.create({

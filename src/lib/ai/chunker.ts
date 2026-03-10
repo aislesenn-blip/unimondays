@@ -1,3 +1,6 @@
+import OpenAI from 'openai';
+import pLimit from 'p-limit';
+
 export interface OcrPage {
     page: number;
     text: string;
@@ -7,115 +10,96 @@ export interface RubricQuestion {
     question: string;
 }
 
-export function parsePagesIntoMap(pages: OcrPage[], rubricQuestions: RubricQuestion[]): Record<string, string> {
-    const questionMap: Record<string, string> = {};
-    const questionIndex: Record<string, number[]> = {};
+// Ensure the OpenAI client is robustly initialized
+const deepSeekClient = new OpenAI({
+    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
+    apiKey: process.env.DEEPSEEK_API_KEY || 'dummy',
+    timeout: 300000,
+    maxRetries: 4,
+});
 
-    // Initialize all expected questions with 'NONE'
+/**
+ * Phase 1 & 2: Page-Parallel Map-Reduce Extraction (The Compiler)
+ * Sends each page concurrently to a fast LLM to extract exactly and ONLY the explicit question answers,
+ * then aggregates them programmatically into a single question map.
+ */
+export async function extractPageParallelMap(
+    pages: OcrPage[],
+    rubricQuestions: RubricQuestion[]
+): Promise<Record<string, string>> {
+
+    const rubricOutline = rubricQuestions.map(r => r.question).join(', ');
+    console.log(`[CHUNKER] Initiating Phase 1: Parallel Page Extraction for ${pages.length} pages...`);
+
+    // We use a higher concurrency limit for map extraction since it's just reading small pages.
+    const limit = pLimit(15);
+
+    const pageExtractionPromises = pages.map(pageObj =>
+        limit(async () => {
+            if (!pageObj.text || pageObj.text.trim() === '') {
+                return {};
+            }
+
+            const extractionSystemPrompt = `You are a strict Data Extraction Engine. Your ONLY job is to extract text explicitly matching the provided Question IDs.
+Do not infer answers. Do not guess meaning. Do not hallucinate.
+Extract the EXACT text the student wrote for each Question ID found ON THIS SPECIFIC PAGE.
+Preserve exact wording, spacing, and sequence.
+Handle sub-question numerals carefully to avoid collisions (e.g., Q1(iii) vs Q6(iii)).
+If a Question ID is NOT explicitly present on this page, map it to "NONE".
+
+OUTPUT FORMAT: Strict JSON only.
+{
+  "Q1": "exact text from this page or 'NONE'",
+  "Q2": "exact text from this page or 'NONE'"
+}`;
+
+            try {
+                const response = await deepSeekClient.chat.completions.create({
+                    model: "deepseek-chat", // Fast, cheap model for Map phase
+                    messages: [
+                        { role: "system", content: extractionSystemPrompt },
+                        { role: "user", content: `RUBRIC QUESTION IDs TO EXTRACT:\n${rubricOutline}\n\nPAGE ${pageObj.page} TEXT:\n${pageObj.text}` }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.0,
+                    max_tokens: 4096
+                });
+
+                const raw = response.choices[0]?.message?.content || '{}';
+                const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+                return JSON.parse(clean);
+            } catch (error: any) {
+                console.warn(`[CHUNKER-WARN] Parallel extraction failed on page ${pageObj.page}: ${error.message}`);
+                return {}; // Safe fallback for a single failed page
+            }
+        })
+    );
+
+    // Wait for all pages to be extracted concurrently
+    const extractedPageMaps = await Promise.all(pageExtractionPromises);
+
+    // Phase 2: Compiler / Aggregation
+    console.log(`[CHUNKER] Phase 2: Compiling Page Maps into Final Document Map...`);
+    const finalQuestionMap: Record<string, string> = {};
+
+    // Initialize all with 'NONE'
     for (const rubricItem of rubricQuestions) {
-        questionMap[rubricItem.question] = "NONE";
-        questionIndex[rubricItem.question] = [];
+        finalQuestionMap[rubricItem.question] = "NONE";
     }
 
-    let activeMainQuestion: string | null = null;
-    let currentQuestionId: string | null = null;
-    let currentBuffer: string[] = [];
-
-    // Robust regex to detect question headers. Matches: "Q1", "Question 1", "1.", "1)", "01", "1(a)", "A)", "i)", "ii)", "iii)"
-    // It captures the number/letter/roman numeral part.
-    const mainHeaderRegex = /^\s*(?:Q(?:uestion|n)?\.?\s*)?(?:0*)?(\d+)(?:\s*\(?[a-zA-Z0-9]+\)?)?(?:\.|\)|:|-|\s*$)/i;
-    const subHeaderRegex = /^\s*(?:0*)?([a-zA-Z]|i{1,3})(?:\s*\(?[a-zA-Z0-9]+\)?)?(?:\.|\)|:|-|\s*$)/i;
-
-    const commitBuffer = (pageNumber: number) => {
-        if (currentQuestionId && currentBuffer.length > 0) {
-            // Find the closest matching question ID from the rubric
-            const normalizedFoundId = currentQuestionId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-            // Try to match against known rubric question IDs
-            const matchingRubricQ = rubricQuestions.find(rq => {
-                const normalizedRubricId = rq.question.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                return normalizedRubricId === normalizedFoundId ||
-                       normalizedRubricId === `Q${normalizedFoundId}` ||
-                       `Q${normalizedRubricId}` === normalizedFoundId;
-            });
-
-            // If a valid rubric question is matched, append the text.
-            if (matchingRubricQ) {
-                const targetId = matchingRubricQ.question;
-                const joinedText = currentBuffer.join('\n').trim();
-
-                if (joinedText) {
-                    if (questionMap[targetId] && questionMap[targetId] !== "NONE") {
-                        // Multi-Page/Intra-Page Continuation
-                        questionMap[targetId] += "\n\n" + joinedText;
-                    } else {
-                        questionMap[targetId] = joinedText;
-                    }
-                    // Add to page index tracking
-                    if (!questionIndex[targetId].includes(pageNumber)) {
-                        questionIndex[targetId].push(pageNumber);
-                    }
+    // Merge in page order
+    for (const pageMap of extractedPageMaps) {
+        for (const qId of Object.keys(finalQuestionMap)) {
+            const pageSnippet = pageMap[qId];
+            if (pageSnippet && pageSnippet !== "NONE" && pageSnippet.trim() !== "") {
+                if (finalQuestionMap[qId] === "NONE") {
+                    finalQuestionMap[qId] = pageSnippet.trim();
+                } else {
+                    finalQuestionMap[qId] += "\n\n" + pageSnippet.trim();
                 }
             }
         }
-        currentBuffer = [];
-    };
-
-    // Phase 1: Sequential Page Iteration & Within-Page Segmentation
-    for (const pageObj of pages) {
-        if (!pageObj.text || pageObj.text.trim() === "") continue;
-
-        // Phase 1: OCR Normalization
-        // Normalize common handwritten misreads before regex parsing
-        let normalizedText = pageObj.text
-            .replace(/\bQl\b/g, "Q1")
-            .replace(/\bQI\b/g, "Q1")
-            .replace(/\bQ 1\b/g, "Q1")
-            .replace(/\bO1\b/g, "01");
-
-        const lines = normalizedText.split('\n');
-
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-
-            const mainMatch = trimmedLine.match(mainHeaderRegex);
-            const subMatch = trimmedLine.match(subHeaderRegex);
-
-            // If we find a new main question (e.g. "Q1", "2.")
-            if (mainMatch && trimmedLine.length < 50) {
-                commitBuffer(pageObj.page);
-                activeMainQuestion = mainMatch[1]; // Store the base number, e.g. "1"
-                currentQuestionId = activeMainQuestion;
-                currentBuffer.push(trimmedLine);
-            }
-            // If we find a sub-question (e.g. "a)", "iii)") AND we have an active main question
-            else if (subMatch && activeMainQuestion && trimmedLine.length < 50) {
-                commitBuffer(pageObj.page);
-                // Combine the active main question with the sub question (e.g. "1" + "a" -> "1a")
-                currentQuestionId = `${activeMainQuestion}${subMatch[1]}`;
-                currentBuffer.push(trimmedLine);
-            }
-            else {
-                // Append text to the active chunk.
-                // Unstructured preamble text (before any question ID is found) is discarded to enforce 'No Number -> No Grade'.
-                if (currentQuestionId) {
-                    currentBuffer.push(trimmedLine);
-                }
-            }
-        }
-
-        // Commit any remaining buffer at the end of the page before moving to the next.
-        // We do NOT clear `activeMainQuestion` here, so it persists across pages for continuations.
-        commitBuffer(pageObj.page);
     }
 
-    console.log(`[CHUNKER] Page-Level Indexing Complete.`);
-    for (const [qId, pageArray] of Object.entries(questionIndex)) {
-        if (pageArray.length > 0) {
-            console.log(`[CHUNKER] Extracted ${qId} from pages [${pageArray.join(', ')}]`);
-        }
-    }
-
-    return questionMap;
+    return finalQuestionMap;
 }
