@@ -222,7 +222,9 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                                     </div>
                                     <div className="font-mono text-sm text-right shrink-0 mt-0.5">
                                         <span className="font-semibold text-foreground">{item.score}</span>
-                                        <span className="text-muted-foreground">/{item.max || item.maxScore || 0}</span>
+                                        {(item.max || item.maxScore) > 0 && (
+                                            <span className="text-muted-foreground">/{item.max || item.maxScore}</span>
+                                        )}
                                     </div>
                                 </div>
                                 {item.evidenceSnippet && (

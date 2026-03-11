@@ -90,84 +90,123 @@ export async function handleAiGrade(job: any) {
         const regNoMatch = fullExamText.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
         const detectedRegNo = regNoMatch ? regNoMatch[1].trim() : "UNKNOWN";
 
-        // 3. PARSE RUBRIC (For accurate max_score and question IDs mapping)
-        const rubricParseResponse = await deepSeekClient.chat.completions.create({
-            model: "deepseek-chat",
-            messages: [
-                { role: "system", content: `You are an expert exam rubric parser. Parse this ENTIRE Marking Scheme into a JSON array. You MUST extract EVERY SINGLE question. Format: { "rubric": [ { "question": "Q1", "rubric_segment": "criteria", "max_score": 10 } ] }` },
-                { role: "user", content: finalRubricText }
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.1,
-            max_tokens: 8192
-        });
+        // 3. PROGRAMMATIC RUBRIC PARSER (Fix 6/0 bug permanently)
+        // Never rely on LLM to guess max scores. Extract it strictly via Regex.
+        // Assuming rubric lines look like "Q1: Explain photosynthesis (5 marks) \n criteria..."
+        // or a similar structured string.
+        console.log("[WORKER] Programmatically extracting max scores from rubric...");
+        const masterRubricArray: any[] = [];
+        const rubricLines = finalRubricText.split('\n');
+        let currentQ = "Global";
+        let currentMax = 100;
+        let currentSegment = "";
 
-        let masterRubricArray: any[] = [];
-        try {
-            const rawRubric = rubricParseResponse.choices[0]?.message?.content || '{"rubric":[]}';
-            const cleanRubric = rawRubric.replace(/```json/g, '').replace(/```/g, '').trim();
-            masterRubricArray = JSON.parse(cleanRubric).rubric || [];
-        } catch (e) {
-            masterRubricArray = [];
+        const qRegex = /^(?:Q(?:uestion)?\s*|)(\d+[a-zA-Z]*(?:\.[a-z]+|\([a-z]+\))?)/i;
+        const markRegex = /\(\s*(\d+)\s*marks?\s*\)/i; // Matches "( 5 marks )"
+
+        for (const line of rubricLines) {
+            const qMatch = line.match(qRegex);
+            const markMatch = line.match(markRegex);
+
+            if (qMatch && line.length < 100) {
+                // Save previous
+                if (currentSegment) {
+                    masterRubricArray.push({ question: currentQ, rubric_segment: currentSegment.trim(), max_score: currentMax });
+                }
+                currentQ = qMatch[1].toUpperCase();
+                currentMax = markMatch ? parseInt(markMatch[1]) : 0;
+                currentSegment = line;
+            } else {
+                currentSegment += "\n" + line;
+                if (markMatch && currentMax === 0) {
+                    currentMax = parseInt(markMatch[1]);
+                }
+            }
+        }
+        if (currentSegment) {
+            masterRubricArray.push({ question: currentQ, rubric_segment: currentSegment.trim(), max_score: currentMax });
         }
 
         // Fuzzy matcher helper
         const normalizeId = (id: string) => (id || "").replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
-        // 4. THE ONE-SHOT HOLISTIC GRADING ENGINE (ZERO-SKIP)
-        console.log(`[WORKER] Initiating ONE-SHOT Holistic Grading Engine (ZERO-SKIP)...`);
+        // 4. ATOMIC PARALLEL SNIPER ARCHITECTURE (Most Stable State Reversion)
+        console.log(`[WORKER] Initiating Atomic Parallel Sniper Architecture for ${masterRubricArray.length} Questions...`);
+        const limit = require('p-limit')(10);
 
-        const expectedQuestionCount = masterRubricArray.length;
+        const atomicGradingPromises = masterRubricArray.map(rubricItem =>
+            limit(async () => {
+                return await withRetries(async () => {
+                    const systemPrompt = `=== FULL EXAM TEXT (CACHE PREFIX) ===\n${fullExamText}\n=====================================\n
+You are an Elite Enterprise Grading AI. Above is the FULL unstructured OCR text of a student's exam.
 
-        const systemPrompt = `You are an expert academic grader with 100% accuracy.
-MANDATE 1: NON-SEQUENTIAL HUNTING. Find the answers regardless of page order. The document is messy OCR; scan the ENTIRE text for meaning.
-MANDATE 2: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
-MANDATE 3: EXHAUSTIVE CHECKLIST. You are provided with exactly ${expectedQuestionCount} Question IDs. You MUST return a JSON object containing exactly ${expectedQuestionCount} results. You are FORBIDDEN from skipping any ID. Search the entire text exhaustively before ever declaring 'missing'.
-MANDATE 4: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output a JSON array. Use this exact format: {"results": [{"q": "Exact_Question_ID_From_Rubric", "s": Score, "f": "Feedback"}]}
-CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculation' or 'See full text'. Write exactly 1 to 2 highly analytical sentences comparing the student's specific answer to the rubric requirements. Explain EXACTLY WHY the student got that score.
-MANDATE 5: THE PARTIAL CREDIT RULE. If a question is worth multiple marks (e.g., Explain 5 reasons), and the student only correctly MENTIONS the points without fully explaining them, or only gets half the points right, you MUST award PARTIAL MARKS proportionally. NEVER award 0 if the student has provided partially correct, relevant concepts.`;
+YOUR ONLY MISSION:
+Find, extract, and grade the student's answer for this ONE specific question ONLY: ${rubricItem.question}
 
-        let formattedBreakdown: any[] = [];
-        try {
-            const gradeResponse = await deepSeekClient.chat.completions.create({
-                model: "deepseek-chat",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: `MARKING SCHEME (RUBRIC):\n${finalRubricText}\n\n====================\n\nSTUDENT EXAM (MESSY OCR):\n${fullExamText}` }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.0, // KILL-HALLUCINATION
-                top_p: 0.1,       // KILL-HALLUCINATION
-                max_tokens: 8192  // REMOVE TOKEN CHOKE: Allows full checklist execution
-            });
+RULES:
+1. Do an exhaustive semantic search across the entire document for this specific concept.
+2. If the answer spans multiple pages, aggregate it internally before grading.
+3. Do NOT grade any other questions.
+4. Grade strictly based on the provided rubric using the Tiered Semantic logic.
 
-            const raw = gradeResponse.choices[0]?.message?.content || '{"results":[]}';
-            const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-            const parsed = JSON.parse(clean);
+THE 'WORLD-CLASS WISE GRADER' DIRECTIVES:
+MANDATE 1: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
+MANDATE 2: THE PARTIAL CREDIT RULE. If a question is worth multiple marks (e.g., Explain 5 reasons), and the student only correctly MENTIONS the points without fully explaining them, or only gets half the points right, you MUST award PARTIAL MARKS proportionally. NEVER award 0 if the student has provided partially correct, relevant concepts.
 
-            const results = parsed.results || [];
+MANDATE 3: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output ONLY JSON.
+{
+  "evaluations": [
+    {
+      "question_id": "${rubricItem.question}",
+      "score": number,
+      "match_status": "Exact Match | Semantic Match | Partial Match | Missing | Out of Scope",
+      "feedback": "string"
+    }
+  ]
+}
+CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculation' or 'See full text'. Write exactly 1 to 2 highly analytical sentences comparing the student's specific answer to the rubric requirements. Explain EXACTLY WHY the student got that score.`;
 
-            // FUZZY MATCHER SHIELD (Fix the 0/0 Bug)
-            formattedBreakdown = results.map((item: any) => {
-                const normItemQ = normalizeId(item.q);
-                // Match the LLM's output against the normalized Master Rubric IDs.
-                const matchedRubricItem = masterRubricArray.find(r => normalizeId(r.question) === normItemQ);
+                    const response = await deepSeekClient.chat.completions.create({
+                        model: "deepseek-chat",
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: `RUBRIC SEGMENT FOR ${rubricItem.question} (MAX SCORE: ${rubricItem.max_score}):\n${rubricItem.rubric_segment}` }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.0,
+                        top_p: 0.1,
+                    });
 
-                return {
-                    question: matchedRubricItem ? matchedRubricItem.question : (item.q || "Unknown"),
-                    score: Number(item.s) || 0,
-                    max: matchedRubricItem ? (Number(matchedRubricItem.max_score) || 0) : 0,
-                    feedback: item.f || "No feedback provided.",
-                    evidenceSnippet: "", // Redundant string removed per CTO request
-                    isRelevant: true
-                };
-            });
-            console.log(`[WORKER] Holistic grading mapped ${formattedBreakdown.length} results.`);
+                    const raw = response.choices[0]?.message?.content || '{"evaluations":[]}';
+                    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(clean);
 
-        } catch (error: any) {
-            console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Holistic Grading Failed: ${error.message}`);
-            throw new Error(`Holistic Grading Engine Error: ${error.message}`);
-        }
+                    const result = parsed.evaluations?.[0] || {};
+
+                    return {
+                        question: rubricItem.question,
+                        score: Number(result.score) || 0,
+                        max: Number(rubricItem.max_score) || 0, // Solves the 0/0 bug natively
+                        feedback: result.feedback || "No feedback provided.",
+                        evidenceSnippet: "", // Redundant string removed per CTO request
+                        isRelevant: true
+                    };
+                }, 3, 2000).catch((error: any) => {
+                    console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Atomic Grading Failed for ${rubricItem.question}: ${error.message}`);
+                    return {
+                        question: rubricItem.question,
+                        score: 0,
+                        max: Number(rubricItem.max_score) || 0,
+                        feedback: "[Out of Scope] Engine timeout.",
+                        evidenceSnippet: "",
+                        isRelevant: false // Silently flag error for filtering if needed
+                    };
+                });
+            })
+        );
+
+        const nestedBreakdown = await Promise.all(atomicGradingPromises);
+        const formattedBreakdown = nestedBreakdown.filter(item => item.isRelevant !== false);
 
         // 4. ACTIONABLE INSIGHT GENERATOR
         console.log(`[WORKER] Initiating Actionable Insight Generator...`);
