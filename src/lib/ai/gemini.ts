@@ -95,6 +95,7 @@ export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise
           ],
           max_tokens: 8192,
           response_format: { type: "json_object" },
+          temperature: 0.0,
         });
 
         const text = response.choices[0]?.message?.content || "{}";
@@ -102,10 +103,12 @@ export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise
             const cleanString = text.replace(/```json/g, '').replace(/```/g, '').trim();
             const pageMap = JSON.parse(cleanString);
             for (const key in pageMap) {
-                if (combinedMap[key]) {
-                    combinedMap[key] += "\n" + pageMap[key];
+                // Normalize key to uppercase Q1 format
+                const normalizedKey = key.trim().toUpperCase().replace(/\s+/g, '');
+                if (combinedMap[normalizedKey]) {
+                    combinedMap[normalizedKey] += "\n" + pageMap[key];
                 } else {
-                    combinedMap[key] = pageMap[key];
+                    combinedMap[normalizedKey] = pageMap[key];
                 }
             }
         } catch (e) {
