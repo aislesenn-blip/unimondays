@@ -132,7 +132,8 @@ export async function handleAiGrade(job: any) {
 
         // 4. ATOMIC PARALLEL SNIPER ARCHITECTURE (Most Stable State Reversion)
         console.log(`[WORKER] Initiating Atomic Parallel Sniper Architecture for ${masterRubricArray.length} Questions...`);
-        const limit = require('p-limit')(10);
+        const pLimit = (await import('p-limit')).default;
+        const limit = pLimit(10);
 
         const atomicGradingPromises = masterRubricArray.map(rubricItem =>
             limit(async () => {

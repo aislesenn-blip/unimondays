@@ -37,8 +37,9 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
   let appealReason: string | null = null;
 
   try {
-      breakdown = submission.score?.breakdown
-        ? (typeof submission.score.breakdown === 'string' ? JSON.parse(submission.score.breakdown) : submission.score.breakdown)
+      const rawBreakdown = submission.score?.breakdown || submission.breakdown;
+      breakdown = rawBreakdown
+        ? (typeof rawBreakdown === 'string' ? JSON.parse(rawBreakdown) : rawBreakdown)
         : [];
       if (!Array.isArray(breakdown)) breakdown = []; // Ensure array
   } catch (e) {
