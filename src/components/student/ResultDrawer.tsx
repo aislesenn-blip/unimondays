@@ -153,7 +153,9 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                                             </div>
                                             <div className="font-mono text-sm text-right shrink-0 mt-0.5">
                                                 <span className="font-semibold text-slate-800">{item.score}</span>
-                                                <span className="text-slate-500">/{item.max || item.maxScore || 0}</span>
+                                                {(item.max || item.maxScore) > 0 && (
+                                                    <span className="text-slate-500">/{item.max || item.maxScore}</span>
+                                                )}
                                             </div>
                                         </div>
                                         {/* Notice: We don't render evidence snippet in Student view to keep it clean, as per requirements. But it's available. */}
