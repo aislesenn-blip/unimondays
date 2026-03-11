@@ -15,11 +15,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function StudentResultDrawer({ submission }: { submission: any }) {
   // Parse logic
-  let feedback: any = submission.feedback;
   let breakdown: any[] = [];
   try {
-      // FIX: Read from submission.breakdown directly because the API flattened it
-      const rawBreakdown = submission.breakdown;
+      const rawBreakdown = submission.score?.breakdown || submission.breakdown;
       breakdown = rawBreakdown
         ? (typeof rawBreakdown === 'string' ? JSON.parse(rawBreakdown) : rawBreakdown)
         : [];
