@@ -39,7 +39,7 @@ export const POST = verifySignatureAppRouter(
 
         // 3. Build Multimodal Content Array
         const promptContent: any[] = [
-            { type: "text", text: `Transcribe all handwritten text from these pages precisely. Do not summarize. Pages: ${pages.join(', ')}` }
+            { type: "text", text: `Extract the student's text and categorize it by question numbers (Q1, Q2, Q3...). If a student answers a question across multiple pages, concatenate them. Return strictly a JSON: {"Q1": "text...", "Q2": "text..."}. Do not lose a single word of the student's response. Pages: ${pages.join(', ')}` }
         ];
 
         for (const pageNum of pages) {
@@ -57,7 +57,10 @@ export const POST = verifySignatureAppRouter(
         try {
             const completion = await openRouterClient.chat.completions.create({
                 model: "google/gemini-2.5-flash",
-                messages: [{ role: "user", content: promptContent }]
+                messages: [{ role: "user", content: promptContent }],
+                response_format: { type: "json_object" },
+                temperature: 0.0,
+                max_tokens: 8192
             });
             extractedText = completion.choices[0]?.message?.content || "";
         } catch (aiError: any) {
