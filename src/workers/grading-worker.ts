@@ -151,9 +151,10 @@ RULES:
 
 THE 'WORLD-CLASS WISE GRADER' DIRECTIVES:
 MANDATE 1: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
-MANDATE 2: THE PARTIAL CREDIT RULE. If a question is worth multiple marks (e.g., Explain 5 reasons), and the student only correctly MENTIONS the points without fully explaining them, or only gets half the points right, you MUST award PARTIAL MARKS proportionally. NEVER award 0 if the student has provided partially correct, relevant concepts.
+MANDATE 2: THE PARTIAL CREDIT RULE. If a question is worth multiple marks, and the student only correctly MENTIONS the points without fully explaining them, award PARTIAL MARKS proportionally.
+MANDATE 3: NO PARTICIPATION TROPHIES (STRICT TIER 3). You are a world-class university examiner. If the student's answer is fundamentally incorrect, completely misses the core academic concept, or is a blind guess, you MUST award 0 MARKS. Do NOT award partial credit just because the student used related vocabulary (e.g. mentioning 'fertilizer' when asked about 'management'). Relevance does not equal correctness.
 
-MANDATE 3: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output ONLY JSON.
+MANDATE 4: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output ONLY JSON.
 {
   "evaluations": [
     {
@@ -197,31 +198,43 @@ CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculat
                         question: rubricItem.question,
                         score: 0,
                         max: Number(rubricItem.max_score) || 0,
-                        feedback: "[Out of Scope] Engine timeout.",
+                        feedback: "[Missing] The student did not provide an answer for this question, or it could not be processed.",
                         evidenceSnippet: "",
-                        isRelevant: false // Silently flag error for filtering if needed
+                        isRelevant: true // Force true so it renders on the UI as a 0 instead of vanishing
                     };
                 });
             })
         );
 
         const nestedBreakdown = await Promise.all(atomicGradingPromises);
-        const formattedBreakdown = nestedBreakdown.filter(item => item.isRelevant !== false);
+        // Do NOT filter out any questions. Every question in the rubric must appear on the UI, even if 0.
+        const formattedBreakdown = nestedBreakdown;
 
-        // 4. ACTIONABLE INSIGHT GENERATOR
+        // 4. ACTIONABLE INSIGHT GENERATOR (STRICT TEXT ONLY)
         console.log(`[WORKER] Initiating Actionable Insight Generator...`);
         let actionableInsight = "Grading complete.";
         try {
+            const insightSystemPrompt = `You are a strict, professional university educator speaking directly to the student.
+Review the student's evaluation array and provide a 1-3 sentence Actionable Insight summarizing their performance.
+Focus on strengths and specific areas for improvement.
+
+CRITICAL RULES:
+1. Speak DIRECTLY to the student (e.g. "You demonstrated strong knowledge in...").
+2. DO NOT output JSON. Output ONLY plain text sentences.
+3. DO NOT break the fourth wall. NEVER describe your grading process (e.g. "I graded holistically...", "Based on the array provided...").
+4. Keep it premium, concise, and educational.`;
+
             const insightResponse = await deepSeekClient.chat.completions.create({
                 model: "deepseek-chat", // Fast model for summarization
                 messages: [
-                    { role: "system", content: `You are an insightful educational assistant. Review the student's evaluation array and provide a 1-2 sentence Actionable Insight summarizing their performance. Focus on strengths and specific areas for improvement. Be concise and direct. Do not use verbose commentary.` },
-                    { role: "user", content: `EVALUATIONS:\n${JSON.stringify(formattedBreakdown)}` }
+                    { role: "system", content: insightSystemPrompt },
+                    { role: "user", content: `STUDENT EVALUATION DATA:\n${JSON.stringify(formattedBreakdown)}` }
                 ],
                 temperature: 0.1,
                 max_tokens: 150
             });
-            actionableInsight = insightResponse.choices[0]?.message?.content?.trim() || actionableInsight;
+            // Clean up any rogue formatting or markdown
+            actionableInsight = insightResponse.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim() || actionableInsight;
         } catch (e: any) {
             console.warn(`[PLAYBOOK-TRACE] [INSIGHT-WARN] Failed to generate actionable insight. Falling back. Reason: ${e.message}`);
         }
