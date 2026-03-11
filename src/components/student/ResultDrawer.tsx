@@ -164,28 +164,7 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                              </div>
                         </div>
                     )}
-
-                    {/* 3. Overall Feedback (Remarks) */}
-                    {feedback && (
-                        <div>
-                             <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                                <span className="bg-slate-800 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">✨</span>
-                                Overall Feedback
-                             </h3>
-                             <div className="p-5 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl text-sm leading-relaxed border border-slate-700 shadow-md text-slate-100 font-medium relative overflow-hidden">
-                                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-                                 <span className="text-slate-600 font-serif text-4xl absolute top-2 left-4 opacity-30">"</span>
-                                 <div className="relative z-10 pl-4 pt-1">{feedback}</div>
-                             </div>
-                        </div>
-                    )}
-
-                    {/* Secondary Remarks (If any) */}
-                    {submission.remarks && submission.remarks !== feedback && (
-                        <div className="p-5 bg-slate-50 rounded-xl text-sm text-slate-700 border border-slate-200 shadow-sm relative mt-4">
-                            <div className="font-medium relative z-10">{submission.remarks}</div>
-                        </div>
-                    )}
+                    {/* Overall Feedback and Remarks have been temporarily removed per CTO request. */}
                 </>
             )}
         </div>

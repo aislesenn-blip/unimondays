@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'; // Using the admin client
 
 const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
-export const maxDuration = 60;
+export const maxDuration = 300; // Increased to max to prevent premature timeouts during OCR
 
 export const POST = verifySignatureAppRouter(
     async (req: NextRequest) => {

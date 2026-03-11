@@ -227,41 +227,12 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                                         )}
                                     </div>
                                 </div>
-                                {item.evidenceSnippet && (
-                                    <details className="mt-2">
-                                        <summary className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-foreground cursor-pointer list-none flex items-center transition-colors select-none">
-                                            <span className="mr-1.5 opacity-50 transition-transform text-[8px]">▶</span>
-                                            Evidence
-                                        </summary>
-                                        <div className="pl-3 mt-2 border-l border-foreground/10">
-                                            <p className="text-xs text-muted-foreground italic leading-relaxed">
-                                                "{item.evidenceSnippet}"
-                                            </p>
-                                        </div>
-                                    </details>
-                                )}
                             </div>
                         ))}
                     </div>
                 </div>
             )}
-
-            {/* Remarks Premium Navy Blue */}
-            {!isEditing && submission.score?.remarks && (
-                <div className="border-t border-foreground/10 pt-6">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-800 mb-3 flex items-center gap-2">
-                        <span className="bg-slate-800 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]">✨</span>
-                        Overall Remarks
-                    </h3>
-                    <div className="p-5 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl text-sm leading-relaxed border border-slate-700 shadow-md text-slate-100 font-medium relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
-                        <span className="text-slate-600 font-serif text-3xl absolute top-2 left-4 opacity-30">"</span>
-                        <div className="relative z-10 pl-4 pt-1">
-                            {submission.score.remarks}
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Evidences and Overall Remarks sections have been temporarily removed per CTO request to enforce concise QN breakdowns. */}
         </div>
       </SheetContent>
     </Sheet>
