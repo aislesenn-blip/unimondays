@@ -246,13 +246,20 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
                 </div>
             )}
 
-            {/* Remarks Minimalist */}
+            {/* Remarks Premium Navy Blue */}
             {!isEditing && submission.score?.remarks && (
                 <div className="border-t border-foreground/10 pt-6">
-                    <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">Overall Remarks</h3>
-                    <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-foreground/20 pl-4 py-1">
-                        "{submission.score.remarks}"
-                    </p>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-800 mb-3 flex items-center gap-2">
+                        <span className="bg-slate-800 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]">✨</span>
+                        Overall Remarks
+                    </h3>
+                    <div className="p-5 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl text-sm leading-relaxed border border-slate-700 shadow-md text-slate-100 font-medium relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+                        <span className="text-slate-600 font-serif text-3xl absolute top-2 left-4 opacity-30">"</span>
+                        <div className="relative z-10 pl-4 pt-1">
+                            {submission.score.remarks}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

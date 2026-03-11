@@ -169,21 +169,21 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                     {feedback && (
                         <div>
                              <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                                <span className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                                <span className="bg-slate-800 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">✨</span>
                                 Overall Feedback
                              </h3>
-                             <div className="p-5 bg-gradient-to-br from-slate-50 to-white rounded-2xl text-sm leading-relaxed border border-slate-200 shadow-sm text-slate-700 font-medium">
-                                 {feedback}
+                             <div className="p-5 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl text-sm leading-relaxed border border-slate-700 shadow-md text-slate-100 font-medium relative overflow-hidden">
+                                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                                 <span className="text-slate-600 font-serif text-4xl absolute top-2 left-4 opacity-30">"</span>
+                                 <div className="relative z-10 pl-4 pt-1">{feedback}</div>
                              </div>
                         </div>
                     )}
 
-                    {/* Remarks */}
-                    {submission.remarks && (
-                        <div className="p-5 bg-teal-50/50 rounded-2xl italic text-sm text-teal-800 border border-teal-100 shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-1 h-full bg-teal-400"></div>
-                            <span className="text-teal-300 font-serif text-2xl absolute top-2 left-4 opacity-50">"</span>
-                            <div className="pl-4 pt-1 font-medium relative z-10">{submission.remarks}</div>
+                    {/* Secondary Remarks (If any) */}
+                    {submission.remarks && submission.remarks !== feedback && (
+                        <div className="p-5 bg-slate-50 rounded-xl text-sm text-slate-700 border border-slate-200 shadow-sm relative mt-4">
+                            <div className="font-medium relative z-10">{submission.remarks}</div>
                         </div>
                     )}
                 </>
