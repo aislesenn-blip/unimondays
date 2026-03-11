@@ -165,7 +165,7 @@ MANDATE 4: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output ONLY JSON.
     }
   ]
 }
-CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculation' or 'See full text'. Write exactly 1 to 2 highly analytical sentences comparing the student's specific answer to the rubric requirements. Explain EXACTLY WHY the student got that score.`;
+CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'The answer is correct' or 'Incorrect calculation'. Write exactly 1 to 2 short, concise, and highly educational insights per question explaining EXACTLY WHY the student got that score based on the rubric.`;
 
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
@@ -207,8 +207,23 @@ CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'Incorrect calculat
         );
 
         const nestedBreakdown = await Promise.all(atomicGradingPromises);
-        // Do NOT filter out any questions. Every question in the rubric must appear on the UI, even if 0.
-        const formattedBreakdown = nestedBreakdown;
+
+        // Fix Missing Q4 UI Bug: Iterate over masterRubricArray to absolutely guarantee no questions vanish from the UI.
+        const formattedBreakdown = masterRubricArray.map(rubricItem => {
+            const foundResult = nestedBreakdown.find(item => normalizeId(item.question) === normalizeId(rubricItem.question));
+            if (foundResult) {
+                return foundResult;
+            } else {
+                return {
+                    question: rubricItem.question,
+                    score: 0,
+                    max: Number(rubricItem.max_score) || 0,
+                    feedback: "[Missing] No answer was detected or processed for this specific question.",
+                    evidenceSnippet: "",
+                    isRelevant: true
+                };
+            }
+        });
 
         // 4. ACTIONABLE INSIGHT GENERATOR (STRICT TEXT ONLY)
         console.log(`[WORKER] Initiating Actionable Insight Generator...`);
