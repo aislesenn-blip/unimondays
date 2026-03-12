@@ -90,41 +90,69 @@ export async function handleAiGrade(job: any) {
         const regNoMatch = fullExamText.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
         const detectedRegNo = regNoMatch ? regNoMatch[1].trim() : "UNKNOWN";
 
-        // 3. PROGRAMMATIC RUBRIC PARSER (Fix 6/0 bug permanently)
-        // Never rely on LLM to guess max scores. Extract it strictly via Regex.
-        // Assuming rubric lines look like "Q1: Explain photosynthesis (5 marks) \n criteria..."
-        // or a similar structured string.
-        console.log("[WORKER] Programmatically extracting max scores from rubric...");
-        const masterRubricArray: any[] = [];
-        const rubricLines = finalRubricText.split('\n');
-        let currentQ = "Global";
-        let currentMax = 100;
-        let currentSegment = "";
+        // 3. DYNAMIC RUBRIC STANDARDIZATION (The Universal Parser)
+        // We use the LLM ONCE per WorkSession to intelligently parse the unstructured text
+        // into a strict JSON array regardless of the exam format globally (Harvard, National, etc.).
+        console.log("[WORKER] Dynamically parsing unstructured rubric into Universal JSON Array...");
 
-        const qRegex = /^(?:Q(?:uestion)?\s*|)(\d+[a-zA-Z]*(?:\.[a-z]+|\([a-z]+\))?)/i;
-        const markRegex = /\(\s*(\d+)\s*marks?\s*\)/i; // Matches "( 5 marks )"
+        let masterRubricArray: any[] = [];
+        try {
+            // First check if the rubric is ALREADY a structured JSON array (from previous cache or Standardized Rubric flow)
+            masterRubricArray = JSON.parse(finalRubricText);
+            if (!Array.isArray(masterRubricArray)) throw new Error("Not a master array");
+        } catch (e) {
+            // If it's raw text, we must structure it intelligently
+            console.log("[WORKER] Rubric is raw text. Extracting structure universally...");
 
-        for (const line of rubricLines) {
-            const qMatch = line.match(qRegex);
-            const markMatch = line.match(markRegex);
+            const rubricSystemPrompt = `You are a Universal Exam Parsing Engine. Your job is to read unstructured marking scheme text from ANY university or national exam globally and convert it into a strict, structured JSON array.
 
-            if (qMatch && line.length < 100) {
-                // Save previous
-                if (currentSegment) {
-                    masterRubricArray.push({ question: currentQ, rubric_segment: currentSegment.trim(), max_score: currentMax });
-                }
-                currentQ = qMatch[1].toUpperCase();
-                currentMax = markMatch ? parseInt(markMatch[1]) : 0;
-                currentSegment = line;
-            } else {
-                currentSegment += "\n" + line;
-                if (markMatch && currentMax === 0) {
-                    currentMax = parseInt(markMatch[1]);
-                }
+You must identify EVERY question, no matter how it is formatted (e.g., '1', '1a', '1(b)(ii)', 'Section A', 'Question 4').
+
+CRITICAL RULES:
+1. Extract the EXACT max score for each question. Look for things like '(5 marks)', '[10 points]', 'Total: 20'. If you absolutely cannot find a score, default to 0.
+2. The 'rubric_segment' must contain the full text and criteria for that specific question so the grader knows exactly what to look for.
+3. You MUST extract EVERY SINGLE question. DO NOT truncate.
+
+OUTPUT FORMAT (STRICT JSON):
+{
+  "rubric": [
+    {
+      "question": "The exact question identifier (e.g. '1(a)')",
+      "rubric_segment": "The full marking criteria text for this question",
+      "max_score": number
+    }
+  ]
+}`;
+
+            const rubricResponse = await deepSeekClient.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: rubricSystemPrompt },
+                    { role: "user", content: `UNSTRUCTURED RUBRIC TEXT:\n\n${finalRubricText}` }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.0,
+                max_tokens: 8192
+            });
+
+            const raw = rubricResponse.choices[0]?.message?.content || '{"rubric":[]}';
+            const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(clean);
+            masterRubricArray = parsed.rubric || [];
+
+            if (masterRubricArray.length > 0) {
+                 // Cache the structured JSON array in the WorkSession so we NEVER have to parse it again for subsequent submissions!
+                 // This fixes the N+1 latency bottleneck.
+                 await prisma.workSession.update({
+                     where: { id: submission.workSession.id },
+                     data: { rubric: JSON.stringify(masterRubricArray) }
+                 });
+                 console.log(`[WORKER] Successfully structured and cached ${masterRubricArray.length} rubric items.`);
             }
         }
-        if (currentSegment) {
-            masterRubricArray.push({ question: currentQ, rubric_segment: currentSegment.trim(), max_score: currentMax });
+
+        if (!masterRubricArray || masterRubricArray.length === 0) {
+            throw new Error("Fatal: Failed to dynamically parse the rubric into a structured array.");
         }
 
         // Fuzzy matcher helper
