@@ -78,10 +78,18 @@ export async function handleAiGrade(job: any) {
             // Safely parse old JSON chunks if they somehow made it in
             try {
                 const parsed = JSON.parse(chunk.text);
-                chunkText = Object.values(parsed).join("\n") || chunk.text;
-            } catch (e) {}
+                // Extract only string values from the parsed JSON object to avoid stringifying nested objects
+                const stringValues = Object.values(parsed).filter(val => typeof val === 'string');
+                if (stringValues.length > 0) {
+                     chunkText = stringValues.join("\n");
+                }
+            } catch (e) {
+                // It is already raw text from the new OCR pipeline, which is perfect.
+            }
 
-            fullExamText += `\n\n--- PAGE ${chunk.pages[0] || 'Unknown'} ---\n\n` + chunkText;
+            // Explicitly join all pages in this chunk to prevent dropping data if the worker processed 2 pages
+            const pagesLabel = Array.isArray(chunk.pages) ? chunk.pages.join(', ') : chunk.pages;
+            fullExamText += `\n\n--- PAGES ${pagesLabel || 'Unknown'} ---\n\n${chunkText.trim()}`;
         }
 
         if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
@@ -172,12 +180,16 @@ You are an Elite Enterprise Grading AI. Above is the FULL unstructured OCR text 
 YOUR ONLY MISSION:
 You must search this entire text to find the student's answer for this ONE specific question: ${rubricItem.question}. They may have messy handwriting, poor formatting, or missing labels. Find it, extract it, and grade it against this rubric.
 
+ANTI-LAZINESS MANDATE:
+Do NOT prematurely return "Missing". The student's answer might be buried on page 10. You must chronologically read the ENTIRE document from start to finish. If you cannot find the exact number label, you MUST search for the semantic meaning of the rubric question and grade that text.
+
 RULES:
 1. Do an exhaustive semantic search across the entire document for this specific question and its concepts.
 2. If the student forgot to label the question, but the semantic meaning clearly answers it, GRADE IT.
 3. If the answer spans multiple pages, aggregate it internally before grading.
 4. Do NOT grade any other questions. Focus strictly on ${rubricItem.question}.
 5. Grade strictly based on the provided rubric using the Tiered Semantic logic.
+6. DIAGRAM/SKETCH RULE: If the rubric requires a diagram/sketch, the text OCR might only capture the student's *description* or *labels* of the drawing. Grade fairly based on the descriptive text present. If there is absolutely no text describing the sketch, award 0 for that specific drawing component.
 
 THE 'WORLD-CLASS WISE GRADER' DIRECTIVES:
 MANDATE 1: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
@@ -196,7 +208,7 @@ MANDATE 4: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output ONLY JSON.
     }
   ]
 }
-CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'The answer is correct' or 'Incorrect calculation'. Write exactly 1 to 2 short, concise, and highly educational insights per question explaining EXACTLY WHY the student got that score based on the rubric.`;
+CRITICAL RULE FOR FEEDBACK VERBOSITY: Your 'feedback' string MUST NOT exceed 3 sentences. Be incredibly concise and get straight to the point. If you write a long paragraph, you fail. Explain EXACTLY WHY the student got that score based on the rubric in 3 sentences maximum.`;
 
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
