@@ -158,7 +158,62 @@ OUTPUT FORMAT (STRICT JSON):
         // Fuzzy matcher helper
         const normalizeId = (id: string) => (id || "").replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
-        // 4. ATOMIC PARALLEL SNIPER ARCHITECTURE (Most Stable State Reversion)
+        // 3.5 MIDDLE-TIER MAP PHASE: DYNAMIC CHUNKER (Fixes LLM Context Fatigue / Skipping)
+        // Instead of feeding the gigantic OCR blob 50 times in a loop causing Context Starvation,
+        // we use DeepSeek ONCE to perfectly chunk the raw text into structured key-value answers based on the rubric.
+        console.log(`[WORKER] Initiating Intelligent Semantic Chunker to isolate student answers...`);
+        let extractedStructuralMap: Record<string, string> = {};
+
+        try {
+            const chunkerSystemPrompt = `You are a Universal Exam Chunker. Your job is to read unstructured raw OCR text from a student's exam and map their specific answers to the provided rubric questions.
+
+You must intelligently identify where the student answers each question. They may have messy handwriting, poor formatting, or missing labels. Use your elite semantic understanding to piece together their answers from the massive text blob.
+
+CRITICAL RULES:
+1. Look at the 'QUESTIONS TO FIND' list. For EVERY SINGLE QUESTION in that list, you MUST find the student's answer in the document.
+2. If an answer spans multiple pages, concatenate it.
+3. DO NOT SUMMARIZE. Copy the student's exact text word-for-word.
+4. If you absolutely cannot find an answer anywhere for a specific question, output "NO ANSWER FOUND".
+5. DO NOT truncate. You must output the full answer for every question.
+
+OUTPUT FORMAT (STRICT JSON DICTIONARY):
+{
+  "answers": {
+    "1a": "The exact student text here...",
+    "Section A": "The exact student text here...",
+    "Q2": "NO ANSWER FOUND"
+  }
+}`;
+            // Extract just the question IDs to give to the chunker to keep the prompt smaller
+            const questionsToFind = masterRubricArray.map(r => r.question).join(", ");
+
+            const chunkerResponse = await deepSeekClient.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: chunkerSystemPrompt },
+                    { role: "user", content: `QUESTIONS TO FIND: ${questionsToFind}\n\n=== FULL RAW EXAM TEXT ===\n${fullExamText}` }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.0,
+                max_tokens: 8192 // Ensure enough tokens to return all answers
+            });
+
+            const rawMap = chunkerResponse.choices[0]?.message?.content || '{"answers":{}}';
+            const cleanMapStr = rawMap.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsedMap = JSON.parse(cleanMapStr);
+
+            // Normalize keys so the grading loop can find them flawlessly
+            const rawAnswers = parsedMap.answers || {};
+            for (const [key, value] of Object.entries(rawAnswers)) {
+                 extractedStructuralMap[normalizeId(key)] = value as string;
+            }
+            console.log(`[WORKER] Intelligent Chunker isolated ${Object.keys(extractedStructuralMap).length} answers successfully.`);
+        } catch (chunkError: any) {
+             console.warn(`[PLAYBOOK-TRACE] [CHUNKER-FAILED] Intelligent Chunking failed: ${chunkError.message}. Falling back to full context mode.`);
+             // If the chunker completely fails (e.g. JSON string too long), we will fallback below.
+        }
+
+        // 4. ATOMIC PARALLEL SNIPER ARCHITECTURE (The Universal Grader)
         console.log(`[WORKER] Initiating Atomic Parallel Sniper Architecture for ${masterRubricArray.length} Questions...`);
         const pLimit = (await import('p-limit')).default;
         const limit = pLimit(10);
@@ -166,7 +221,37 @@ OUTPUT FORMAT (STRICT JSON):
         const atomicGradingPromises = masterRubricArray.map(rubricItem =>
             limit(async () => {
                 return await withRetries(async () => {
-                    const systemPrompt = `=== FULL EXAM TEXT (CACHE PREFIX) ===\n${fullExamText}\n=====================================\n
+                    const questionIdNormal = normalizeId(rubricItem.question);
+
+                    // Fetch the isolated answer from the Middle-Tier Chunker map.
+                    // If the chunker failed or skipped it, fallback to the entire massive text (The Universal Grader).
+                    let targetText = extractedStructuralMap[questionIdNormal];
+
+                    // Intelligent fallback logic
+                    let systemPrompt = "";
+                    if (targetText && targetText !== "NO ANSWER FOUND") {
+                         systemPrompt = `=== TARGET STUDENT ANSWER ===\n${targetText}\n=====================================\n
+You are an Elite Enterprise Grading AI. Above is the EXACT extracted answer block for ONE specific question.
+
+YOUR ONLY MISSION:
+Grade the provided student answer against the rubric segment strictly for question: ${rubricItem.question}.
+
+RULES:
+1. Grade strictly based on the provided rubric using the Tiered Semantic logic.
+2. Keep focus purely on evaluating the exact snippet provided against the rubric segment.`;
+                    } else if (targetText === "NO ANSWER FOUND") {
+                          // Fast-path to 0 if chunker explicitly stated it was missing
+                          return {
+                              question: rubricItem.question,
+                              score: 0,
+                              max: Number(rubricItem.max_score) || 0,
+                              feedback: "[Missing] No answer was detected for this specific question.",
+                              evidenceSnippet: "No explicit answer found within the document context.",
+                              isRelevant: true
+                          };
+                    } else {
+                         // FALLBACK: The chunker failed or didn't map this key. We revert to the Universal Context Search.
+                         systemPrompt = `=== FULL EXAM TEXT (CACHE PREFIX) ===\n${fullExamText}\n=====================================\n
 You are an Elite Enterprise Grading AI. Above is the FULL unstructured OCR text of a student's exam.
 
 YOUR ONLY MISSION:
@@ -176,9 +261,10 @@ RULES:
 1. Do an exhaustive semantic search across the entire document for this specific concept.
 2. If the answer spans multiple pages, aggregate it internally before grading.
 3. Do NOT grade any other questions.
-4. Grade strictly based on the provided rubric using the Tiered Semantic logic.
+4. Grade strictly based on the provided rubric using the Tiered Semantic logic.`;
+                    }
 
-THE 'WORLD-CLASS WISE GRADER' DIRECTIVES:
+                    systemPrompt += `\n\nTHE 'WORLD-CLASS WISE GRADER' DIRECTIVES:
 MANDATE 1: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
 MANDATE 2: THE PARTIAL CREDIT RULE. If a question is worth multiple marks, and the student only correctly MENTIONS the points without fully explaining them, award PARTIAL MARKS proportionally.
 MANDATE 3: NO PARTICIPATION TROPHIES (STRICT TIER 3). You are a world-class university examiner. If the student's answer is fundamentally incorrect, completely misses the core academic concept, or is a blind guess, you MUST award 0 MARKS. Do NOT award partial credit just because the student used related vocabulary (e.g. mentioning 'fertilizer' when asked about 'management'). Relevance does not equal correctness.
