@@ -68,30 +68,23 @@ export async function handleAiGrade(job: any) {
 
         if (!finalRubricText || finalRubricText.trim() === '') throw new Error("Fatal: Rubric text is entirely missing.");
 
-        // 2. CONSTRUCT STRUCTURAL OCR JSON MAP (The Map Phase result)
-        console.log("[WORKER] Reconstructing Structured OCR Map...");
-        let extractedStructuralMap: Record<string, string> = {};
-        let fullExamText = ""; // Keep a full text fallback for RegNo
+        // 2. CONSTRUCT HOLISTIC FULL EXAM TEXT (Universal Grader)
+        console.log("[WORKER] Reconstructing complete OCR exam payload...");
+        let fullExamText = "";
 
         const sortedData = (submission.extractedData as any[]).sort((a, b) => a.pages[0] - b.pages[0]);
         for (const chunk of sortedData) {
+            let chunkText = chunk.text || "";
+            // Safely parse old JSON chunks if they somehow made it in
             try {
                 const parsed = JSON.parse(chunk.text);
-                // Merge keys from page chunk into master map
-                for (const key in parsed) {
-                    const normKey = key.trim().toUpperCase().replace(/\s+/g, '');
-                    if (extractedStructuralMap[normKey]) {
-                        extractedStructuralMap[normKey] += "\n" + parsed[key];
-                    } else {
-                        extractedStructuralMap[normKey] = parsed[key];
-                    }
-                    fullExamText += `\n${parsed[key]}`;
-                }
-            } catch (e) {
-               console.warn("[WORKER] Chunk is not valid JSON map, appending as raw text...");
-               fullExamText += `\n${chunk.text}`;
-            }
+                chunkText = Object.values(parsed).join("\n") || chunk.text;
+            } catch (e) {}
+
+            fullExamText += `\n\n--- PAGE ${chunk.pages[0] || 'Unknown'} ---\n\n` + chunkText;
         }
+
+        if (!fullExamText.trim()) fullExamText = "No readable text extracted.";
 
         // REG NO EXTRACTION (Zero-Cost Regex)
         const regNoMatch = fullExamText.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
@@ -145,19 +138,17 @@ export async function handleAiGrade(job: any) {
         const atomicGradingPromises = masterRubricArray.map(rubricItem =>
             limit(async () => {
                 return await withRetries(async () => {
-                    const questionIdNormal = normalizeId(rubricItem.question);
-                    const specificStudentAnswer = extractedStructuralMap[questionIdNormal] || "NO ANSWER FOUND FOR THIS QUESTION IN JSON MAP.";
-
-                    const systemPrompt = `=== TARGET STUDENT ANSWER ===\n${specificStudentAnswer}\n=====================================\n
-You are an Elite Enterprise Grading AI. Above is the EXACT extracted answer block for ONE specific question.
+                    const systemPrompt = `=== FULL EXAM TEXT (CACHE PREFIX) ===\n${fullExamText}\n=====================================\n
+You are an Elite Enterprise Grading AI. Above is the FULL unstructured OCR text of a student's exam.
 
 YOUR ONLY MISSION:
-Grade the provided student answer against the rubric segment strictly for question: ${rubricItem.question}.
+Find, extract, and grade the student's answer for this ONE specific question ONLY: ${rubricItem.question}
 
 RULES:
-1. Grade strictly based on the provided rubric using the Tiered Semantic logic.
-2. If the Target Student Answer says 'NO ANSWER FOUND', award 0 marks immediately and note it is missing.
-3. Keep focus purely on evaluating the exact snippet provided against the rubric segment.
+1. Do an exhaustive semantic search across the entire document for this specific concept.
+2. If the answer spans multiple pages, aggregate it internally before grading.
+3. Do NOT grade any other questions.
+4. Grade strictly based on the provided rubric using the Tiered Semantic logic.
 
 THE 'WORLD-CLASS WISE GRADER' DIRECTIVES:
 MANDATE 1: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
@@ -200,7 +191,7 @@ CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'The answer is corr
                         score: Number(result.score) || 0,
                         max: Number(rubricItem.max_score) || 0, // Solves the 0/0 bug natively
                         feedback: result.feedback || "No feedback provided.",
-                        evidenceSnippet: result.extracted_evidence || specificStudentAnswer || "",
+                        evidenceSnippet: result.extracted_evidence || "No specific evidence extracted.",
                         isRelevant: true
                     };
                 }, 3, 2000).catch((error: any) => {
@@ -230,7 +221,7 @@ CRITICAL RULE FOR 'f' (Feedback): Block generic phrases like 'The answer is corr
                     score: 0,
                     max: Number(rubricItem.max_score) || 0,
                     feedback: "[Missing] No answer was detected or processed for this specific question.",
-                    evidenceSnippet: "NO ANSWER FOUND FOR THIS QUESTION IN JSON MAP.",
+                    evidenceSnippet: "No explicit answer found within the document context.",
                     isRelevant: true
                 };
             }
