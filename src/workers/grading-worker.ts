@@ -234,6 +234,7 @@ CRITICAL RULE FOR FEEDBACK VERBOSITY: Your 'feedback' string MUST NOT exceed 3 s
                         response_format: { type: "json_object" },
                         temperature: 0.0,
                         top_p: 0.7, // Increased from 0.1 to 0.7 to allow better semantic/fuzzy matching in large unformatted texts
+                        max_tokens: 8192 // CRITICAL FIX: Gives the AI the mathematical space required to read a 10,000 word document and extract answers without panic-aborting into [Missing].
                     });
 
                     const raw = response.choices[0]?.message?.content || '{"evaluations":[]}';
