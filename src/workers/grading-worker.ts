@@ -2,13 +2,22 @@ import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import { readFile } from '@/lib/storage';
-// Universal Retry Wrapper
-async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> {
+// Universal Retry Wrapper with Exponential Backoff + Jitter for 429 Rate Limits
+async function withRetries<T>(fn: () => Promise<T>, retries = 5, baseDelayMs = 2000): Promise<T> {
     for (let i = 0; i < retries; i++) {
-        try { return await fn(); } catch (error: any) {
-            console.warn(`[NETWORK RETRY] Operation failed: ${error.message}. Retrying...`);
-            if (i === retries - 1) throw error;
-            await new Promise(res => setTimeout(res, delayMs));
+        try {
+            return await fn();
+        } catch (error: any) {
+            const isRateLimit = error?.status === 429 || error?.message?.includes('429');
+            if (i === retries - 1) {
+                console.error(`[NETWORK FATAL] Max retries reached: ${error.message}`);
+                throw error;
+            }
+
+            // Exponential backoff: 2s, 4s, 8s, 16s... + random jitter to prevent thundering herd
+            const delay = (baseDelayMs * Math.pow(2, i)) + Math.random() * 1000;
+            console.warn(`[NETWORK RETRY ${i+1}/${retries}] Failed: ${error.message}. ${isRateLimit ? 'RATE LIMITED.' : ''} Waiting ${Math.round(delay)}ms...`);
+            await new Promise(res => setTimeout(res, delay));
         }
     }
     throw new Error("Unreachable");
@@ -78,10 +87,15 @@ export async function handleAiGrade(job: any) {
             // Safely parse old JSON chunks if they somehow made it in
             try {
                 const parsed = JSON.parse(chunk.text);
-                // Extract only string values from the parsed JSON object to avoid stringifying nested objects
-                const stringValues = Object.values(parsed).filter(val => typeof val === 'string');
-                if (stringValues.length > 0) {
-                     chunkText = stringValues.join("\n");
+                // Extract keys AND values so question numbers are NOT stripped out of legacy OCR map data
+                let legacyConcat = "";
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (typeof value === 'string') {
+                         legacyConcat += `\n[Question ${key}]: ${value}`;
+                    }
+                }
+                if (legacyConcat.trim() !== "") {
+                     chunkText = legacyConcat;
                 }
             } catch (e) {
                 // It is already raw text from the new OCR pipeline, which is perfect.
@@ -169,7 +183,8 @@ OUTPUT FORMAT (STRICT JSON):
         // 4. ATOMIC PARALLEL SNIPER ARCHITECTURE (The Universal Grader)
         console.log(`[WORKER] Initiating Atomic Parallel Sniper Architecture for ${masterRubricArray.length} Questions...`);
         const pLimit = (await import('p-limit')).default;
-        const limit = pLimit(10);
+        // REDUCED CONCURRENCY TO 5: This halves the token burst payload per second to prevent triggering LLM 429 API blocks while retaining massive speed gains over sequential processing.
+        const limit = pLimit(5);
 
         const atomicGradingPromises = masterRubricArray.map(rubricItem =>
             limit(async () => {
@@ -218,7 +233,7 @@ CRITICAL RULE FOR FEEDBACK VERBOSITY: Your 'feedback' string MUST NOT exceed 3 s
                         ],
                         response_format: { type: "json_object" },
                         temperature: 0.0,
-                        top_p: 0.1,
+                        top_p: 0.7, // Increased from 0.1 to 0.7 to allow better semantic/fuzzy matching in large unformatted texts
                     });
 
                     const raw = response.choices[0]?.message?.content || '{"evaluations":[]}';
