@@ -133,7 +133,7 @@ You must identify EVERY question, no matter how it is formatted (e.g., '1', '1a'
 CRITICAL RULES:
 1. Extract the EXACT max score for each question. Look for things like '(5 marks)', '[10 points]', 'Total: 20'. If you absolutely cannot find a score, default to 0.
 2. The 'rubric_segment' must contain the full text and criteria for that specific question so the grader knows exactly what to look for.
-3. You MUST extract EVERY SINGLE question. DO NOT truncate.
+3. ANTI-TRUNCATION MANDATE: You MUST extract EVERY SINGLE question from the document. If there are 50 questions, you must output 50 JSON objects. Do NOT stop early. Do NOT summarize.
 
 OUTPUT FORMAT (STRICT JSON):
 {
@@ -189,47 +189,22 @@ OUTPUT FORMAT (STRICT JSON):
         const atomicGradingPromises = masterRubricArray.map(rubricItem =>
             limit(async () => {
                 return await withRetries(async () => {
-                    const systemPrompt = `=== FULL EXAM TEXT (CACHE PREFIX) ===\n${fullExamText}\n=====================================\n
-You are an Elite Enterprise Grading AI. Above is the FULL unstructured OCR text of a student's exam.
-
-YOUR ONLY MISSION:
-You must search this entire text to find the student's answer for this ONE specific question: ${rubricItem.question}. They may have messy handwriting, poor formatting, or missing labels. Find it, extract it, and grade it against this rubric.
-
-ANTI-LAZINESS MANDATE:
-Do NOT prematurely return "Missing". The student's answer might be buried on page 10. You must chronologically read the ENTIRE document from start to finish. If you cannot find the exact number label, you MUST search for the semantic meaning of the rubric question and grade that text.
-
-RULES:
-1. Do an exhaustive semantic search across the entire document for this specific question and its concepts.
-2. If the student forgot to label the question, but the semantic meaning clearly answers it, GRADE IT.
-3. If the answer spans multiple pages, aggregate it internally before grading.
-4. Do NOT grade any other questions. Focus strictly on ${rubricItem.question}.
-5. Grade strictly based on the provided rubric using the Tiered Semantic logic.
-6. DIAGRAM/SKETCH RULE: If the rubric requires a diagram/sketch, the text OCR might only capture the student's *description* or *labels* of the drawing. Grade fairly based on the descriptive text present. If there is absolutely no text describing the sketch, award 0 for that specific drawing component.
-
-THE 'WORLD-CLASS WISE GRADER' DIRECTIVES:
-MANDATE 1: THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms or phrases that mean the same thing as the rubric, ACCEPT IT as correct.
-MANDATE 2: THE PARTIAL CREDIT RULE. If a question is worth multiple marks, and the student only correctly MENTIONS the points without fully explaining them, award PARTIAL MARKS proportionally.
-MANDATE 3: NO PARTICIPATION TROPHIES (STRICT TIER 3). You are a world-class university examiner. If the student's answer is fundamentally incorrect, completely misses the core academic concept, or is a blind guess, you MUST award 0 MARKS. Do NOT award partial credit just because the student used related vocabulary (e.g. mentioning 'fertilizer' when asked about 'management'). Relevance does not equal correctness.
-
-MANDATE 4: STRUCTURED JSON WITH ANALYTICAL FEEDBACK. You MUST output ONLY JSON.
-{
-  "evaluations": [
-    {
-      "question_id": "${rubricItem.question}",
-      "score": number,
-      "match_status": "Exact Match | Semantic Match | Partial Match | Missing | Out of Scope",
-      "feedback": "string",
-      "extracted_evidence": "string"
-    }
-  ]
-}
-CRITICAL RULE FOR FEEDBACK VERBOSITY: Your 'feedback' string MUST NOT exceed 3 sentences. Be incredibly concise and get straight to the point. If you write a long paragraph, you fail. Explain EXACTLY WHY the student got that score based on the rubric in 3 sentences maximum.`;
+                    // RESTORED GOLDEN ENGINE PROMPT: Zero Noise. Clean Signal. Exact Formatting.
+                    const systemPrompt = `You are a grader. Evaluate ONE question against ONE rubric segment.
+MANDATORY DIRECTIVES:
+1. Extract exact evidence first from the STUDENT ANSWER.
+2. Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+3. DO NOT penalize for missing sketches/diagrams as OCR cannot read them. Grade based on any descriptive text provided.
+4. Feedback must be a MAXIMUM of 3 sentences.
+5. Semantic Equivalence: Accept valid synonyms.
+6. Partial Credit: Award proportional marks for partially correct answers.
+JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences" }`;
 
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
                             { role: "system", content: systemPrompt },
-                            { role: "user", content: `RUBRIC SEGMENT FOR ${rubricItem.question} (MAX SCORE: ${rubricItem.max_score}):\n${rubricItem.rubric_segment}` }
+                            { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT - SEARCH EXHAUSTIVELY):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
                         temperature: 0.0,
@@ -237,11 +212,9 @@ CRITICAL RULE FOR FEEDBACK VERBOSITY: Your 'feedback' string MUST NOT exceed 3 s
                         max_tokens: 8192 // CRITICAL FIX: Gives the AI the mathematical space required to read a 10,000 word document and extract answers without panic-aborting into [Missing].
                     });
 
-                    const raw = response.choices[0]?.message?.content || '{"evaluations":[]}';
+                    const raw = response.choices[0]?.message?.content || '{}';
                     const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const parsed = JSON.parse(clean);
-
-                    const result = parsed.evaluations?.[0] || {};
+                    const result = JSON.parse(clean);
 
                     return {
                         question: rubricItem.question,
