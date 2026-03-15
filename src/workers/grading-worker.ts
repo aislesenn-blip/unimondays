@@ -127,32 +127,27 @@ export async function handleAiGrade(job: any) {
         // Fuzzy matcher helper
         const normalizeId = (id: string) => (id || "").replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
-        // 4. ATOMIC PARALLEL SNIPER ARCHITECTURE
-        console.log(`[WORKER] Initiating Atomic Parallel Sniper Architecture for ${masterRubricArray.length} Questions...`);
+        // 4. ATOMIC GRADING (pLimit)
+        console.log(`[WORKER] Initiating Atomic Grading for ${masterRubricArray.length} Questions...`);
+        const pLimit = (await import('p-limit')).default;
         const limit = pLimit(10);
 
         const atomicGradingPromises = masterRubricArray.map((rubricItem: any) =>
             limit(async () => {
-                return await withRetries(async () => {
-                    const systemPrompt = `You are a world-class university examiner. Evaluate ONE question against ONE rubric segment.
-MANDATORY DIRECTIVES:
-1. THE SEMANTIC EQUIVALENCE PROTOCOL. Grade based on the core meaning, not exact wording. If the student uses valid synonyms, ACCEPT IT.
-2. THE PARTIAL CREDIT RULE. Award proportional partial marks for half-correct answers.
-3. NO PARTICIPATION TROPHIES (STRICT TIER 3). If the student's answer is fundamentally incorrect or misses the core concept, you MUST award 0 MARKS. Do not award points for just guessing related keywords.
-4. Extract exact evidence first.
-5. Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
-6. DO NOT penalize for missing sketches/diagrams.
-JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences" }`;
-
+                try {
                     const response = await deepSeekClient.chat.completions.create({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: systemPrompt },
+                            { role: "system", content: `You are a grader. Evaluate ONE question against ONE rubric segment.
+MANDATORY DIRECTIVES:
+1. Extract exact evidence first.
+2. Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+3. DO NOT penalize for missing sketches/diagrams as OCR cannot read them.
+JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences" }` },
                             { role: "user", content: `QUESTION: ${rubricItem.question}\nMAX SCORE: ${rubricItem.max_score}\n\nRUBRIC SEGMENT:\n${rubricItem.rubric_segment}\n\nSTUDENT ANSWER (FULL TEXT):\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
-                        temperature: 0.0,
-                        top_p: 0.1,
+                        temperature: 0.1,
                     });
 
                     const raw = response.choices[0]?.message?.content || '{}';
@@ -162,88 +157,33 @@ JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier
                     return {
                         question: rubricItem.question,
                         score: Number(result.score) || 0,
-                        max: Number(rubricItem.max_score) || 0, // Solves the 0/0 bug natively
-                        feedback: result.feedback || "No feedback provided.",
-                        evidenceSnippet: result.extracted_evidence || "",
-                        isRelevant: true
-                    };
-                }, 3, 2000).catch((error: any) => {
-                    console.error(`[PLAYBOOK-TRACE] [FATAL-LLM] Atomic Grading Failed for ${rubricItem.question}: ${error.message}`);
-                    return {
-                        question: rubricItem.question,
-                        score: 0,
                         max: Number(rubricItem.max_score) || 0,
-                        feedback: "[Missing] The student did not provide an answer for this question, or it could not be processed.",
-                        evidenceSnippet: "",
-                        isRelevant: true // Force true so it renders on the UI as a 0 instead of vanishing
+                        feedback: result.feedback || "No feedback provided.",
+                        evidenceSnippet: result.extracted_evidence || "None found"
                     };
-                });
+                } catch (e) {
+                    return { question: rubricItem.question, score: 0, max: Number(rubricItem.max_score) || 0, feedback: "[Out of Scope] Engine failed.", evidenceSnippet: "ERROR" };
+                }
             })
         );
 
-        const nestedBreakdown = await Promise.all(atomicGradingPromises);
+        const formattedBreakdown = await Promise.all(atomicGradingPromises);
 
-        // Fix Missing Q4 UI Bug: Iterate over masterRubricArray to absolutely guarantee no questions vanish from the UI.
-        const formattedBreakdown = masterRubricArray.map(rubricItem => {
-            const foundResult = nestedBreakdown.find(item => normalizeId(item.question) === normalizeId(rubricItem.question));
-            if (foundResult) {
-                return foundResult;
-            } else {
-                return {
-                    question: rubricItem.question,
-                    score: 0,
-                    max: Number(rubricItem.max_score) || 0,
-                    feedback: "[Missing] No answer was detected or processed for this specific question.",
-                    evidenceSnippet: "",
-                    isRelevant: true
-                };
-            }
-        });
-
-        // 5. ACTIONABLE INSIGHT GENERATOR
-        console.log(`[WORKER] Initiating Actionable Insight Generator...`);
-        let actionableInsight = "Graded via Atomic Map-Reduce.";
-        try {
-            const insightSystemPrompt = `You are a strict, professional university educator speaking directly to the student.
-Review the student's evaluation array and provide a 1-3 sentence Actionable Insight summarizing their performance.
-Focus on strengths and specific areas for improvement.
-
-CRITICAL RULES:
-1. Speak DIRECTLY to the student (e.g. "You demonstrated strong knowledge in...").
-2. DO NOT output JSON. Output ONLY plain text sentences.
-3. DO NOT break the fourth wall. NEVER describe your grading process (e.g. "I graded holistically...", "Based on the array provided...").
-4. Keep it premium, concise, and educational.`;
-
-            const insightResponse = await deepSeekClient.chat.completions.create({
-                model: "deepseek-chat", // Fast model for summarization
-                messages: [
-                    { role: "system", content: insightSystemPrompt },
-                    { role: "user", content: `STUDENT EVALUATION DATA:\n${JSON.stringify(formattedBreakdown)}` }
-                ],
-                temperature: 0.1,
-                max_tokens: 150
-            });
-            // Clean up any rogue formatting or markdown
-            actionableInsight = insightResponse.choices[0]?.message?.content?.replace(/```json/g, '').replace(/```/g, '').trim() || actionableInsight;
-        } catch (e: any) {
-            console.warn(`[PLAYBOOK-TRACE] [INSIGHT-WARN] Failed to generate actionable insight. Falling back. Reason: ${e.message}`);
-        }
-
-        // 6. SAVE TO DB (IDEMPOTENT)
+        // 5. SAVE TO DB (IDEMPOTENT)
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
         await prisma.score.upsert({
             where: { submissionId: submission.id },
             update: {
                 totalMarks: calculatedTotalScore,
-                remarks: actionableInsight,
+                remarks: "Graded via Atomic Map-Reduce.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             },
             create: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
-                remarks: actionableInsight,
+                remarks: "Graded via Atomic Map-Reduce.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             }
