@@ -5,6 +5,7 @@ import { Client } from "@upstash/qstash";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { extractMultiplePageImagesFromBuffer } from '@/lib/pdf-utils';
 import { supabase } from '@/lib/supabase'; // Using the admin client
+import { fileTypeFromBuffer } from 'file-type';
 
 const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
@@ -14,7 +15,7 @@ export const POST = verifySignatureAppRouter(
     async (req: NextRequest) => {
         console.log("[PLAYBOOK-TRACE] [SECURITY] QStash Signature Verified for payload.");
         try {
-        const { submissionId, pages, pdfUrl } = await req.json(); // pages is an array: [1, 2, 3, 4]
+        const { submissionId, pages, chunkIndex, pdfUrl } = await req.json();
 
         // 1. Download PDF Buffer Exactly ONCE using robust Supabase Admin SDK
         // Clean path to ensure it doesn't have leading slashes if it's already a relative storage path
@@ -34,12 +35,18 @@ export const POST = verifySignatureAppRouter(
         const arrayBuffer = await fileData.arrayBuffer();
         const pdfBuffer = Buffer.from(arrayBuffer);
 
+        // Validating PDF MIME
+        const type = await fileTypeFromBuffer(pdfBuffer);
+        if (type?.mime !== 'application/pdf') {
+            throw new Error('Invalid file type. Only PDFs are allowed.');
+        }
+
         // 2. Extract multiple pages in a single iteration
         const pageImages = await extractMultiplePageImagesFromBuffer(pdfBuffer, pages);
 
         // 3. Build Multimodal Content Array
         const promptContent: any[] = [
-            { type: "text", text: `Transcribe all handwritten and printed text from these pages precisely. Do not summarize. Preserve the exact layout, numbering, and content. Pages: ${pages.join(', ')}` }
+            { type: "text", text: `Transcribe all handwritten and printed text from these pages precisely. Do not summarize. Preserve the exact layout, numbering, and content. Also estimate readability: rate from 0.0 to 1.0 how confident you are that the text is accurate. Include the score explicitly as [CONFIDENCE: X.X]. Pages: ${pages.join(', ')}` }
         ];
 
         for (const pageNum of pages) {
@@ -54,6 +61,7 @@ export const POST = verifySignatureAppRouter(
 
         // 4. Parallel OCR via Gemini Vision (with strict timeout/error handling)
         let extractedText = "";
+        let confidenceScore = 0.5; // default fallback
         try {
             const completion = await openRouterClient.chat.completions.create({
                 model: "google/gemini-2.5-flash",
@@ -62,23 +70,50 @@ export const POST = verifySignatureAppRouter(
                 max_tokens: 8192
             });
             extractedText = completion.choices[0]?.message?.content || "";
+
+            // Extract confidence score
+            const confidenceMatch = extractedText.match(/\[CONFIDENCE:\s*([\d\.]+)\]/i);
+            if (confidenceMatch) {
+                confidenceScore = parseFloat(confidenceMatch[1]);
+            }
         } catch (aiError: any) {
             console.error(`[PLAYBOOK-TRACE] [FATAL-OCR] OpenRouter API Failed. Check API Credits/Network. Reason: ${aiError.message}`);
             throw aiError; // Trigger QStash retry
         }
-        const chunkData = { pages, text: extractedText };
 
-        // 3. ATOMIC LOCK & REDUCE TRIGGER (Zero Race Conditions)
-        const updatedSubmission = await prisma.submission.update({
-            where: { id: submissionId },
-            data: {
-                extractedData: { push: chunkData }, // Atomic push to PostgreSQL array
-                processedChunks: { increment: 1 }   // Atomic increment
+        // Idempotent UPSERT to ExtractedChunk table to fix array race condition and dupes
+        await prisma.extractedChunk.upsert({
+            where: {
+                submissionId_chunkIndex: {
+                    submissionId: submissionId,
+                    chunkIndex: chunkIndex
+                }
+            },
+            update: {
+                pages: pages,
+                text: extractedText,
+                confidence: confidenceScore
+            },
+            create: {
+                submissionId: submissionId,
+                chunkIndex: chunkIndex,
+                pages: pages,
+                text: extractedText,
+                confidence: confidenceScore
             }
         });
 
+        // Check completion atomically
+        const totalChunksRecord = await prisma.submission.findUnique({
+            where: { id: submissionId },
+            select: { totalChunks: true }
+        });
+        const currentCount = await prisma.extractedChunk.count({
+            where: { submissionId: submissionId }
+        });
+
         // 4. Fire Reducer if this was the last chunk to finish
-        if (updatedSubmission.processedChunks === updatedSubmission.totalChunks) {
+        if (totalChunksRecord && currentCount === totalChunksRecord.totalChunks) {
             const protocol = req.headers.get('x-forwarded-proto') || 'https';
             const host = req.headers.get('host') || 'localhost:3000';
             const baseUrl = `${protocol}://${host}`;

@@ -122,11 +122,31 @@ model Submission {
   score        Score?
   appeals      Appeal[]
 
+  // Relational chunk handling
+  extractedChunks ExtractedChunk[]
+
   // Unique constraint on workSessionId + userId
   @@unique([workSessionId, userId])
 
   @@map("submissions")
   @@index([workSessionId])
+}
+
+// 6.5 EXTRACTED CHUNKS
+model ExtractedChunk {
+  id             String     @id @default(cuid())
+  submissionId   String     @map("submission_id")
+  chunkIndex     Int        @map("chunk_index")
+  pages          Int[]      // e.g., [1, 2]
+  text           String
+  confidence     Float?
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  submission     Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, chunkIndex])
+  @@index([submissionId])
+  @@map("extracted_chunks")
 }
 
 // 7. SCORES
@@ -160,6 +180,17 @@ model Job {
 
   @@map("jobs")
   @@index([status, type])
+}
+
+// 8.5 SYSTEM LOGS
+model SystemLog {
+  id           String    @id @default(cuid())
+  level        String    // 'ERROR', 'WARN', 'INFO'
+  message      String
+  metadata     Json?     // Error stack, submissionId, etc.
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("system_logs")
 }
 
 // 9. AUDIT LOGS
