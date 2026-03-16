@@ -13,9 +13,16 @@ export const maxDuration = 300; // Increased to max to prevent premature timeout
 
 export const POST = verifySignatureAppRouter(
     async (req: NextRequest) => {
+        const startTime = Date.now();
+        const DEBUG_MODE = process.env.DEBUG_MODE === 'true';
+
         console.log("[PLAYBOOK-TRACE] [SECURITY] QStash Signature Verified for payload.");
         try {
         const { submissionId, pages, chunkIndex, pdfUrl } = await req.json();
+
+        if (DEBUG_MODE) {
+            console.log(`[DEBUG] [OCR_STAGE] Started OCR for submission ${submissionId}, chunk ${chunkIndex}`);
+        }
 
         // 1. Download PDF Buffer Exactly ONCE using robust Supabase Admin SDK
         // Clean path to ensure it doesn't have leading slashes if it's already a relative storage path
@@ -103,6 +110,11 @@ export const POST = verifySignatureAppRouter(
             }
         });
 
+        if (DEBUG_MODE) {
+            const ocrTime = Date.now() - startTime;
+            console.log(`[DEBUG] [OCR_STAGE] Chunk ${chunkIndex} completed in ${ocrTime}ms. Text Length: ${extractedText.length}, Confidence: ${confidenceScore}`);
+        }
+
         // Check completion atomically
         const totalChunksRecord = await prisma.submission.findUnique({
             where: { id: submissionId },
@@ -114,6 +126,17 @@ export const POST = verifySignatureAppRouter(
 
         // 4. Fire Reducer if this was the last chunk to finish
         if (totalChunksRecord && currentCount === totalChunksRecord.totalChunks) {
+            if (DEBUG_MODE) {
+                console.log(`[DEBUG] [OCR_STAGE] SUCCESS. All chunks extracted for submission ${submissionId}.`);
+                await prisma.systemLog.create({
+                    data: {
+                        level: 'INFO',
+                        message: 'OCR Stage Completed',
+                        metadata: JSON.stringify({ submissionId, totalChunks: currentCount })
+                    }
+                });
+            }
+
             const protocol = req.headers.get('x-forwarded-proto') || 'https';
             const host = req.headers.get('host') || 'localhost:3000';
             const baseUrl = `${protocol}://${host}`;
