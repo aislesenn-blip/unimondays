@@ -9,6 +9,11 @@ export const maxDuration = 300; // Vercel timeout protection
 const CHUNK_SIZE = 2; // Reduced to 2 pages per worker to prevent OpenRouter timeouts
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+  const DEBUG_MODE = process.env.DEBUG_MODE === 'true';
+
+  if (DEBUG_MODE) console.log(`[DEBUG] [UPLOAD_STAGE] Initiating file ingestion...`);
+
   try {
     // 1. Authenticate (Robust)
     const cookieStore = await cookies();
@@ -35,6 +40,10 @@ export async function POST(req: NextRequest) {
     // MANDATE 1: Client-Side Upload Protocol
     const body = await req.json();
     const { filePath, workSessionId, workCode } = body;
+
+    if (DEBUG_MODE) {
+        console.log(`[DEBUG] [UPLOAD_STAGE] File received: ${filePath}`);
+    }
 
     if (!filePath) {
         return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
@@ -102,13 +111,19 @@ export async function POST(req: NextRequest) {
 
     if (listError || !fileList || fileList.length === 0) {
         console.warn(`[Security] File not found in storage: ${cleanPath} for user ${userId}`);
+        if (DEBUG_MODE) console.error(`[DEBUG] [UPLOAD_STAGE] File missing in storage: ${cleanPath}`);
         return NextResponse.json({ error: 'Security Verification Failed: Uploaded file not found.' }, { status: 400 });
     }
 
     // Double check exact match
     const foundFile = fileList.find(f => f.name === filename);
     if (!foundFile) {
+         if (DEBUG_MODE) console.error(`[DEBUG] [UPLOAD_STAGE] File mismatch in storage.`);
          return NextResponse.json({ error: 'Security Verification Failed: File mismatch.' }, { status: 400 });
+    }
+
+    if (DEBUG_MODE) {
+        console.log(`[DEBUG] [UPLOAD_STAGE] File verified. Type: ${foundFile.metadata?.mimetype || 'unknown'}, Size: ${foundFile.metadata?.size || 'unknown'} bytes`);
     }
 
     // 5. Verify Work Session & Deadline
@@ -216,6 +231,18 @@ export async function POST(req: NextRequest) {
 
         await qstash.batchJSON(messages);
         console.log(`[SUBMIT] Successfully dispatched ${chunks.length} Map-Reduce jobs to QStash.`);
+
+        if (DEBUG_MODE) {
+            const uploadTime = Date.now() - startTime;
+            console.log(`[DEBUG] [UPLOAD_STAGE] SUCCESS. Total ingestion time: ${uploadTime}ms.`);
+            await prisma.systemLog.create({
+                data: {
+                    level: 'INFO',
+                    message: 'Upload Stage Completed',
+                    metadata: JSON.stringify({ submissionId: submission.id, uploadTimeMs: uploadTime, chunks: chunks.length })
+                }
+            });
+        }
 
     } catch (dispatchError: any) {
         console.error("[SUBMIT] Failed to dispatch to QStash:", dispatchError);
