@@ -126,6 +126,8 @@ export const POST = verifySignatureAppRouter(
 
         // 4. Fire Reducer if this was the last chunk to finish
         if (totalChunksRecord && currentCount === totalChunksRecord.totalChunks) {
+            console.log(`[OCR] ALL CHUNKS COMPLETED for Submission ${submissionId}. Moving to GRADING queue...`);
+
             if (DEBUG_MODE) {
                 console.log(`[DEBUG] [OCR_STAGE] SUCCESS. All chunks extracted for submission ${submissionId}.`);
                 await prisma.systemLog.create({
@@ -136,6 +138,11 @@ export const POST = verifySignatureAppRouter(
                     }
                 });
             }
+
+            await prisma.submission.update({
+                where: { id: submissionId },
+                data: { status: 'GRADING' }
+            });
 
             const protocol = req.headers.get('x-forwarded-proto') || 'https';
             const host = req.headers.get('host') || 'localhost:3000';

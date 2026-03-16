@@ -17,8 +17,16 @@ export const POST = verifySignatureAppRouter(
 
         try {
             // STRICTLY 1 JOB PER LAMBDA TO AVOID 300s TIMEOUT
+            // FIX: Use OR clause to fetch PENDING jobs where retryCount is less than 3 OR null
+            // This prevents jobs from silently being excluded due to Prisma inequality quirks.
             const jobs = await prisma.job.findMany({
-                where: { status: 'PENDING' },
+                where: {
+                    status: 'PENDING',
+                    OR: [
+                        { retryCount: { lt: 3 } },
+                        { retryCount: null }
+                    ]
+                },
                 orderBy: { createdAt: 'asc' },
                 take: 1
             });
@@ -46,6 +54,16 @@ export const POST = verifySignatureAppRouter(
                 } catch (err: any) {
                     console.error(`[QUEUE] -> Job ${job.id} FAILED:`, err.message);
 
+                    if (process.env.DEBUG_MODE === 'true') {
+                         await prisma.systemLog.create({
+                             data: {
+                                 level: 'ERROR',
+                                 message: `Job ${job.id} failed execution`,
+                                 metadata: JSON.stringify({ error: err.message, stack: err.stack, jobType: job.type })
+                             }
+                         });
+                    }
+
                     // Fallback to PENDING for 3 retries
                     const retryCount = (job.retryCount || 0) + 1;
                     const newStatus = retryCount >= 3 ? 'FAILED' : 'PENDING';
@@ -54,6 +72,24 @@ export const POST = verifySignatureAppRouter(
                         where: { id: job.id },
                         data: { status: newStatus, error: err.message, retryCount }
                     });
+
+                    // IF it failed permanently, ensure the submission status doesn't stay stuck in GRADING forever
+                    if (newStatus === 'FAILED' && job.payload) {
+                        try {
+                             const rawPayload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
+                             const actualPayload = rawPayload.payload ? rawPayload.payload : rawPayload;
+                             const subId = actualPayload.submissionId;
+
+                             if (subId) {
+                                  await prisma.submission.update({
+                                      where: { id: subId },
+                                      data: { status: 'FAILED', feedback: 'System encountered a fatal error while grading. Please contact support.' }
+                                  });
+                             }
+                        } catch (e) {
+                             console.error("Failed to update submission status after terminal job failure.");
+                        }
+                    }
                 }
             }
 
