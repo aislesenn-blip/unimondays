@@ -65,10 +65,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           if (key in body) data[key] = body[key];
       }
 
+      // If a new PDF marking scheme is uploaded but no text rubric is provided, explicitly nullify the old rubric text
+      // to force the background engine to re-extract the fresh PDF.
+      if (data.markingScheme && data.markingScheme !== existing.markingScheme) {
+          if (!data.rubric) {
+              data.rubric = null; // Force cold-start cache invalidation for the new PDF
+          }
+      }
+
       const session = await prisma.workSession.update({
           where: { id },
           data
       });
+
+      // If the rubric was explicitly nullified (new PDF uploaded), we can optionally pre-warm the rubric here.
+      // However, for pure fault tolerance, the grading-worker is designed to lazily cache it on the first run.
+      // We will ensure the grading-worker handles this robustly without 504 timeouts.
 
       return NextResponse.json(session);
   } catch (e) {
