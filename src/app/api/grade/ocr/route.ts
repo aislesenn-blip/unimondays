@@ -28,14 +28,32 @@ export const POST = verifySignatureAppRouter(
         // Clean path to ensure it doesn't have leading slashes if it's already a relative storage path
         const cleanPath = pdfUrl?.startsWith('/') ? pdfUrl.slice(1) : pdfUrl;
 
-        const { data: fileData, error: downloadError } = await supabase
-            .storage
-            .from('exam_pdfs')
-            .download(cleanPath);
+        let fileData: Blob | null = null;
+        let downloadError: any = null;
 
-        if (downloadError || !fileData) {
-            console.error(`[Storage Error] Failed to download PDF for submission ${submissionId}:`, downloadError);
-            throw new Error(`Supabase Download Failed: ${downloadError?.message || 'No data returned'}`);
+        // Implementation of Eventual Consistency Backoff for Supabase CDN Propagation
+        for (let i = 0; i < 4; i++) {
+            const result = await supabase.storage.from('exam_pdfs').download(cleanPath);
+            if (result.error || !result.data) {
+                downloadError = result.error;
+                if (DEBUG_MODE) console.warn(`[DEBUG] [OCR_STAGE] Supabase download failed for ${cleanPath}. Attempt ${i + 1}/4. Retrying in ${2000 * Math.pow(2, i)}ms...`);
+                await new Promise(res => setTimeout(res, 2000 * Math.pow(2, i))); // Exponential backoff: 2s, 4s, 8s
+            } else {
+                fileData = result.data;
+                break;
+            }
+        }
+
+        if (!fileData) {
+            console.error(`[Storage Error] Failed to download PDF for submission ${submissionId} after 4 retries:`, downloadError);
+
+            // Critical Eventual Consistency Fail-Safe
+            await prisma.submission.update({
+                where: { id: submissionId },
+                data: { status: 'FAILED', feedback: 'Failed to access the uploaded file from cloud storage. The file may be corrupted or deleted.' }
+            }).catch(e => console.error("Failed to update status on storage error", e));
+
+            throw new Error(`Supabase Download Failed: ${downloadError?.message || 'No data returned after retries'}`);
         }
 
         // Convert Blob/File to Buffer for your PDF parser
