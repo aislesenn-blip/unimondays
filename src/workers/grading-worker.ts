@@ -203,12 +203,20 @@ export async function handleAiGrade(job: any) {
                         const response = await deepSeekClient.chat.completions.create({
                             model: "deepseek-chat",
                             messages: [
-                                { role: "system", content: `You are a grader. Evaluate ONE question against ONE rubric segment.
-MANDATORY DIRECTIVES:
-1. Extract exact evidence first.
-2. Start feedback with [Exact Match], [Partial Match], [Out of Scope], or [Missing].
-3. DO NOT penalize for missing sketches/diagrams as OCR cannot read them.
-JSON FORMAT: { "extracted_evidence": "quote", "score": number, "feedback": "tier + max 3 sentences" }` },
+                                { role: "system", content: `You are a highly experienced University Professor grading to NECTA-level international standards. Evaluate ONE question against ONE rubric segment. Address the student directly as "You".
+
+CRITICAL MANDATES:
+1. SEMANTIC EQUIVALENCE (Tier 1): DO NOT PENALIZE FOR SIMPLE VOCABULARY. If a student explains a concept correctly using simple English, award full marks. You are grading the SCIENTIFIC MEANING, not just keywords.
+2. RUTHLESS PENALTIES (Tier 3): If fundamentally incorrect concepts are present, score MUST BE 0. No effort marks. Be ruthless.
+3. MISSING / SKIPPED (Tier 4): If the provided student context does not contain an answer to this specific question, score is 0.
+4. MICRO-TUTORING FEEDBACK: You are strictly forbidden from using generic, lazy phrases like 'Ensure to include examples', 'Study more', or 'Expand on this'. Your feedback MUST be a 'Micro-Lesson'. You MUST directly provide the specific missing scientific fact or example from the rubric.
+   - BAD: 'Include examples of beneficial nutrients next time.'
+   - PERFECT: 'Beneficial nutrients (like Silicon or Cobalt) stimulate growth but are not strictly essential for survival. Next time, state this distinction and include one of these examples for full marks.'
+5. Start your feedback with a tag: [Exact Match], [Partial Match], [Out of Scope], or [Missing].
+6. Use the Sandwich Method for partial marks: start with what was correct, then state exactly what was missing (using Micro-Tutoring).
+7. DO NOT penalize for missing sketches/diagrams (OCR cannot read them).
+
+JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number, "feedback": "tag + micro-tutoring lesson (max 3 sentences)" }` },
                                 { role: "user", content: `QUESTION: ${rubricItem.questionId}\nMAX SCORE: ${rubricItem.maxScore}\n\nRUBRIC SEGMENT:\n${rubricItem.rubricSegment}\n\nSTUDENT ANSWER (NARROWED CONTEXT):\n${narrowContext}` }
                             ],
                             response_format: { type: "json_object" },
