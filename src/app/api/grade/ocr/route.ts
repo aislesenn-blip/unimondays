@@ -75,7 +75,7 @@ export const POST = verifySignatureAppRouter(
                 messages: [{ role: "user", content: promptContent }],
                 temperature: 0.0,
                 max_tokens: 8192
-            });
+            }, { timeout: 120000 }); // Explicit 2-minute application timeout
             extractedText = completion.choices[0]?.message?.content || "";
 
             // Extract confidence score
@@ -85,6 +85,13 @@ export const POST = verifySignatureAppRouter(
             }
         } catch (aiError: any) {
             console.error(`[PLAYBOOK-TRACE] [FATAL-OCR] OpenRouter API Failed. Check API Credits/Network. Reason: ${aiError.message}`);
+
+            // Critical Fix: Explicitly fail the submission if OCR permanently aborts
+            await prisma.submission.update({
+                where: { id: submissionId },
+                data: { status: 'FAILED', feedback: 'Failed to extract text from PDF via OCR. Please try uploading a clearer document or check API limits.' }
+            }).catch(e => console.error("Failed to update status on OCR error", e));
+
             throw aiError; // Trigger QStash retry
         }
 

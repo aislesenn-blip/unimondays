@@ -246,7 +246,15 @@ export async function POST(req: NextRequest) {
 
     } catch (dispatchError: any) {
         console.error("[SUBMIT] Failed to dispatch to QStash:", dispatchError);
-        // We still return success to the student, the job table will act as a fallback/retry mechanism if implemented
+
+        // Critical Fix: If QStash fails to queue, the submission is permanently stuck in PROCESSING/PENDING.
+        // We MUST fail loudly to the UI.
+        await prisma.submission.update({
+            where: { id: submission.id },
+            data: { status: 'FAILED', feedback: 'Failed to queue document for processing. Please try again.' }
+        }).catch(e => console.error("Failed to update status on dispatch error", e));
+
+        return NextResponse.json({ error: 'Failed to queue submission due to internal network error. Please try again.' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
