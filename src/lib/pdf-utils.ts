@@ -5,8 +5,24 @@ import { readFile } from './storage';
 export async function getPdfPageCount(filePathOrUrl: string | null): Promise<number> {
     if (!filePathOrUrl) throw new Error("File path is missing.");
 
-    // Retrieve file buffer
-    const buffer = await readFile(filePathOrUrl, 'exam_pdfs');
+    let buffer: Buffer | null = null;
+    let lastError: any = null;
+
+    // Retry loop for eventual consistency CDN delays right after upload
+    for (let i = 0; i < 4; i++) {
+        try {
+            buffer = await readFile(filePathOrUrl, 'exam_pdfs');
+            break; // Success
+        } catch (error) {
+            lastError = error;
+            console.warn(`[PDF-UTILS] Failed to read file ${filePathOrUrl} for page count. Attempt ${i + 1}/4. Retrying in ${2000 * Math.pow(2, i)}ms...`);
+            await new Promise(res => setTimeout(res, 2000 * Math.pow(2, i))); // 2s, 4s, 8s backoff
+        }
+    }
+
+    if (!buffer) {
+        throw new Error(`Failed to read file after 4 retries: ${lastError?.message || 'Unknown error'}`);
+    }
 
     // Use pdf-lib to get the page count extremely quickly
     const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true, updateMetadata: false });
