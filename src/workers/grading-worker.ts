@@ -222,7 +222,7 @@ JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number
                             response_format: { type: "json_object" },
                             temperature: 0.1,
                             max_tokens: 8192
-                        });
+                        }, { timeout: 90000 }); // 90 second explicit app timeout
 
                         const raw = response.choices[0]?.message?.content || '{}';
                         const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
