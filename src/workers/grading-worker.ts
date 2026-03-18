@@ -232,6 +232,15 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
 
     if (!isQualityValid) return; // End workflow
 
+    // Transition Status to GRADING so UI progresses
+    await context.run("update-status-grading", async () => {
+        await prisma.submission.update({
+            where: { id: submission.id },
+            data: { status: 'GRADING' }
+        });
+        console.log(`[WORKFLOW] Status updated to GRADING for Submission ${submission.id}`);
+    });
+
     // 3. PROGRAMMATIC RUBRIC PARSER
     const masterRubricArray = await context.run("parse-rubric", async () => {
         console.log("[WORKER] Programmatically parsing rubric...");
@@ -243,12 +252,8 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
     const isSimulationMode = process.env.DEEPSEEK_API_KEY === 'dummy' || !process.env.DEEPSEEK_API_KEY;
 
     // 4. ATOMIC GRADING
-    // To respect the 300s limit per step while executing concurrently,
-    // we use a single workflow step for grading using p-limit(10),
-    // but if the exam is extremely large, this could theoretically timeout.
-    // Assuming 90s max per atomic block, 10 limits, it should finish within 300s.
-    // An alternative is to loop through masterRubricArray and context.run() each question.
-    // For Vercel, context.run() each question is bulletproof.
+    // We break the loop into individual steps to absolutely guarantee we never hit
+    // the Vercel 300s timeout. Each iteration of masterRubricArray gets its own context.run().
 
     const formattedBreakdown: any[] = [];
     const failedQuestions: any[] = [];
@@ -256,7 +261,9 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
     for (let i = 0; i < masterRubricArray.length; i++) {
         const rubricItem = masterRubricArray[i];
 
+        // This effectively turns a giant array of promises into sequential step executions per question
         const qResult = await context.run(`grade-q-${rubricItem.questionId}`, async () => {
+             console.log(`[WORKFLOW] Executing isolated grading step for Question: ${rubricItem.questionId}`);
              if (isSimulationMode) {
                   return {
                       status: 'fulfilled',
@@ -339,6 +346,10 @@ JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number
                  };
              }
         });
+
+        // We do not push to a local array here because local memory doesn't persist across workflow steps.
+        // Wait, context.run returns the value to the orchestrator memory!
+        // qResult is correctly persisted by the workflow engine!
 
         if (qResult.status === 'fulfilled' && qResult.value.score !== null) {
              formattedBreakdown.push(qResult.value);
