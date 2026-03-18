@@ -162,8 +162,20 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageDat
     for await (const imageBuffer of document) {
         console.log(`[GEMINI] Processing Page ${pageNum}...`);
 
-        // Use existing OpenRouter Gemini Vision API call logic
-        const extractedText = await callGeminiVisionAPI(imageBuffer);
+        // PAGE-LEVEL RETRY LOGIC (Anti-Nuclear Fix)
+        // If a single page hits a 500 or 429 timeout, it gently retries this specific page
+        // instead of crashing the entire loop and destroying the entire PDF extraction.
+        let extractedText = "";
+        for (let i = 0; i < 3; i++) {
+             try {
+                 extractedText = await callGeminiVisionAPI(imageBuffer);
+                 break;
+             } catch (error: any) {
+                 if (i === 2) throw new Error(`Failed to extract page ${pageNum} after 3 attempts: ${error.message}`);
+                 console.warn(`[GEMINI] Page ${pageNum} extraction failed. Retrying... (${i+1}/3). Waiting 4 seconds.`);
+                 await new Promise(res => setTimeout(res, 4000)); // Wait before retrying
+             }
+        }
 
         pagesData.push({
             pageNumber: pageNum,
