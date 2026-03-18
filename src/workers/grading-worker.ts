@@ -30,182 +30,193 @@ const deepSeekClient = new OpenAI({
 });
 
 export async function handleAiGrade(job: any) {
+    // Keeping for backwards compatibility if needed temporarily,
+    // but the main execution path will be handleAiGradeWorkflow below.
+    throw new Error("Use handleAiGradeWorkflow for QStash Workflow execution.");
+}
+
+export async function handleAiGradeWorkflow(context: any, submissionId: string) {
     const DEBUG_MODE = process.env.DEBUG_MODE === 'true';
-    const pipelineStartTime = Date.now();
-    const stageTimes: Record<string, number> = {};
 
-    console.log(`[WORKER] Booting ATOMIC Map-Reduce for Job ${job.id}`);
+    console.log(`[WORKFLOW] Booting Upstash Workflow for Submission ${submissionId}`);
 
-    let submissionIdToUpdate: string | null = null;
-
-    try {
-        const rawPayload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
-        // Unwrap the nested payload from QStash if it exists, otherwise use raw
-        const actualPayload = rawPayload.payload ? rawPayload.payload : rawPayload;
-
-        submissionIdToUpdate = actualPayload.submissionId;
-
-        if (!submissionIdToUpdate) throw new Error("Payload is missing submissionId");
-
-        const submission = await prisma.submission.findUnique({
-            where: { id: submissionIdToUpdate },
+    // Fetch initial submission data
+    const submission = await context.run("fetch-submission", async () => {
+        const sub = await prisma.submission.findUnique({
+            where: { id: submissionId },
             include: { workSession: true }
         });
+        if (!sub) throw new Error("Submission not found");
+        return sub;
+    });
 
-        if (!submission) throw new Error("Submission not found");
+    let finalRubricText = submission.workSession.rubric;
 
-        let finalRubricText = submission.workSession.rubric;
-
-        // 1. CACHE RUBRIC
-        if ((!finalRubricText || finalRubricText.trim() === '') && submission.workSession.markingScheme) {
+    // 1. CACHE RUBRIC
+    if ((!finalRubricText || finalRubricText.trim() === '') && submission.workSession.markingScheme) {
+        finalRubricText = await context.run("extract-rubric", async () => {
             console.log("[WORKER] Extracting Rubric from PDF...");
+            let text = "";
             const urlOrText = submission.workSession.markingScheme;
             if (urlOrText.includes('/') || urlOrText.toLowerCase().endsWith('.pdf') || urlOrText.toLowerCase().endsWith('.png')) {
                 const buffer = await withRetries(() => readFile(urlOrText, 'exam_pdfs'));
                 if (urlOrText.toLowerCase().endsWith('.pdf')) {
                     const pages = await withRetries(() => extractPagesMultimodal(buffer));
-                    finalRubricText = pages.map(p => p.text).join('\n\n');
+                    text = pages.map(p => p.text).join('\n\n');
                 } else {
                     const mimeType = urlOrText.toLowerCase().endsWith('.png') ? 'image/png' : 'application/pdf';
-                    finalRubricText = await withRetries(() => ocrDocument(buffer, mimeType));
+                    text = await withRetries(() => ocrDocument(buffer, mimeType));
                 }
             } else {
-                finalRubricText = urlOrText;
+                text = urlOrText;
             }
             await prisma.workSession.update({
                 where: { id: submission.workSession.id },
-                data: { rubric: finalRubricText }
+                data: { rubric: text }
             });
+            return text;
+        });
+    }
+
+    if (!finalRubricText || finalRubricText.trim() === '') throw new Error("Fatal: Rubric text is entirely missing.");
+
+    // 2. MAP PHASE: NATIVE LINEAR OCR (Batched by workflow step)
+    let totalPages = 0;
+    if (submission.filePath) {
+        totalPages = await context.run("fetch-page-count", async () => {
+             const cleanPath = submission.filePath.startsWith('/') ? submission.filePath.slice(1) : submission.filePath;
+             const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(cleanPath);
+             if (downloadError || !fileData) throw new Error(`Supabase Download Failed: ${downloadError?.message}`);
+
+             // We just need the page count here, unfortunately we have to download the buffer to get it reliably if we don't store it
+             // A better approach would be to store totalPages during upload, but we'll fetch it.
+             const arrayBuffer = await fileData.arrayBuffer();
+             const pdfBuffer = Buffer.from(arrayBuffer);
+
+             // Check if chunks exist first
+             const chunksExist = await prisma.extractedChunk.count({ where: { submissionId } });
+             if (chunksExist > 0) return 0; // Skip OCR steps
+
+             return await getPdfPageCount(submission.filePath);
+        });
+    }
+
+    const CHUNK_SIZE = 2;
+    let currentChunkIndex = 0;
+
+    for (let i = 1; i <= totalPages; i += CHUNK_SIZE) {
+        const pageBatch: number[] = [];
+        for (let j = 0; j < CHUNK_SIZE && (i + j) <= totalPages; j++) {
+            pageBatch.push(i + j);
         }
 
-        if (!finalRubricText || finalRubricText.trim() === '') throw new Error("Fatal: Rubric text is entirely missing.");
+        // Each OCR batch is a separate workflow step, avoiding 300s timeouts
+        await context.run(`ocr-chunk-${currentChunkIndex}`, async () => {
+             console.log(`[WORKFLOW] Processing OCR Chunk ${currentChunkIndex} for pages ${pageBatch.join(', ')}`);
 
-        stageTimes.uploadAndRubric = Date.now() - pipelineStartTime;
+             const cleanPath = submission.filePath.startsWith('/') ? submission.filePath.slice(1) : submission.filePath;
+             const { data: fileData } = await supabase.storage.from('exam_pdfs').download(cleanPath);
+             if (!fileData) throw new Error("Failed to download PDF for OCR chunk");
 
-        // 2. MAP PHASE: NATIVE LINEAR OCR
-        let chunks = await prisma.extractedChunk.findMany({
-            where: { submissionId: submissionIdToUpdate },
+             const arrayBuffer = await fileData.arrayBuffer();
+             const pdfBuffer = Buffer.from(arrayBuffer);
+             const pageImages = await extractMultiplePageImagesFromBuffer(pdfBuffer, pageBatch);
+
+             let extractedText = "";
+             let confidenceScore = 1.0;
+
+             try {
+                 const promptContent: any[] = [
+                     { type: "text", text: `Transcribe all handwritten and printed text from these pages precisely. Do not summarize. Preserve the exact layout, numbering, and content. Also estimate readability: rate from 0.0 to 1.0 how confident you are that the text is accurate. Include the score explicitly as [CONFIDENCE: X.X]. Pages: ${pageBatch.join(', ')}` }
+                 ];
+
+                 for (const pageNum of pageBatch) {
+                     const imageBuffer = pageImages.get(pageNum);
+                     if (imageBuffer) {
+                         promptContent.push({
+                             type: "image_url",
+                             image_url: { url: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` }
+                         });
+                     }
+                 }
+
+                 const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
+                 const completion = await openRouterClient.chat.completions.create({
+                     model: "google/gemini-2.5-flash",
+                     messages: [{ role: "user", content: promptContent }],
+                     temperature: 0.0,
+                     max_tokens: 8192
+                 }, { timeout: 120000 });
+
+                 extractedText = completion.choices[0]?.message?.content || "";
+                 const confidenceMatch = extractedText.match(/\[CONFIDENCE:\s*([\d\.]+)\]/i);
+                 if (confidenceMatch) {
+                     confidenceScore = parseFloat(confidenceMatch[1]);
+                 }
+             } catch (aiError: any) {
+                 console.error(`[WORKER] OCR failed for pages ${pageBatch.join(', ')}:`, aiError.message);
+                 extractedText = "[OCR_FAILED]";
+                 confidenceScore = 0.0;
+             }
+
+             await prisma.extractedChunk.upsert({
+                 where: { submissionId_chunkIndex: { submissionId, chunkIndex: currentChunkIndex } },
+                 update: { pages: pageBatch, text: extractedText, confidence: confidenceScore },
+                 create: { submissionId, chunkIndex: currentChunkIndex, pages: pageBatch, text: extractedText, confidence: confidenceScore }
+             });
+        });
+        currentChunkIndex++;
+    }
+
+    const { fullExamText, detectedRegNo, validChunks, totalConfidence, pageTextMapJSON } = await context.run("aggregate-ocr", async () => {
+        const chunks = await prisma.extractedChunk.findMany({
+            where: { submissionId },
             orderBy: { chunkIndex: 'asc' }
         });
 
-        if (chunks.length === 0 && submission.filePath) {
-            console.log(`[WORKER] No OCR chunks found. Performing Native Linear OCR for Submission ${submissionIdToUpdate}`);
-
-            // Download PDF securely using Admin Client
-            const cleanPath = submission.filePath.startsWith('/') ? submission.filePath.slice(1) : submission.filePath;
-            const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(cleanPath);
-            if (downloadError || !fileData) throw new Error(`Supabase Download Failed: ${downloadError?.message}`);
-
-            const arrayBuffer = await fileData.arrayBuffer();
-            const pdfBuffer = Buffer.from(arrayBuffer);
-
-            // Extract text from pages in a linear loop to prevent timeouts
-            console.log("[WORKER] Extracting pages from student submission PDF linearly...");
-            const totalPages = await getPdfPageCount(submission.filePath);
-            const CHUNK_SIZE = 2;
-
-            let currentChunkIndex = 0;
-            for (let i = 1; i <= totalPages; i += CHUNK_SIZE) {
-                const pageBatch = [];
-                for (let j = 0; j < CHUNK_SIZE && (i + j) <= totalPages; j++) {
-                    pageBatch.push(i + j);
-                }
-
-                // Extract images for this batch
-                const pageImages = await extractMultiplePageImagesFromBuffer(pdfBuffer, pageBatch);
-
-                // OCR via Gemini Vision
-                let extractedText = "";
-                let confidenceScore = 1.0;
-
-                try {
-                    const promptContent: any[] = [
-                        { type: "text", text: `Transcribe all handwritten and printed text from these pages precisely. Do not summarize. Preserve the exact layout, numbering, and content. Also estimate readability: rate from 0.0 to 1.0 how confident you are that the text is accurate. Include the score explicitly as [CONFIDENCE: X.X]. Pages: ${pageBatch.join(', ')}` }
-                    ];
-
-                    for (const pageNum of pageBatch) {
-                        const imageBuffer = pageImages.get(pageNum);
-                        if (imageBuffer) {
-                            promptContent.push({
-                                type: "image_url",
-                                image_url: { url: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` }
-                            });
-                        }
-                    }
-
-                    // Native OpenRouter Call for OCR
-                    const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
-                    const completion = await openRouterClient.chat.completions.create({
-                        model: "google/gemini-2.5-flash",
-                        messages: [{ role: "user", content: promptContent }],
-                        temperature: 0.0,
-                        max_tokens: 8192
-                    }, { timeout: 120000 });
-
-                    extractedText = completion.choices[0]?.message?.content || "";
-                    const confidenceMatch = extractedText.match(/\[CONFIDENCE:\s*([\d\.]+)\]/i);
-                    if (confidenceMatch) {
-                        confidenceScore = parseFloat(confidenceMatch[1]);
-                    }
-                } catch (aiError: any) {
-                    console.error(`[WORKER] OCR failed for pages ${pageBatch.join(', ')}:`, aiError.message);
-                    extractedText = "[OCR_FAILED]";
-                    confidenceScore = 0.0;
-                }
-
-                // Save to ExtractedChunk idempotently
-                await prisma.extractedChunk.upsert({
-                    where: { submissionId_chunkIndex: { submissionId: submissionIdToUpdate, chunkIndex: currentChunkIndex } },
-                    update: { pages: pageBatch, text: extractedText, confidence: confidenceScore },
-                    create: { submissionId: submissionIdToUpdate, chunkIndex: currentChunkIndex, pages: pageBatch, text: extractedText, confidence: confidenceScore }
-                });
-
-                currentChunkIndex++;
-            }
-
-            // Re-fetch chunks
-            chunks = await prisma.extractedChunk.findMany({
-                where: { submissionId: submissionIdToUpdate },
-                orderBy: { chunkIndex: 'asc' }
-            });
-        }
-
-        let fullExamText = "";
-        let totalConfidence = 0;
-        let validChunks = 0;
+        let fullExamTextStr = "";
+        let totalConfidenceVal = 0;
+        let validChunksCount = 0;
         const idCandidates: string[] = [];
-
-        // Build a page-to-text map to narrow context optionally
-        const pageTextMap = new Map<number, string>();
+        const ptMap: Record<number, string> = {};
 
         for (const chunk of chunks) {
             const text = chunk.text || "";
-            fullExamText += `\n\n--- PAGES ${chunk.pages.join(', ')} ---\n\n${text}`;
+            fullExamTextStr += `\n\n--- PAGES ${chunk.pages.join(', ')} ---\n\n${text}`;
 
             if (chunk.confidence !== null) {
-                totalConfidence += chunk.confidence;
-                validChunks++;
+                totalConfidenceVal += chunk.confidence;
+                validChunksCount++;
             }
 
             for (const p of chunk.pages) {
-                pageTextMap.set(p, (pageTextMap.get(p) || '') + '\n' + text);
+                ptMap[p] = (ptMap[p] || '') + '\n' + text;
             }
 
-            // RegNo Candidate Extraction
             const match = text.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
             if (match) idCandidates.push(match[1].trim().toUpperCase());
         }
 
-        // Student ID Consensus
         const idCounts = idCandidates.reduce((acc: any, id) => { acc[id] = (acc[id] || 0) + 1; return acc; }, {});
-        const detectedRegNo = Object.entries(idCounts).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || 'UNKNOWN';
+        const detRegNo = Object.entries(idCounts).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || 'UNKNOWN';
 
+        return {
+            fullExamText: fullExamTextStr,
+            detectedRegNo: detRegNo,
+            validChunks: validChunksCount,
+            totalConfidence: totalConfidenceVal,
+            pageTextMapJSON: JSON.stringify(ptMap)
+        };
+    });
+
+    // Check OCR Quality
+    const isQualityValid = await context.run("check-ocr-quality", async () => {
         if (!fullExamText.trim() || fullExamText.length < 100) {
             await prisma.submission.update({
                 where: { id: submission.id },
                 data: { status: 'REVIEW_NEEDED', feedback: 'OCR extracted insufficient text. Please review manually.' }
             });
-            return;
+            return false;
         }
 
         const avgConfidence = validChunks > 0 ? totalConfidence / validChunks : 1.0;
@@ -214,156 +225,142 @@ export async function handleAiGrade(job: any) {
                 where: { id: submission.id },
                 data: { status: 'REVIEW_NEEDED', feedback: 'Handwriting unclear, please review manually.' }
             });
-            return;
+            return false;
         }
+        return true;
+    });
 
-        // 3. PROGRAMMATIC RUBRIC PARSER (Robust Multi-Pass)
+    if (!isQualityValid) return; // End workflow
+
+    // 3. PROGRAMMATIC RUBRIC PARSER
+    const masterRubricArray = await context.run("parse-rubric", async () => {
         console.log("[WORKER] Programmatically parsing rubric...");
-        const masterRubricArray: RubricItem[] = parseRubric(finalRubricText);
+        const arr = parseRubric(finalRubricText);
+        if (arr.length === 0) throw new Error("Failed to parse any questions from the rubric.");
+        return arr;
+    });
 
-        if (masterRubricArray.length === 0) {
-            throw new Error("Failed to parse any questions from the rubric.");
-        }
+    const isSimulationMode = process.env.DEEPSEEK_API_KEY === 'dummy' || !process.env.DEEPSEEK_API_KEY;
 
-        // Fuzzy matcher helper
-        const normalizeId = (id: string) => (id || "").replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    // 4. ATOMIC GRADING
+    // To respect the 300s limit per step while executing concurrently,
+    // we use a single workflow step for grading using p-limit(10),
+    // but if the exam is extremely large, this could theoretically timeout.
+    // Assuming 90s max per atomic block, 10 limits, it should finish within 300s.
+    // An alternative is to loop through masterRubricArray and context.run() each question.
+    // For Vercel, context.run() each question is bulletproof.
 
-        // Helper: Narrow Context
-        function findRelevantPages(questionId: string, pageMap: Map<number, string>): string {
-            const qTarget = normalizeId(questionId);
-            const relevant: number[] = [];
-            for (const [pageNum, text] of pageMap.entries()) {
-                if (normalizeId(text).includes(qTarget)) {
-                    relevant.push(pageNum);
-                }
-            }
-            // Fallback: If heuristic fails, send full text
-            if (relevant.length === 0) return fullExamText;
+    const formattedBreakdown: any[] = [];
+    const failedQuestions: any[] = [];
 
-            return relevant.map(p => `--- PAGE ${p} ---\n${pageMap.get(p)}`).join('\n\n');
-        }
+    for (let i = 0; i < masterRubricArray.length; i++) {
+        const rubricItem = masterRubricArray[i];
 
-        // 4. ATOMIC GRADING (pLimit & Promise.allSettled)
-        const gradingStartTime = Date.now();
+        const qResult = await context.run(`grade-q-${rubricItem.questionId}`, async () => {
+             if (isSimulationMode) {
+                  return {
+                      status: 'fulfilled',
+                      value: {
+                         question: rubricItem.questionId,
+                         score: Math.floor(Math.random() * (rubricItem.maxScore + 1)),
+                         max: rubricItem.maxScore,
+                         feedback: "Simulation feedback: AI module inactive but grading pipeline executed successfully.",
+                         evidenceSnippet: "Simulated extracted evidence."
+                      }
+                  };
+             }
 
-        if (DEBUG_MODE) {
-            console.log(`[DEBUG] [AI_GRADING_STAGE] Preparing AI grading request.`);
-            console.log(`[DEBUG] [AI_GRADING_STAGE] Exam question count: ${masterRubricArray.length}`);
-            console.log(`[DEBUG] [AI_GRADING_STAGE] Approximate full context length: ${fullExamText.length} characters.`);
-        }
+             try {
+                 const normalizeId = (id: string) => (id || "").replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                 const pageTextMap = JSON.parse(pageTextMapJSON);
+                 const qTarget = normalizeId(rubricItem.questionId);
+                 const relevant: number[] = [];
+                 for (const [pageNum, text] of Object.entries(pageTextMap)) {
+                     if (normalizeId(text as string).includes(qTarget)) {
+                         relevant.push(Number(pageNum));
+                     }
+                 }
+                 let narrowContext = fullExamText;
+                 if (relevant.length > 0) {
+                     narrowContext = relevant.map(p => `--- PAGE ${p} ---\n${pageTextMap[p]}`).join('\n\n');
+                 }
 
-        console.log(`[WORKER] Initiating Atomic Grading for ${masterRubricArray.length} Questions...`);
+                 await apiBucket.consume(); // Assuming this is fast enough for workflow steps
 
-        let atomicGradingPromises: Promise<any>[] = [];
-
-        // Check if API key is dummy or missing
-        const isSimulationMode = process.env.DEEPSEEK_API_KEY === 'dummy' || !process.env.DEEPSEEK_API_KEY;
-
-        if (isSimulationMode) {
-             console.warn(`[AI_API_STATUS] API_KEY_MISSING_OR_INACTIVE`);
-             console.log(`[SIMULATION_MODE] Running grading simulation`);
-
-             atomicGradingPromises = masterRubricArray.map((rubricItem) =>
-                 Promise.resolve({
-                     question: rubricItem.questionId,
-                     score: Math.floor(Math.random() * (rubricItem.maxScore + 1)), // Random score between 0 and maxScore
-                     max: rubricItem.maxScore,
-                     feedback: "Simulation feedback: AI module inactive but grading pipeline executed successfully.",
-                     evidenceSnippet: "Simulated extracted evidence."
-                 })
-             );
-
-        } else {
-            const pLimitLib = (await import('p-limit')).default;
-            const limit = pLimitLib(10);
-
-            atomicGradingPromises = masterRubricArray.map((rubricItem) =>
-                limit(async () => {
-                    try {
-                        await apiBucket.consume(); // Token Bucket Rate Limiter
-
-                        const narrowContext = findRelevantPages(rubricItem.questionId, pageTextMap);
-
-                        const response = await deepSeekClient.chat.completions.create({
-                            model: "deepseek-chat",
-                            messages: [
-                                { role: "system", content: `You are a highly experienced University Professor grading to NECTA-level international standards. Evaluate ONE question against ONE rubric segment. Address the student directly as "You".
+                 const response = await deepSeekClient.chat.completions.create({
+                     model: "deepseek-chat",
+                     messages: [
+                         { role: "system", content: `You are a highly experienced University Professor grading to NECTA-level international standards. Evaluate ONE question against ONE rubric segment. Address the student directly as "You".
 
 CRITICAL MANDATES:
 1. SEMANTIC EQUIVALENCE (Tier 1): DO NOT PENALIZE FOR SIMPLE VOCABULARY. If a student explains a concept correctly using simple English, award full marks. You are grading the SCIENTIFIC MEANING, not just keywords.
 2. RUTHLESS PENALTIES (Tier 3): If fundamentally incorrect concepts are present, score MUST BE 0. No effort marks. Be ruthless.
 3. MISSING / SKIPPED (Tier 4): If the provided student context does not contain an answer to this specific question, score is 0.
 4. MICRO-TUTORING FEEDBACK: You are strictly forbidden from using generic, lazy phrases like 'Ensure to include examples', 'Study more', or 'Expand on this'. Your feedback MUST be a 'Micro-Lesson'. You MUST directly provide the specific missing scientific fact or example from the rubric.
-   - BAD: 'Include examples of beneficial nutrients next time.'
-   - PERFECT: 'Beneficial nutrients (like Silicon or Cobalt) stimulate growth but are not strictly essential for survival. Next time, state this distinction and include one of these examples for full marks.'
 5. Start your feedback with a tag: [Exact Match], [Partial Match], [Out of Scope], or [Missing].
 6. Use the Sandwich Method for partial marks: start with what was correct, then state exactly what was missing (using Micro-Tutoring).
 7. DO NOT penalize for missing sketches/diagrams (OCR cannot read them).
 
 JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number, "constructive_feedback": "tag + micro-tutoring lesson (max 3 sentences)" }` },
-                                { role: "user", content: `QUESTION: ${rubricItem.questionId}\nMAX SCORE: ${rubricItem.maxScore}\n\nRUBRIC SEGMENT:\n${rubricItem.rubricSegment}\n\nSTUDENT ANSWER (NARROWED CONTEXT):\n${narrowContext}` }
-                            ],
-                            response_format: { type: "json_object" },
-                            temperature: 0.1,
-                            max_tokens: 8192
-                        }, { timeout: 90000 }); // 90 second explicit app timeout
+                         { role: "user", content: `QUESTION: ${rubricItem.questionId}\nMAX SCORE: ${rubricItem.maxScore}\n\nRUBRIC SEGMENT:\n${rubricItem.rubricSegment}\n\nSTUDENT ANSWER (NARROWED CONTEXT):\n${narrowContext}` }
+                     ],
+                     response_format: { type: "json_object" },
+                     temperature: 0.1,
+                     max_tokens: 8192
+                 }, { timeout: 90000 });
 
-                        const raw = response.choices[0]?.message?.content || '{}';
-                        const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-                        const result = JSON.parse(clean);
+                 const raw = response.choices[0]?.message?.content || '{}';
+                 const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+                 const result = JSON.parse(clean);
 
-                        return {
-                            question: rubricItem.questionId,
-                            score: Number(result.score) || 0,
-                            max: Number(rubricItem.maxScore) || 0,
-                            constructive_feedback: result.constructive_feedback || result.feedback || "No feedback provided.",
-                            evidenceSnippet: result.extracted_evidence || "None found"
-                        };
-                    } catch (e: any) {
-                        const isNetworkError = e.code === 'ECONNRESET' || e.status === 429 || e.status >= 500;
-                        if (DEBUG_MODE) console.error(`[ERROR] LLM request skipped for ${rubricItem.questionId} due to API failure: ${e.message}`);
-                        return {
-                            question: rubricItem.questionId,
-                            score: null, // Signals failure to allSettled loop
-                            max: Number(rubricItem.maxScore) || 0,
-                            feedback: isNetworkError ? '[SYSTEM_ERROR] Grading temporarily unavailable.' : '[UNKNOWN_ERROR]',
-                            evidenceSnippet: 'ERROR',
-                            error: e.message
-                        };
-                    }
-                })
-            );
+                 return {
+                     status: 'fulfilled',
+                     value: {
+                         question: rubricItem.questionId,
+                         score: Number(result.score) || 0,
+                         max: Number(rubricItem.maxScore) || 0,
+                         constructive_feedback: result.constructive_feedback || result.feedback || "No feedback provided.",
+                         evidenceSnippet: result.extracted_evidence || "None found"
+                     }
+                 };
+             } catch (e: any) {
+                 const isNetworkError = e.code === 'ECONNRESET' || e.status === 429 || e.status >= 500;
+                 return {
+                     status: 'rejected',
+                     reason: e.message,
+                     value: {
+                         question: rubricItem.questionId,
+                         score: null,
+                         max: Number(rubricItem.maxScore) || 0,
+                         feedback: isNetworkError ? '[SYSTEM_ERROR] Grading temporarily unavailable.' : '[UNKNOWN_ERROR]',
+                         evidenceSnippet: 'ERROR',
+                         error: e.message
+                     }
+                 };
+             }
+        });
+
+        if (qResult.status === 'fulfilled' && qResult.value.score !== null) {
+             formattedBreakdown.push(qResult.value);
+        } else {
+             failedQuestions.push({
+                 question: rubricItem.questionId,
+                 reason: qResult.reason || qResult.value?.error || 'Unknown'
+             });
+             formattedBreakdown.push({
+                 question: rubricItem.questionId,
+                 score: 0,
+                 max: rubricItem.maxScore,
+                 feedback: "[Missing/Error] " + (qResult.status === 'rejected' ? 'System error during processing.' : qResult.value?.feedback),
+                 evidenceSnippet: ""
+             });
         }
+    }
 
-        const settled = await Promise.allSettled(atomicGradingPromises);
-
-        const formattedBreakdown = [];
-        const failedQuestions = [];
-
-        for (let i = 0; i < settled.length; i++) {
-            const result = settled[i];
-            const rubricItem = masterRubricArray[i];
-            if (result.status === 'fulfilled' && result.value.score !== null) {
-                formattedBreakdown.push(result.value);
-            } else {
-                failedQuestions.push({
-                    question: rubricItem.questionId,
-                    reason: result.status === 'rejected' ? result.reason?.message : (result.value as any)?.error || 'Unknown'
-                });
-
-                // Still push a 0-score fallback so the UI isn't broken
-                formattedBreakdown.push({
-                    question: rubricItem.questionId,
-                    score: 0,
-                    max: rubricItem.maxScore,
-                    feedback: "[Missing/Error] " + (result.status === 'rejected' ? 'System error during processing.' : (result.value as any)?.feedback),
-                    evidenceSnippet: ""
-                });
-            }
-        }
-
+    // 5. SAVE TO DB (IDEMPOTENT)
+    await context.run("finalize-grading", async () => {
         if (failedQuestions.length > 0) {
-             console.warn(`[WORKER] ${failedQuestions.length} questions failed grading.`);
+             console.warn(`[WORKFLOW] ${failedQuestions.length} questions failed grading.`);
              await prisma.systemLog.create({
                  data: {
                      level: 'WARN',
@@ -373,21 +370,20 @@ JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number
              });
         }
 
-        // 5. SAVE TO DB (IDEMPOTENT)
         const calculatedTotalScore = formattedBreakdown.reduce((sum: number, item: any) => sum + item.score, 0);
 
         await prisma.score.upsert({
             where: { submissionId: submission.id },
             update: {
                 totalMarks: calculatedTotalScore,
-                remarks: "Graded via Atomic Map-Reduce.",
+                remarks: "Graded via Upstash Workflow.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             },
             create: {
                 submissionId: submission.id,
                 totalMarks: calculatedTotalScore,
-                remarks: "Graded via Atomic Map-Reduce.",
+                remarks: "Graded via Upstash Workflow.",
                 breakdown: JSON.stringify(formattedBreakdown),
                 detectedIdentity: detectedRegNo
             }
@@ -398,50 +394,6 @@ JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number
             data: { status: 'GRADED', studentRegNo: detectedRegNo !== "UNKNOWN" ? detectedRegNo : submission.studentRegNo }
         });
 
-        stageTimes.grading = Date.now() - gradingStartTime;
-        stageTimes.totalPipeline = Date.now() - pipelineStartTime;
-
-        let calculatedTotalScoreLog = calculatedTotalScore; // Fix variable scope for logging
-        console.log(`[WORKER] Mission Accomplished for Submission ${submission.id}. Score: ${calculatedTotalScoreLog}`);
-
-        if (DEBUG_MODE) {
-            console.log(`
-PIPELINE SUMMARY
-================
-Upload: SUCCESS
-OCR: SUCCESS
-AI Model: ${isSimulationMode ? 'SKIPPED (API inactive)' : 'SUCCESS'}
-Simulation Engine: ${isSimulationMode ? 'SUCCESS' : 'SKIPPED'}
-Feedback Generator: SUCCESS
-Analytics Engine: SUCCESS
-
-Performance Metrics:
-- Setup & Rubric Time: ${stageTimes.uploadAndRubric}ms
-- AI Grading Phase Time: ${stageTimes.grading}ms
-- Total Pipeline Worker Time: ${stageTimes.totalPipeline}ms
-            `);
-
-            await prisma.systemLog.create({
-                data: {
-                    level: 'INFO',
-                    message: 'Pipeline Execution Summary',
-                    metadata: JSON.stringify({
-                        submissionId: submission.id,
-                        isSimulationMode,
-                        stageTimes
-                    })
-                }
-            });
-        }
-
-    } catch (fatalError: any) {
-        console.error(`[WORKER] Error:`, fatalError.message);
-        if (submissionIdToUpdate) {
-            await prisma.submission.update({
-                where: { id: submissionIdToUpdate },
-                data: { status: 'FAILED', feedback: fatalError.message }
-            }).catch(e => console.error("Failed to update status to FAILED", e));
-        }
-        throw fatalError;
-    }
+        console.log(`[WORKFLOW] Mission Accomplished for Submission ${submission.id}. Score: ${calculatedTotalScore}`);
+    });
 }

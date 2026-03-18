@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. LINEAR QUEUE DISPATCH
+    // 8. UPSTASH WORKFLOW DISPATCH
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;
@@ -194,24 +194,20 @@ export async function POST(req: NextRequest) {
         await prisma.submission.update({
             where: { id: submission.id },
             data: {
-                status: 'PROCESSING'
+                status: 'PROCESSING' // Or wait for workflow to set it
             }
         });
 
-        // Directly create a Job for the Linear Queue
-        await prisma.job.create({
-            data: {
-                type: 'AI_GRADE_SUBMISSION',
-                payload: JSON.stringify({ submissionId: submission.id }),
-                status: 'PENDING',
-                retryCount: 0
-            }
+        // Dispatch Upstash Workflow
+        const { Client: WorkflowClient } = await import("@upstash/workflow");
+        const workflowClient = new WorkflowClient({ baseUrl: process.env.QSTASH_URL, token: process.env.QSTASH_TOKEN! });
+
+        await workflowClient.trigger({
+             url: `${baseUrl}/api/workflow/grade`,
+             body: { submissionId: submission.id }
         });
 
-        // Wake up the queue processor
-        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-        await qstash.publish({ url: `${baseUrl}/api/queue/process` });
-        console.log(`[SUBMIT] Successfully queued AI_GRADE_SUBMISSION job and pinged processor.`);
+        console.log(`[SUBMIT] Successfully triggered Upstash Workflow for submission ${submission.id}.`);
 
         if (DEBUG_MODE) {
             const uploadTime = Date.now() - startTime;
@@ -226,9 +222,8 @@ export async function POST(req: NextRequest) {
         }
 
     } catch (dispatchError: any) {
-        console.error("[SUBMIT] Failed to dispatch to Queue:", dispatchError);
+        console.error("[SUBMIT] Failed to dispatch Workflow:", dispatchError);
 
-        // Critical Fix: If Queue fails, the submission is permanently stuck in PROCESSING/PENDING.
         await prisma.submission.update({
             where: { id: submission.id },
             data: { status: 'FAILED', feedback: 'Failed to queue document for processing. Please try again.' }
