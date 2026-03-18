@@ -50,13 +50,33 @@ export class SupabaseStorageService implements StorageService {
      // Clean path: remove leading slashes if present
      const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
 
-     // Download from Supabase
-     const { data, error } = await supabase.storage.from(bucket).download(cleanPath);
+     let data: Blob | null = null;
+     let downloadError: any = null;
 
-     if (error) {
-         console.error(`[Storage] Supabase Download Error: ${error.message} (Bucket: ${bucket}, Path: ${cleanPath})`);
-         throw new Error(`Supabase Download Error for ${cleanPath} in ${bucket}: ${error.message}`);
+     // Robust Exponential Backoff (Cures Eventual Consistency CDN Propagation Delays)
+     // 5 attempts total. Delays: 0s, 2s, 4s, 8s, 12s -> Total max wait: ~26 seconds
+     const delays = [0, 2000, 4000, 8000, 12000];
+
+     for (let i = 0; i < delays.length; i++) {
+         if (delays[i] > 0) {
+             console.warn(`[Storage] Supabase Download Retry ${i}/${delays.length - 1} for ${cleanPath}. Waiting ${delays[i]}ms...`);
+             await new Promise(resolve => setTimeout(resolve, delays[i]));
+         }
+
+         const response = await supabase.storage.from(bucket).download(cleanPath);
+
+         if (!response.error && response.data) {
+             data = response.data;
+             break; // Success, exit retry loop
+         }
+         downloadError = response.error;
      }
+
+     if (!data) {
+         console.error(`[Storage] Supabase Download Error after ${delays.length} attempts: ${downloadError?.message} (Bucket: ${bucket}, Path: ${cleanPath})`);
+         throw new Error(`Supabase Download Error for ${cleanPath} in ${bucket}: ${downloadError?.message || 'File not found'}`);
+     }
+
      return Buffer.from(await data.arrayBuffer());
   }
 
