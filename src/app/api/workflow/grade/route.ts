@@ -13,6 +13,8 @@ const qstashUrl = process.env.QSTASH_URL && process.env.QSTASH_URL.includes('127
 
 export const { POST } = serve(
   async (context) => {
+    // Add defensive logging early in the workflow execution context
+    console.log(`[WORKFLOW EXECUTION] Workflow webhook received and executing.`);
     const payload = context.requestPayload;
 
     // We expect the payload to contain the submissionId
