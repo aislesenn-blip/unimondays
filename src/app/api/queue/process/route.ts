@@ -95,7 +95,39 @@ export const POST = verifySignatureAppRouter(
 
             console.log("[QUEUE] Batch Complete.");
 
-            const remaining = await prisma.job.count({ where: { status: 'PENDING' } });
+            const remaining = await prisma.job.count({
+                where: {
+                    status: 'PENDING',
+                    OR: [
+                        { retryCount: { lt: 3 } },
+                        { retryCount: null }
+                    ]
+                }
+            });
+
+            // SELF-HEALING RECURSIVE LOOP
+            // If jobs are still pending (or a job failed and was put back into PENDING for a retry),
+            // the queue MUST wake itself up again. Serverless functions die silently otherwise.
+            if (remaining > 0) {
+                console.log(`[QUEUE] ${remaining} jobs still pending. Firing self-healing wakeup ping...`);
+
+                const protocol = req.headers.get('x-forwarded-proto') || 'https';
+                const host = req.headers.get('host') || 'localhost:3000';
+                const baseUrl = `${protocol}://${host}`;
+
+                try {
+                    const { Client } = await import("@upstash/qstash");
+                    const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+
+                    // We delay the retry by 10 seconds to give APIs (like Supabase or OpenRouter) a chance to recover
+                    await qstash.publish({
+                        url: `${baseUrl}/api/queue/process`,
+                        delay: 10
+                    });
+                } catch (qErr) {
+                    console.error("[QUEUE] Failed to fire self-healing ping. Queue will sleep until next manual trigger.", qErr);
+                }
+            }
 
             return NextResponse.json({ processed: jobs.length, remaining });
 
