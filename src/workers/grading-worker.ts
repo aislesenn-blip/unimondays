@@ -266,14 +266,11 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
              console.log(`[WORKFLOW] Executing isolated grading step for Question: ${rubricItem.questionId}`);
              if (isSimulationMode) {
                   return {
-                      status: 'fulfilled',
-                      value: {
-                         question: rubricItem.questionId,
-                         score: Math.floor(Math.random() * (rubricItem.maxScore + 1)),
-                         max: rubricItem.maxScore,
-                         feedback: "Simulation feedback: AI module inactive but grading pipeline executed successfully.",
-                         evidenceSnippet: "Simulated extracted evidence."
-                      }
+                     question: rubricItem.questionId,
+                     score: Math.floor(Math.random() * (rubricItem.maxScore + 1)),
+                     max: rubricItem.maxScore,
+                     constructive_feedback: "Simulation feedback: AI module inactive but grading pipeline executed successfully.",
+                     evidenceSnippet: "Simulated extracted evidence."
                   };
              }
 
@@ -321,48 +318,38 @@ JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number
                  const result = JSON.parse(clean);
 
                  return {
-                     status: 'fulfilled',
-                     value: {
-                         question: rubricItem.questionId,
-                         score: Number(result.score) || 0,
-                         max: Number(rubricItem.maxScore) || 0,
-                         constructive_feedback: result.constructive_feedback || result.feedback || "No feedback provided.",
-                         evidenceSnippet: result.extracted_evidence || "None found"
-                     }
+                     question: rubricItem.questionId,
+                     score: Number(result.score) || 0,
+                     max: Number(rubricItem.maxScore) || 0,
+                     constructive_feedback: result.constructive_feedback || result.feedback || "No feedback provided.",
+                     evidenceSnippet: result.extracted_evidence || "None found"
                  };
              } catch (e: any) {
                  const isNetworkError = e.code === 'ECONNRESET' || e.status === 429 || e.status >= 500;
                  return {
-                     status: 'rejected',
-                     reason: e.message,
-                     value: {
-                         question: rubricItem.questionId,
-                         score: null,
-                         max: Number(rubricItem.maxScore) || 0,
-                         feedback: isNetworkError ? '[SYSTEM_ERROR] Grading temporarily unavailable.' : '[UNKNOWN_ERROR]',
-                         evidenceSnippet: 'ERROR',
-                         error: e.message
-                     }
+                     error: true,
+                     question: rubricItem.questionId,
+                     score: null,
+                     max: Number(rubricItem.maxScore) || 0,
+                     constructive_feedback: isNetworkError ? '[SYSTEM_ERROR] Grading temporarily unavailable.' : '[UNKNOWN_ERROR]',
+                     evidenceSnippet: 'ERROR',
+                     reason: e.message
                  };
              }
         });
 
-        // We do not push to a local array here because local memory doesn't persist across workflow steps.
-        // Wait, context.run returns the value to the orchestrator memory!
-        // qResult is correctly persisted by the workflow engine!
-
-        if (qResult.status === 'fulfilled' && qResult.value.score !== null) {
-             formattedBreakdown.push(qResult.value);
+        if (!qResult.error && qResult.score !== null) {
+             formattedBreakdown.push(qResult);
         } else {
              failedQuestions.push({
                  question: rubricItem.questionId,
-                 reason: qResult.reason || qResult.value?.error || 'Unknown'
+                 reason: qResult.reason || 'Unknown'
              });
              formattedBreakdown.push({
                  question: rubricItem.questionId,
                  score: 0,
                  max: rubricItem.maxScore,
-                 feedback: "[Missing/Error] " + (qResult.status === 'rejected' ? 'System error during processing.' : qResult.value?.feedback),
+                 feedback: `[Missing/Error] ${qResult.constructive_feedback || 'System error during processing.'}`,
                  evidenceSnippet: ""
              });
         }
