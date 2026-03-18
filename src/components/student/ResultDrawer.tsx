@@ -142,11 +142,11 @@ export function StudentResultDrawer({ submission }: { submission: any }) {
                                             <div className="flex-1">
                                                 <span className="font-medium text-sm text-slate-800">{item.question || `Q${i+1}`}</span>
                                                 <p className="text-slate-700 text-sm mt-1 leading-relaxed">
-                                                    {item.feedback?.includes('[Exact Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold mr-1">Exact Match</span> :
-                                                     item.feedback?.includes('[Partial Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-cyan-100 text-cyan-800 border border-cyan-200 font-bold mr-1">Partial Match</span> :
-                                                     item.feedback?.includes('[Out of Scope]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Out of Scope</span> :
-                                                     item.feedback?.includes('[Missing]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Missing</span> : null}
-                                                    {item.feedback?.replace(/\[.*?\]\s*/, '')}
+                                                    {(item.constructive_feedback || item.feedback)?.includes('[Exact Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold mr-1">Exact Match</span> :
+                                                     (item.constructive_feedback || item.feedback)?.includes('[Partial Match]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-cyan-100 text-cyan-800 border border-cyan-200 font-bold mr-1">Partial Match</span> :
+                                                     (item.constructive_feedback || item.feedback)?.includes('[Out of Scope]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Out of Scope</span> :
+                                                     (item.constructive_feedback || item.feedback)?.includes('[Missing]') ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-bold mr-1">Missing</span> : null}
+                                                    {(item.constructive_feedback || item.feedback)?.replace(/\[.*?\]\s*/, '')}
                                                 </p>
                                             </div>
                                             <div className="font-mono text-sm text-right shrink-0 mt-0.5">

@@ -185,52 +185,33 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. MAP-REDUCE QSTASH DISPATCH (OCR Phase First)
+    // 8. LINEAR QUEUE DISPATCH
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;
 
     try {
-        // Calculate chunks
-        const totalPages = await getPdfPageCount(submission.filePath);
-
-        if (totalPages <= 0) {
-            await prisma.submission.update({
-                where: { id: submission.id },
-                data: { status: 'FAILED', feedback: 'Empty PDF or unable to read pages.' }
-            });
-            throw new Error("PDF has 0 pages.");
-        }
-
-        const chunks = [];
-        for (let i = 1; i <= totalPages; i += CHUNK_SIZE) {
-            const pageBatch = [];
-            for (let j = 0; j < CHUNK_SIZE && (i + j) <= totalPages; j++) {
-                pageBatch.push(i + j);
-            }
-            chunks.push(pageBatch);
-        }
-
-        // Initialize Atomic Tracking State
         await prisma.submission.update({
             where: { id: submission.id },
             data: {
-                status: 'PROCESSING',
-                totalChunks: chunks.length,
-                processedChunks: 0,
-                extractedData: []
+                status: 'PROCESSING'
             }
         });
 
-        // Initialize QStash and Dispatch
-        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-        const messages = chunks.map((pageBatch, index) => ({
-            url: `${baseUrl}/api/grade/ocr`,
-            body: { submissionId: submission.id, pages: pageBatch, chunkIndex: index, pdfUrl: submission.filePath }
-        }));
+        // Directly create a Job for the Linear Queue
+        await prisma.job.create({
+            data: {
+                type: 'AI_GRADE_SUBMISSION',
+                payload: JSON.stringify({ submissionId: submission.id }),
+                status: 'PENDING',
+                retryCount: 0
+            }
+        });
 
-        await qstash.batchJSON(messages);
-        console.log(`[SUBMIT] Successfully dispatched ${chunks.length} Map-Reduce jobs to QStash.`);
+        // Wake up the queue processor
+        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+        await qstash.publish({ url: `${baseUrl}/api/queue/process` });
+        console.log(`[SUBMIT] Successfully queued AI_GRADE_SUBMISSION job and pinged processor.`);
 
         if (DEBUG_MODE) {
             const uploadTime = Date.now() - startTime;
@@ -239,16 +220,15 @@ export async function POST(req: NextRequest) {
                 data: {
                     level: 'INFO',
                     message: 'Upload Stage Completed',
-                    metadata: JSON.stringify({ submissionId: submission.id, uploadTimeMs: uploadTime, chunks: chunks.length })
+                    metadata: JSON.stringify({ submissionId: submission.id, uploadTimeMs: uploadTime })
                 }
             });
         }
 
     } catch (dispatchError: any) {
-        console.error("[SUBMIT] Failed to dispatch to QStash:", dispatchError);
+        console.error("[SUBMIT] Failed to dispatch to Queue:", dispatchError);
 
-        // Critical Fix: If QStash fails to queue, the submission is permanently stuck in PROCESSING/PENDING.
-        // We MUST fail loudly to the UI.
+        // Critical Fix: If Queue fails, the submission is permanently stuck in PROCESSING/PENDING.
         await prisma.submission.update({
             where: { id: submission.id },
             data: { status: 'FAILED', feedback: 'Failed to queue document for processing. Please try again.' }

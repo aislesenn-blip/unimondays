@@ -131,45 +131,6 @@ export const POST = verifySignatureAppRouter(
             where: { submissionId: submissionId }
         });
 
-        // 4. Fire Reducer if this was the last chunk to finish
-        if (totalChunksRecord && currentCount === totalChunksRecord.totalChunks) {
-            console.log(`[OCR] ALL CHUNKS COMPLETED for Submission ${submissionId}. Moving to GRADING queue...`);
-
-            if (DEBUG_MODE) {
-                console.log(`[DEBUG] [OCR_STAGE] SUCCESS. All chunks extracted for submission ${submissionId}.`);
-                await prisma.systemLog.create({
-                    data: {
-                        level: 'INFO',
-                        message: 'OCR Stage Completed',
-                        metadata: JSON.stringify({ submissionId, totalChunks: currentCount })
-                    }
-                });
-            }
-
-            await prisma.submission.update({
-                where: { id: submissionId },
-                data: { status: 'GRADING' }
-            });
-
-            const protocol = req.headers.get('x-forwarded-proto') || 'https';
-            const host = req.headers.get('host') || 'localhost:3000';
-            const baseUrl = `${protocol}://${host}`;
-
-            // ARCHITECTURE FIX: Option B. Create Job post-OCR, then wake queue.
-            await prisma.job.create({
-                data: {
-                    type: 'AI_GRADE_SUBMISSION',
-                    payload: JSON.stringify({ submissionId }),
-                    status: 'PENDING',
-                    retryCount: 0
-                }
-            });
-
-            // Detached Wake-Up Ping using QStash to provide valid signatures
-            await qstash.publish({ url: `${baseUrl}/api/queue/process` })
-                .catch(e => console.error("[OCR_WAKE_ERROR] Failed to ping queue via QStash:", e));
-        }
-
             return NextResponse.json({ success: true, pages });
         } catch (error: any) {
             return NextResponse.json({ error: error.message }, { status: 500 });
