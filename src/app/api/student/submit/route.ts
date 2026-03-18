@@ -188,9 +188,16 @@ export async function POST(req: NextRequest) {
     }
 
     // 8. UPSTASH WORKFLOW DISPATCH
-    const protocol = req.headers.get('x-forwarded-proto') || 'https';
-    const host = req.headers.get('host') || 'localhost:3000';
-    const baseUrl = `${protocol}://${host}`;
+    // FIX: Always use VERCEL_URL or NEXT_PUBLIC_APP_URL to prevent webhook routing errors, fallback to host header
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+
+    if (!baseUrl) {
+        const protocol = req.headers.get('x-forwarded-proto') || 'https';
+        const host = req.headers.get('host') || 'localhost:3000';
+        baseUrl = `${protocol}://${host}`;
+    }
+
+    const targetUrl = `${baseUrl}/api/workflow/grade`;
 
     try {
         await prisma.submission.update({
@@ -210,8 +217,10 @@ export async function POST(req: NextRequest) {
 
         const workflowClient = new WorkflowClient({ baseUrl: qstashUrl, token: process.env.QSTASH_TOKEN! });
 
+        console.log(`[SUBMIT] Triggering workflow targeting URL: ${targetUrl}`);
+
         await workflowClient.trigger({
-             url: `${baseUrl}/api/workflow/grade`,
+             url: targetUrl,
              body: { submissionId: submission.id }
         });
 
