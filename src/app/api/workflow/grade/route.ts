@@ -2,6 +2,9 @@ import { serve } from "@upstash/workflow/nextjs";
 import { prisma } from '@/lib/prisma';
 import { handleAiGradeWorkflow } from '@/workers/grading-worker';
 
+export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
+
 export const { POST } = serve(
   async (context) => {
     const payload = context.requestPayload;
