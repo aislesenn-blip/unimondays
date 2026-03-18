@@ -185,52 +185,40 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. MAP-REDUCE QSTASH DISPATCH (OCR Phase First)
+    // 8. LINEAR BACKGROUND QUEUE DISPATCH
+    // We completely bypass the fragile distributed Map-Reduce fan-out here.
+    // Instead, we immediately queue the entire OCR + Grading process to a single robust worker.
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;
 
     try {
-        // Calculate chunks
-        const totalPages = await getPdfPageCount(submission.filePath);
-
-        if (totalPages <= 0) {
-            await prisma.submission.update({
-                where: { id: submission.id },
-                data: { status: 'FAILED', feedback: 'Empty PDF or unable to read pages.' }
-            });
-            throw new Error("PDF has 0 pages.");
-        }
-
-        const chunks = [];
-        for (let i = 1; i <= totalPages; i += CHUNK_SIZE) {
-            const pageBatch = [];
-            for (let j = 0; j < CHUNK_SIZE && (i + j) <= totalPages; j++) {
-                pageBatch.push(i + j);
-            }
-            chunks.push(pageBatch);
-        }
-
-        // Initialize Atomic Tracking State
+        // Ensure submission remains in PENDING state (UI: "Queued for processing...")
         await prisma.submission.update({
             where: { id: submission.id },
             data: {
-                status: 'PROCESSING',
-                totalChunks: chunks.length,
+                status: 'PENDING',
+                totalChunks: 0,
                 processedChunks: 0,
                 extractedData: []
             }
         });
 
-        // Initialize QStash and Dispatch
-        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-        const messages = chunks.map((pageBatch, index) => ({
-            url: `${baseUrl}/api/grade/ocr`,
-            body: { submissionId: submission.id, pages: pageBatch, chunkIndex: index, pdfUrl: submission.filePath }
-        }));
+        // Create a single tracking job for the entire pipeline
+        await prisma.job.create({
+            data: {
+                type: 'AI_GRADE_SUBMISSION',
+                payload: JSON.stringify({ submissionId: submission.id }),
+                status: 'PENDING',
+                retryCount: 0
+            }
+        });
 
-        await qstash.batchJSON(messages);
-        console.log(`[SUBMIT] Successfully dispatched ${chunks.length} Map-Reduce jobs to QStash.`);
+        // Initialize QStash and Ping the Queue Processor
+        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
+        await qstash.publish({ url: `${baseUrl}/api/queue/process` });
+
+        console.log(`[SUBMIT] Successfully dispatched Linear Grading Job for Submission ${submission.id}.`);
 
         if (DEBUG_MODE) {
             const uploadTime = Date.now() - startTime;
@@ -238,23 +226,22 @@ export async function POST(req: NextRequest) {
             await prisma.systemLog.create({
                 data: {
                     level: 'INFO',
-                    message: 'Upload Stage Completed',
-                    metadata: JSON.stringify({ submissionId: submission.id, uploadTimeMs: uploadTime, chunks: chunks.length })
+                    message: 'Upload Stage Completed (Linear Pipeline)',
+                    metadata: JSON.stringify({ submissionId: submission.id, uploadTimeMs: uploadTime })
                 }
             });
         }
 
     } catch (dispatchError: any) {
-        console.error("[SUBMIT] Failed to dispatch to QStash:", dispatchError);
+        console.error("[SUBMIT] Failed to queue the background job:", dispatchError);
 
-        // Critical Fix: If QStash fails to queue, the submission is permanently stuck in PROCESSING/PENDING.
-        // We MUST fail loudly to the UI.
+        // Critical Fix: Fail loudly to UI if job creation or QStash ping fails
         await prisma.submission.update({
             where: { id: submission.id },
             data: { status: 'FAILED', feedback: 'Failed to queue document for processing. Please try again.' }
         }).catch(e => console.error("Failed to update status on dispatch error", e));
 
-        return NextResponse.json({ error: 'Failed to queue submission due to internal network error. Please try again.' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to queue submission due to internal database/network error. Please try again.' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
