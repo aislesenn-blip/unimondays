@@ -202,7 +202,13 @@ export async function POST(req: NextRequest) {
 
         // Dispatch Upstash Workflow
         const { Client: WorkflowClient } = await import("@upstash/workflow");
-        const workflowClient = new WorkflowClient({ baseUrl: process.env.QSTASH_URL, token: process.env.QSTASH_TOKEN! });
+
+        // Vercel ENV Fix: Force production QStash URL unless explicitly running local dev server
+        const qstashUrl = process.env.QSTASH_URL && process.env.QSTASH_URL.includes('127.0.0.1')
+                            ? process.env.QSTASH_URL
+                            : 'https://qstash.upstash.io';
+
+        const workflowClient = new WorkflowClient({ baseUrl: qstashUrl, token: process.env.QSTASH_TOKEN! });
 
         await workflowClient.trigger({
              url: `${baseUrl}/api/workflow/grade`,

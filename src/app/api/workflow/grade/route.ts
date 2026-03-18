@@ -1,9 +1,15 @@
 import { serve } from "@upstash/workflow/nextjs";
 import { prisma } from '@/lib/prisma';
 import { handleAiGradeWorkflow } from '@/workers/grading-worker';
+import { Client } from "@upstash/workflow";
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
+
+// Vercel ENV Fix: Force production QStash URL unless explicitly running local dev server
+const qstashUrl = process.env.QSTASH_URL && process.env.QSTASH_URL.includes('127.0.0.1')
+                    ? process.env.QSTASH_URL
+                    : 'https://qstash.upstash.io';
 
 export const { POST } = serve(
   async (context) => {
@@ -36,6 +42,7 @@ export const { POST } = serve(
     console.log(`[WORKFLOW] Successfully completed workflow for submission: ${submissionId}`);
   },
   {
+    qstashClient: { baseUrl: qstashUrl, token: process.env.QSTASH_TOKEN! } as any,
     failureFunction: async ({ context, failStatus, failResponse }) => {
        console.error("Workflow failed:", failResponse);
 
