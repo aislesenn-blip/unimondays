@@ -349,7 +349,7 @@ JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number
                  question: rubricItem.questionId,
                  score: 0,
                  max: rubricItem.maxScore,
-                 feedback: `[Missing/Error] ${qResult.constructive_feedback || 'System error during processing.'}`,
+                 constructive_feedback: `[Missing/Error] ${qResult.constructive_feedback || 'System error during processing.'}`,
                  evidenceSnippet: ""
              });
         }
