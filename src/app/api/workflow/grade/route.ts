@@ -38,14 +38,29 @@ export const { POST } = serve(
   {
     failureFunction: async ({ context, failStatus, failResponse }) => {
        console.error("Workflow failed:", failResponse);
-       const payload = context.requestPayload as { submissionId?: string };
-       if (payload?.submissionId) {
+
+       let submissionId: string | undefined;
+
+       // Fallback to requestPayload
+       if (context?.requestPayload) {
+          if (typeof context.requestPayload === 'string') {
+              try {
+                 const parsed = JSON.parse(context.requestPayload);
+                 submissionId = parsed.submissionId;
+              } catch (e) {}
+          } else {
+              submissionId = (context.requestPayload as any).submissionId;
+          }
+       }
+
+       // Note: Depending on Upstash configuration, requestPayload might be inaccessible in failure blocks
+       // dynamically. If this fails, consider passing headers manually or resolving upstream logs.
+
+       if (submissionId) {
           try {
-             // We can't use prisma here cleanly if it's an edge function,
-             // but assuming it's standard node we can update it.
              const { prisma } = await import('@/lib/prisma');
              await prisma.submission.update({
-                  where: { id: payload.submissionId },
+                  where: { id: submissionId },
                   data: {
                       status: 'FAILED',
                       feedback: 'System encountered a fatal error during grading. Please try again.'
@@ -54,6 +69,8 @@ export const { POST } = serve(
           } catch (e) {
              console.error("Failed to update status on workflow failure", e);
           }
+       } else {
+          console.error("Workflow failed, but unable to extract submissionId to update DB state.");
        }
     }
   }
