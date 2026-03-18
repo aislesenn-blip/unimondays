@@ -87,46 +87,7 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // 4. Security: Verify File Exists in Storage (Server-Side Check)
-    // We use the Admin Client to verify metadata. This prevents users from linking arbitrary files.
-    // We verify the file exists in the 'exam_pdfs' bucket (or default bucket).
-
-    // Cleanup path if it contains bucket name or leading slash
-    // Supabase path: 'submissions/xyz.pdf'
-    let cleanPath = filePath;
-    if (cleanPath.startsWith('/')) cleanPath = cleanPath.slice(1);
-
-    // List files in the folder to see if our file is there
-    // This is cheaper/safer than downloading it.
-    // Or we can try getPublicUrl head check, but listing is good.
-    const folder = cleanPath.split('/').slice(0, -1).join('/');
-    const filename = cleanPath.split('/').pop();
-
-    const { data: fileList, error: listError } = await supabase
-        .storage
-        .from('exam_pdfs')
-        .list(folder, {
-            search: filename
-        });
-
-    if (listError || !fileList || fileList.length === 0) {
-        console.warn(`[Security] File not found in storage: ${cleanPath} for user ${userId}`);
-        if (DEBUG_MODE) console.error(`[DEBUG] [UPLOAD_STAGE] File missing in storage: ${cleanPath}`);
-        return NextResponse.json({ error: 'Security Verification Failed: Uploaded file not found.' }, { status: 400 });
-    }
-
-    // Double check exact match
-    const foundFile = fileList.find(f => f.name === filename);
-    if (!foundFile) {
-         if (DEBUG_MODE) console.error(`[DEBUG] [UPLOAD_STAGE] File mismatch in storage.`);
-         return NextResponse.json({ error: 'Security Verification Failed: File mismatch.' }, { status: 400 });
-    }
-
-    if (DEBUG_MODE) {
-        console.log(`[DEBUG] [UPLOAD_STAGE] File verified. Type: ${foundFile.metadata?.mimetype || 'unknown'}, Size: ${foundFile.metadata?.size || 'unknown'} bytes`);
-    }
-
-    // 5. Verify Work Session & Deadline
+    // 4. Verify Work Session & Deadline
     const workSession = await prisma.workSession.findUnique({
         where: { id: targetWorkSessionId }
     });
@@ -145,10 +106,13 @@ export async function POST(req: NextRequest) {
          }
     }
 
-    // 6. Use the verified file path
+    // 5. Use the verified file path
+    // Cleanup path if it contains bucket name or leading slash
+    let cleanPath = filePath;
+    if (cleanPath.startsWith('/')) cleanPath = cleanPath.slice(1);
     const fileUrl = cleanPath;
 
-    // 7. Create or Update Submission (Idempotent)
+    // 6. Create or Update Submission (Idempotent)
     const existingSubmission = await prisma.submission.findUnique({
         where: {
             workSessionId_userId: {
@@ -171,8 +135,10 @@ export async function POST(req: NextRequest) {
                 feedback: null
             }
         });
-        // Clear old scores to trigger re-grading
+
+        // FIX 5: Idempotency Leak - Clear old scores AND old OCR chunks to force a fresh re-extraction
         await prisma.score.deleteMany({ where: { submissionId: submission.id } });
+        await prisma.extractedChunk.deleteMany({ where: { submissionId: submission.id } });
     } else {
         submission = await prisma.submission.create({
             data: {
@@ -185,9 +151,9 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 8. LINEAR BACKGROUND QUEUE DISPATCH
-    // We completely bypass the fragile distributed Map-Reduce fan-out here.
-    // Instead, we immediately queue the entire OCR + Grading process to a single robust worker.
+    // 7. UPSTASH WORKFLOW ORCHESTRATION
+    // We completely bypass the raw 300s serverless worker and job table.
+    // Instead, we hand this directly to the durable Upstash Workflow orchestrator.
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;
@@ -204,21 +170,17 @@ export async function POST(req: NextRequest) {
             }
         });
 
-        // Create a single tracking job for the entire pipeline
-        await prisma.job.create({
-            data: {
-                type: 'AI_GRADE_SUBMISSION',
-                payload: JSON.stringify({ submissionId: submission.id }),
-                status: 'PENDING',
-                retryCount: 0
-            }
+        // Initialize Upstash Workflow Client and trigger the orchestrator
+        const { Client } = await import("@upstash/workflow");
+        const client = new Client({ token: process.env.QSTASH_TOKEN! });
+
+        // Trigger the workflow instead of publishing to a raw webhook
+        await client.trigger({
+            url: `${baseUrl}/api/workflow/grade`,
+            body: { submissionId: submission.id }
         });
 
-        // Initialize QStash and Ping the Queue Processor
-        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-        await qstash.publish({ url: `${baseUrl}/api/queue/process` });
-
-        console.log(`[SUBMIT] Successfully dispatched Linear Grading Job for Submission ${submission.id}.`);
+        console.log(`[SUBMIT] Successfully triggered Upstash Workflow for Submission ${submission.id}.`);
 
         if (DEBUG_MODE) {
             const uploadTime = Date.now() - startTime;

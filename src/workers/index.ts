@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { claimJob, completeJob, failJob, JobType } from '@/lib/queue';
 import { Job } from '@prisma/client';
 import { handleOcrSplit } from './ocr-worker';
-import { handleAiGrade } from './grading-worker';
+// handleAiGrade migrated to native Upstash Workflow endpoint at /api/workflow/grade
 import { handleExportZip } from './export-worker';
 
 // Handlers interface
@@ -11,7 +11,7 @@ type JobHandler = (job: Job) => Promise<any>;
 // Map job types to handlers
 const handlers: Record<string, JobHandler> = {
   'OCR_SPLIT': handleOcrSplit,
-  'AI_GRADE': handleAiGrade,
+  'AI_GRADE': async (job: Job) => { console.warn("Job handler replaced by Upstash Workflow. Skipping legacy call.") },
   'EXPORT_ZIP': handleExportZip
 };
 
