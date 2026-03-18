@@ -25,7 +25,7 @@ const apiBucket = new TokenBucket(5, 5);
 const deepSeekClient = new OpenAI({
     baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
     apiKey: process.env.DEEPSEEK_API_KEY || 'dummy',
-    timeout: 300000,
+    timeout: 270000, // FATAL FLAW 3 FIX: Fail at 4.5m before Vercel 300s edge timeout murders the function
     maxRetries: 4,
 });
 
@@ -168,7 +168,7 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
         currentChunkIndex++;
     }
 
-    const { fullExamText, detectedRegNo, validChunks, totalConfidence, pageTextMapJSON } = await context.run("aggregate-ocr", async () => {
+    const { detectedRegNo } = await context.run("aggregate-ocr", async () => {
         const chunks = await prisma.extractedChunk.findMany({
             where: { submissionId },
             orderBy: { chunkIndex: 'asc' }
@@ -178,7 +178,6 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
         let totalConfidenceVal = 0;
         let validChunksCount = 0;
         const idCandidates: string[] = [];
-        const ptMap: Record<number, string> = {};
 
         for (const chunk of chunks) {
             const text = chunk.text || "";
@@ -189,10 +188,6 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
                 validChunksCount++;
             }
 
-            for (const p of chunk.pages) {
-                ptMap[p] = (ptMap[p] || '') + '\n' + text;
-            }
-
             const match = text.match(/(?:REGISTRATION NUMBER|Reg No|Registration No)[\s:]*([A-Z0-9-]+)/i);
             if (match) idCandidates.push(match[1].trim().toUpperCase());
         }
@@ -200,18 +195,33 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
         const idCounts = idCandidates.reduce((acc: any, id) => { acc[id] = (acc[id] || 0) + 1; return acc; }, {});
         const detRegNo = Object.entries(idCounts).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || 'UNKNOWN';
 
+        const avgConfidence = validChunksCount > 0 ? totalConfidenceVal / validChunksCount : 1.0;
+
+        // FATAL FLAW 2 FIX: Do NOT return massive fullExamText to Upstash Workflow State.
+        // Save to DB directly and read inside individual question context steps.
+        await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+                ocrText: fullExamTextStr,
+                confidenceScore: avgConfidence,
+                studentRegNo: detRegNo !== "UNKNOWN" ? detRegNo : submission.studentRegNo
+            }
+        });
+
         return {
-            fullExamText: fullExamTextStr,
             detectedRegNo: detRegNo,
-            validChunks: validChunksCount,
-            totalConfidence: totalConfidenceVal,
-            pageTextMapJSON: JSON.stringify(ptMap)
+            fullExamTextLength: fullExamTextStr.length,
+            avgConfidence
         };
     });
 
     // Check OCR Quality
     const isQualityValid = await context.run("check-ocr-quality", async () => {
-        if (!fullExamText.trim() || fullExamText.length < 100) {
+        const sub = await prisma.submission.findUnique({ where: { id: submission.id } });
+        const ocrLen = sub?.ocrText?.length || 0;
+        const conf = sub?.confidenceScore || 1.0;
+
+        if (ocrLen < 100) {
             await prisma.submission.update({
                 where: { id: submission.id },
                 data: { status: 'REVIEW_NEEDED', feedback: 'OCR extracted insufficient text. Please review manually.' }
@@ -219,8 +229,7 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
             return false;
         }
 
-        const avgConfidence = validChunks > 0 ? totalConfidence / validChunks : 1.0;
-        if (avgConfidence < 0.6) {
+        if (conf < 0.6) {
             await prisma.submission.update({
                 where: { id: submission.id },
                 data: { status: 'REVIEW_NEEDED', feedback: 'Handwriting unclear, please review manually.' }
@@ -275,8 +284,20 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
              }
 
              try {
+                 // FATAL FLAW 2 FIX: Read the text locally from the database inside this isolated step
+                 const sub = await prisma.submission.findUnique({ where: { id: submissionId } });
+                 const chunks = await prisma.extractedChunk.findMany({ where: { submissionId } });
+
+                 const pageTextMap: Record<number, string> = {};
+                 for (const chunk of chunks) {
+                     for (const p of chunk.pages) {
+                         pageTextMap[p] = (pageTextMap[p] || '') + '\n' + (chunk.text || '');
+                     }
+                 }
+
+                 let narrowContext = sub?.ocrText || "";
+
                  const normalizeId = (id: string) => (id || "").replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                 const pageTextMap = JSON.parse(pageTextMapJSON);
                  const qTarget = normalizeId(rubricItem.questionId);
                  const relevant: number[] = [];
                  for (const [pageNum, text] of Object.entries(pageTextMap)) {
@@ -284,7 +305,7 @@ export async function handleAiGradeWorkflow(context: any, submissionId: string) 
                          relevant.push(Number(pageNum));
                      }
                  }
-                 let narrowContext = fullExamText;
+
                  if (relevant.length > 0) {
                      narrowContext = relevant.map(p => `--- PAGE ${p} ---\n${pageTextMap[p]}`).join('\n\n');
                  }
@@ -311,7 +332,7 @@ JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number
                      response_format: { type: "json_object" },
                      temperature: 0.1,
                      max_tokens: 8192
-                 }, { timeout: 90000 });
+                 }, { timeout: 270000 }); // Safely within 300s window limit
 
                  const raw = response.choices[0]?.message?.content || '{}';
                  const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
