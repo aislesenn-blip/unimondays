@@ -114,10 +114,17 @@ export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise
         } catch (e) {
             console.error(`[GEMINI] Failed to parse JSON for page ${pageNum}:`, e);
         }
+
+        // RATE LIMIT THROTTLE: Force a 2.5 second delay between pages
+        if (pageNum > 0) {
+            console.log(`[GEMINI] Throttling OpenRouter API (2500ms delay) to prevent 429 Rate Limits...`);
+            await new Promise(res => setTimeout(res, 2500));
+        }
+
         pageNum++;
     }
 
-    console.log("[GEMINI] Structural OCR Map Phase Complete.");
+    console.log("[GEMINI] Structural OCR Map Phase Complete. Rate limits respected.");
     return combinedMap;
 }
 
@@ -164,9 +171,17 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageDat
             extractedText: extractedText,
             pageImageBase64: imageBuffer.toString("base64")
         });
+
+        // RATE LIMIT THROTTLE: Force a 2.5 second delay between pages to avoid OpenRouter 429 Too Many Requests limits
+        // on Gemini Vision models. This ensures the "sacrificial lamb" cold start doesn't kill the background worker.
+        if (pageNum > 0) {
+            console.log(`[GEMINI] Throttling OpenRouter API (2500ms delay) to prevent 429 Rate Limits...`);
+            await new Promise(res => setTimeout(res, 2500));
+        }
+
         pageNum++;
     }
 
-    console.log("[GEMINI] PDF Extraction Complete. Zero RAM Spikes.");
+    console.log("[GEMINI] PDF Extraction Complete. Zero RAM Spikes. Rate limits respected.");
     return pagesData;
 }

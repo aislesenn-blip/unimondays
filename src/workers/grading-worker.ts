@@ -107,8 +107,8 @@ export async function handleAiGrade(job: any) {
 
                       await prisma.extractedChunk.upsert({
                            where: { submissionId_chunkIndex: { submissionId: submission.id, chunkIndex: i } },
-                           update: { pages: [(pageData as any).page || (i + 1)], text: pageData.text, confidence: confidenceScore },
-                           create: { submissionId: submission.id, chunkIndex: i, pages: [(pageData as any).page || (i + 1)], text: pageData.text, confidence: confidenceScore }
+                           update: { pages: [pageData.pageNumber || (i + 1)], text: pageData.text, confidence: confidenceScore },
+                           create: { submissionId: submission.id, chunkIndex: i, pages: [pageData.pageNumber || (i + 1)], text: pageData.text, confidence: confidenceScore }
                       });
                  }
 
