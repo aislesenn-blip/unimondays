@@ -16,34 +16,42 @@ export const { POST } = serve(
 
     console.log(`[WORKFLOW] Started workflow for submission: ${submissionId}`);
 
-    try {
-      // 1. Mark as Processing
-      await context.run("mark-processing", async () => {
-        await prisma.submission.update({
-            where: { id: submissionId },
-            data: { status: 'PROCESSING' }
-        });
+    // 1. Mark as Processing
+    await context.run("mark-processing", async () => {
+      await prisma.submission.update({
+          where: { id: submissionId },
+          data: { status: 'PROCESSING' }
       });
+    });
 
-      // 2. Execute the Grading Workflow Steps
-      // We pass the context to the worker so it can use context.run() internally
-      await handleAiGradeWorkflow(context, submissionId);
+    // 2. Execute the Grading Workflow Steps
+    // We pass the context to the worker so it can use context.run() internally
+    // Note: Do NOT wrap context.run in try/catch. Upstash throws WorkflowAbort internally.
+    await handleAiGradeWorkflow(context, submissionId);
 
-      // 3. Mark as Completed (handled inside handleAiGradeWorkflow, but we can log it here)
-      console.log(`[WORKFLOW] Successfully completed workflow for submission: ${submissionId}`);
-
-    } catch (error: any) {
-      console.error(`[WORKFLOW] Error for submission ${submissionId}:`, error);
-
-      await context.run("mark-failed", async () => {
-          await prisma.submission.update({
-              where: { id: submissionId },
-              data: {
-                  status: 'FAILED',
-                  feedback: error.message || 'System encountered a fatal error during grading.'
-              }
-          });
-      });
+    // 3. Mark as Completed (handled inside handleAiGradeWorkflow, but we can log it here)
+    console.log(`[WORKFLOW] Successfully completed workflow for submission: ${submissionId}`);
+  },
+  {
+    failureFunction: async ({ context, failStatus, failResponse }) => {
+       console.error("Workflow failed:", failResponse);
+       const payload = context.requestPayload as { submissionId?: string };
+       if (payload?.submissionId) {
+          try {
+             // We can't use prisma here cleanly if it's an edge function,
+             // but assuming it's standard node we can update it.
+             const { prisma } = await import('@/lib/prisma');
+             await prisma.submission.update({
+                  where: { id: payload.submissionId },
+                  data: {
+                      status: 'FAILED',
+                      feedback: 'System encountered a fatal error during grading. Please try again.'
+                  }
+              });
+          } catch (e) {
+             console.error("Failed to update status on workflow failure", e);
+          }
+       }
     }
   }
 );
