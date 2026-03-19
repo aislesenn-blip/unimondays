@@ -20,8 +20,8 @@ export async function extractSinglePageImage(filePathOrUrl: string | null, targe
     const buffer = await readFile(filePathOrUrl, 'exam_pdfs');
 
     // Iterate until we find the target page using pdf-to-img
-    const document = await pdf(buffer, { scale: 1.5 }); // memory-safe scale 1.5
-    console.log("[PLAYBOOK-TRACE] [OCR-PREP] PDF buffer converted to images at memory-safe scale 1.5.");
+    const document = await pdf(buffer, { scale: 1.0 }); // Lower scale to prevent Vercel OOM crashes
+    console.log("[PLAYBOOK-TRACE] [OCR-PREP] PDF buffer converted to images at memory-safe scale 1.0.");
 
     let currentPage = 1;
     for await (const imageBuffer of document) {
@@ -36,8 +36,8 @@ export async function extractSinglePageImage(filePathOrUrl: string | null, targe
 
 export async function extractMultiplePageImagesFromBuffer(buffer: Buffer, targetPages: number[]): Promise<Map<number, Buffer>> {
     // Iterate through the PDF once, extracting only the pages we need
-    const document = await pdf(buffer, { scale: 1.5 }); // memory-safe scale 1.5
-    console.log("[PLAYBOOK-TRACE] [OCR-PREP] PDF buffer converted to images at memory-safe scale 1.5.");
+    const document = await pdf(buffer, { scale: 1.0 }); // Lower scale to prevent Vercel OOM crashes
+    console.log("[PLAYBOOK-TRACE] [OCR-PREP] PDF buffer converted to images at memory-safe scale 1.0.");
     const extractedImages = new Map<number, Buffer>();
     const pagesToFind = new Set(targetPages);
 
