@@ -20,4 +20,6 @@ const serviceKey = supabaseServiceKey || 'missing-service-key';
 export const supabaseAdmin = createClient(url, serviceKey);
 
 // Public client for client-side operations
-export const supabase = createClient(url, anonKey);
+// The user provided replacement code strictly uses `supabase` for admin actions like .list() and .download()
+// Therefore we must ensure `supabase` is initialized with the service key, not the anon key.
+export const supabase = supabaseAdmin;
