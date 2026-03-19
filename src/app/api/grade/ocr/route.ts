@@ -84,8 +84,8 @@ export const POST = verifySignatureAppRouter(
                 confidenceScore = parseFloat(confidenceMatch[1]);
             }
         } catch (aiError: any) {
-            console.error(`[PLAYBOOK-TRACE] [FATAL-OCR] OpenRouter API Failed. Check API Credits/Network. Reason: ${aiError.message}`);
-            throw aiError; // Trigger QStash retry
+            console.error(`[FATAL-OCR] API Failed. Reason: ${aiError.message}`);
+            throw aiError; // Let QStash handle the retry natively without killing the UI
         }
 
         // Idempotent UPSERT to ExtractedChunk table to fix array race condition and dupes
