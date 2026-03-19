@@ -352,12 +352,10 @@ Performance Metrics:
 
     } catch (fatalError: any) {
         console.error(`[WORKER] Error:`, fatalError.message);
-        if (submissionIdToUpdate) {
-            await prisma.submission.update({
-                where: { id: submissionIdToUpdate },
-                data: { status: 'FAILED', feedback: fatalError.message }
-            }).catch(e => console.error("Failed to update status to FAILED", e));
-        }
+        // CRITICAL FIX: We MUST NOT update the UI submission status to 'FAILED' here!
+        // We throw the error so the Queue Processor (api/queue/process/route.ts) catches it.
+        // The Queue Processor will handle the 3 retries safely, and only update the submission
+        // to FAILED if all 3 retries are permanently exhausted.
         throw fatalError;
     }
 }
