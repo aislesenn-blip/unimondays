@@ -173,6 +173,9 @@ export async function POST(req: NextRequest) {
         });
         // Clear old scores to trigger re-grading
         await prisma.score.deleteMany({ where: { submissionId: submission.id } });
+        // CRITICAL FIX: Clear old extracted chunks, otherwise the system immediately
+        // assumes OCR is done and creates duplicate jobs for the old chunks.
+        await prisma.extractedChunk.deleteMany({ where: { submissionId: submission.id } });
     } else {
         submission = await prisma.submission.create({
             data: {

@@ -17,9 +17,11 @@ export const POST = verifySignatureAppRouter(
 
         try {
             // STRICTLY 1 JOB PER LAMBDA TO AVOID 300s TIMEOUT
-            // FIX: Use OR clause to fetch PENDING jobs where retryCount is less than 3 OR null
-            // This prevents jobs from silently being excluded due to Prisma inequality quirks.
-            const jobs = await prisma.job.findMany({
+            // FIX: ATOMIC QUEUE CLAIMING TO PREVENT LAMBDA RACE CONDITIONS
+            // Instead of finding and updating separately, we find a PENDING job and instantly update to PROCESSING.
+            // PostgreSQL will handle the lock, ensuring no two workers grab the same job.
+
+            const pendingJobs = await prisma.job.findMany({
                 where: {
                     status: 'PENDING',
                     OR: [
@@ -28,20 +30,44 @@ export const POST = verifySignatureAppRouter(
                     ]
                 },
                 orderBy: { createdAt: 'asc' },
-                take: 1
+                take: 1, // Look for the oldest available job
+                select: { id: true }
             });
 
-            if (jobs.length === 0) {
+            if (pendingJobs.length === 0) {
                 console.log("[QUEUE] Empty queue.");
                 return NextResponse.json({ processed: 0 });
             }
 
-            console.log(`[QUEUE] Processing ${jobs.length} jobs sequentially.`);
+            // ATOMIC CLAIM: Try to be the one to flip it from PENDING to PROCESSING
+            const targetJobId = pendingJobs[0].id;
+            const claimedJob = await prisma.job.updateMany({
+                where: { id: targetJobId, status: 'PENDING' },
+                data: { status: 'PROCESSING' }
+            });
 
-            // SEQUENTIAL FOR-LOOP (The antidote to Vercel 504s)
+            // If count is 0, another Vercel lambda beat us to it in the last 100ms.
+            if (claimedJob.count === 0) {
+                console.log(`[QUEUE] Job ${targetJobId} was claimed by another worker. Exiting gracefully.`);
+                return NextResponse.json({ processed: 0 });
+            }
+
+            // We successfully claimed it! Now fetch the full job payload safely.
+            const job = await prisma.job.findUnique({
+                where: { id: targetJobId }
+            });
+
+            if (!job) {
+                console.log(`[QUEUE] Job ${targetJobId} disappeared after claiming.`);
+                return NextResponse.json({ processed: 0 });
+            }
+
+            console.log(`[QUEUE] -> Successfully Claimed and Starting Job ${job.id}`);
+
+            // We only process the single claimed job in this serverless function
+            const jobs = [job]; // Keeping the array format to minimize code disruption below
+
             for (const job of jobs) {
-                console.log(`[QUEUE] -> Starting Job ${job.id}`);
-                await prisma.job.update({ where: { id: job.id }, data: { status: 'PROCESSING' } });
 
                 try {
                     if (job.type === 'AI_GRADE_SUBMISSION') {
