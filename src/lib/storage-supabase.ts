@@ -1,5 +1,5 @@
 import { StorageService } from './storage';
-import { supabase } from './supabase';
+import { supabaseAdmin } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 
@@ -30,7 +30,7 @@ export class SupabaseStorageService implements StorageService {
         else contentType = 'application/octet-stream';
     }
 
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabaseAdmin.storage
       .from(bucket)
       .upload(storagePath, buffer, {
         contentType: contentType,
@@ -51,7 +51,7 @@ export class SupabaseStorageService implements StorageService {
      const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
 
      // Download from Supabase
-     const { data, error } = await supabase.storage.from(bucket).download(cleanPath);
+     const { data, error } = await supabaseAdmin.storage.from(bucket).download(cleanPath);
 
      if (error) {
          console.error(`[Storage] Supabase Download Error: ${error.message} (Bucket: ${bucket}, Path: ${cleanPath})`);
@@ -63,7 +63,7 @@ export class SupabaseStorageService implements StorageService {
   async deleteFile(filePath: string): Promise<void> {
     const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
     const bucket = 'exam_pdfs'; // Default
-    await supabase.storage.from(bucket).remove([cleanPath]);
+    await supabaseAdmin.storage.from(bucket).remove([cleanPath]);
   }
 
   // V4.5 Cloud-Pull Architecture

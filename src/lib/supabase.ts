@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
   // Log error but don't crash the process immediately to allow build to proceed
   console.error("Missing Supabase environment variables!");
 }
@@ -12,6 +13,11 @@ if (!supabaseUrl || !supabaseKey) {
 // At runtime, these invalid credentials will cause operations to fail (Zero Trust),
 // forcing the administrator to configure the environment correctly.
 const url = supabaseUrl || 'https://missing-env.supabase.co';
-const key = supabaseKey || 'missing-key';
+const anonKey = supabaseAnonKey || 'missing-anon-key';
+const serviceKey = supabaseServiceKey || 'missing-service-key';
 
-export const supabase = createClient(url, key);
+// Ensure you are using the Service Role Key for Admin privileges to bypass RLS during server-side processing
+export const supabaseAdmin = createClient(url, serviceKey);
+
+// Public client for client-side operations
+export const supabase = createClient(url, anonKey);
