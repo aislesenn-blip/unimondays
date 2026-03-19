@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
         const messages = chunks.map((pageBatch, index) => ({
             url: `${baseUrl}/api/grade/ocr`,
             body: { submissionId: submission.id, pages: pageBatch, chunkIndex: index, pdfUrl: submission.filePath },
-            delay: `${index * 5}s` as const // MANDATORY: Stagger to prevent OpenRouter HTTP 500 / 429
+            delay: `${index * 30}s` as const // MANDATORY: Stagger to prevent OpenRouter HTTP 500 / 429
         }));
 
         await qstash.batchJSON(messages as any);
