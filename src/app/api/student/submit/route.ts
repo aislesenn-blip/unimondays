@@ -228,10 +228,11 @@ export async function POST(req: NextRequest) {
         const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
         const messages = chunks.map((pageBatch, index) => ({
             url: `${baseUrl}/api/grade/ocr`,
-            body: { submissionId: submission.id, pages: pageBatch, chunkIndex: index, pdfUrl: submission.filePath }
+            body: { submissionId: submission.id, pages: pageBatch, chunkIndex: index, pdfUrl: submission.filePath },
+            delay: `${index * 5}s` as const // MANDATORY: Stagger to prevent OpenRouter HTTP 500 / 429
         }));
 
-        await qstash.batchJSON(messages);
+        await qstash.batchJSON(messages as any);
         console.log(`[SUBMIT] Successfully dispatched ${chunks.length} Map-Reduce jobs to QStash.`);
 
         if (DEBUG_MODE) {
