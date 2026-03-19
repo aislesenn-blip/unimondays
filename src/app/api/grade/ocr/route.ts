@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 import { Client } from "@upstash/qstash";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { extractMultiplePageImagesFromBuffer } from '@/lib/pdf-utils';
-import { supabase } from '@/lib/supabase'; // Using the admin client
+import { supabaseAdmin } from '@/lib/supabase'; // Using the admin client
 import { fileTypeFromBuffer } from 'file-type';
 
 const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
@@ -28,7 +28,7 @@ export const POST = verifySignatureAppRouter(
         // Clean path to ensure it doesn't have leading slashes if it's already a relative storage path
         const cleanPath = pdfUrl?.startsWith('/') ? pdfUrl.slice(1) : pdfUrl;
 
-        const { data: fileData, error: downloadError } = await supabase
+        const { data: fileData, error: downloadError } = await supabaseAdmin
             .storage
             .from('exam_pdfs')
             .download(cleanPath);

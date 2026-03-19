@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import { supabase } from '@/lib/supabase'; // Admin Client
+import { supabaseAdmin } from '@/lib/supabase'; // Admin Client
 import { Client } from "@upstash/qstash";
 import { getPdfPageCount } from '@/lib/pdf-utils';
 
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     const folder = cleanPath.split('/').slice(0, -1).join('/');
     const filename = cleanPath.split('/').pop();
 
-    const { data: fileList, error: listError } = await supabase
+    const { data: fileList, error: listError } = await supabaseAdmin
         .storage
         .from('exam_pdfs')
         .list(folder, {
