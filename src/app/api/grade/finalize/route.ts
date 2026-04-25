@@ -184,7 +184,7 @@ Return strictly a JSON object: {"Q1": "Rubric text for Q1...", "Q2": "Rubric tex
 
         // Attempting to extract Registration Number & Overall remarks from full text
         let aiFeedback = "Successfully graded via Atomic Parallel Pipeline.";
-        let regNo = detectedRegNo;
+        const regNo = detectedRegNo;
 
         try {
             const metaPrompt = `Write a 3-paragraph encouraging overall feedback for the student based on their answers. Return strictly JSON: {"aiFeedback": "..."}`;
