@@ -317,9 +317,6 @@ CREATE POLICY "Users can update own profile"
   ON public.users FOR UPDATE
   USING ( auth.uid()::text = id );
 
--- Enable RLS on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-
 -- Allow authenticated users to upload files to exam_pdfs
 -- Allow users to upload their own files to exam_pdfs
 CREATE POLICY "Allow users to upload own files to exam_pdfs"
