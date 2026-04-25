@@ -51,7 +51,10 @@ export async function POST(req: NextRequest) {
     waitUntil(
         fetch(`${baseUrl}/api/cloud-marking/${bulkSession.id}/convert`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.INTERNAL_API_KEY || ''}`
+        }
         }).catch(e => console.error("Failed to trigger cloud conversion", e))
     );
 

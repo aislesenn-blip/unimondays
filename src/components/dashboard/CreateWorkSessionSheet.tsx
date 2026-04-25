@@ -68,7 +68,14 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
         throw new Error(ocrData.error || "Failed to extract text from document.");
       }
 
-      setValue(field, ocrData.text); // Store extracted text directly (which is now a strict JSON string for rubrics)
+      // Store the Supabase URL in the main field (so we don't crash the DB string limits)
+      setValue(field, filePath);
+
+      // If it's a rubric, store the parsed JSON in a hidden secondary field or directly in state
+      if (isRubric) {
+          setValue('parsedRubricJson', ocrData.text);
+      }
+
       toast.success(`${field} extracted successfully`);
     } catch (error: any) {
       toast.error(`Failed to process ${field}: ${error.message}`);
@@ -90,6 +97,7 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
 
       const payload = {
         ...data,
+        rubric: data.parsedRubricJson || null, // Send the JSON separately
         calibration: JSON.stringify(calibration),
         saveAsDefault: data.saveAsDefault
       };

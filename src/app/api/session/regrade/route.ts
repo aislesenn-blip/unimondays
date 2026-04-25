@@ -68,23 +68,24 @@ export async function POST(req: NextRequest) {
 
             console.log(`[BATCH_REGRADE] Triggering grading streams for ${submissions.length} submissions.`);
 
-            // Use waitUntil to ensure background execution on Vercel without blocking the response
+            // Use waitUntil to ensure background execution on Vercel without blocking the response.
+            // Fan out requests concurrently using Promise.all to prevent sequential timeout issues.
             waitUntil(
-                (async () => {
-                    for (const sub of submissions) {
-                        try {
-                            // MUST await .text() or similar to ensure the stream completes before the fetch promise resolves
-                            const res = await fetch(`${baseUrl}/api/grade/stream`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ submissionId: sub.id }),
-                            });
-                            await res.text();
-                        } catch (e) {
-                            console.error(`Regrade stream failed for ${sub.id}:`, e);
-                        }
+                Promise.all(submissions.map(async (sub) => {
+                    try {
+                        const res = await fetch(`${baseUrl}/api/grade/stream`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${process.env.INTERNAL_API_KEY || ''}`
+                            },
+                            body: JSON.stringify({ submissionId: sub.id }),
+                        });
+                        await res.text();
+                    } catch (e) {
+                        console.error(`Regrade stream failed for ${sub.id}:`, e);
                     }
-                })()
+                }))
             );
         }
 

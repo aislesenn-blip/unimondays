@@ -4,7 +4,24 @@ import { getAuthenticatedUser } from "@/lib/auth";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getAuthenticatedUser();
+    const authHeader = req.headers.get('authorization');
+    const internalKey = process.env.INTERNAL_API_KEY;
+
+    let user = null;
+
+    // Check if internal background request
+    if (internalKey && authHeader === `Bearer ${internalKey}`) {
+        // Find the user from the bulk session directly if triggered internally
+        const { id: tempId } = await params;
+        const bulkData = await prisma.bulkSession.findUnique({ where: { id: tempId } });
+        if (bulkData) {
+            user = { id: bulkData.lecturerId };
+        }
+    } else {
+        // Fallback to user session
+        user = await getAuthenticatedUser();
+    }
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

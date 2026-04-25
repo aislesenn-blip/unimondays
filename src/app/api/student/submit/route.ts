@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized: Missing User ID' }, { status: 401 });
 
     const body = await req.json();
-    const { extractedText, workSessionId, workCode } = body;
+    const { extractedText, filePath, workSessionId, workCode } = body;
 
     if (!extractedText) return NextResponse.json({ error: 'Missing extracted text' }, { status: 400 });
 
@@ -65,10 +65,14 @@ export async function POST(req: NextRequest) {
     });
 
     let submission;
+    // Clean path for database storage
+    let cleanPath = filePath;
+    if (cleanPath && cleanPath.startsWith('/')) cleanPath = cleanPath.slice(1);
+
     if (existingSubmission) {
         submission = await prisma.submission.update({
             where: { id: existingSubmission.id },
-            data: { ocrText: extractedText, status: 'GRADING', submittedAt: new Date(), feedback: null }
+            data: { ocrText: extractedText, filePath: cleanPath, status: 'GRADING', submittedAt: new Date(), feedback: null }
         });
 
         // L8 BULLETPROOF GUARD: Try-catch prevents P2021 Prisma crashes if DB is not synced
@@ -81,7 +85,7 @@ export async function POST(req: NextRequest) {
         }
     } else {
         submission = await prisma.submission.create({
-            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, ocrText: extractedText, status: 'GRADING' }
+            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, filePath: cleanPath, ocrText: extractedText, status: 'GRADING' }
         });
     }
 
@@ -97,7 +101,10 @@ export async function POST(req: NextRequest) {
                 // Await .text() so the fetch promise waits for the entire stream to finish
                 const res = await fetch(`${baseUrl}/api/grade/stream`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${process.env.INTERNAL_API_KEY || ''}`
+                    },
                     body: JSON.stringify({ submissionId: submission.id }),
                 });
                 await res.text();

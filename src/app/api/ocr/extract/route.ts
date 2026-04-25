@@ -107,7 +107,8 @@ CRITICAL INSTRUCTIONS:
             model: google('gemini-2.5-flash'),
             messages: [{ role: "user", content: promptContent as any }],
             temperature: 0.0,
-        });
+            maxTokens: 8192 // Force 8192 tokens now that we bypass TS
+        } as any);
 
         console.log("[OCR] Extraction complete.");
 

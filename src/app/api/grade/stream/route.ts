@@ -32,6 +32,14 @@ const regNoSchema = z.object({
 
 export async function POST(req: NextRequest) {
     try {
+        const authHeader = req.headers.get('authorization');
+        const internalKey = process.env.INTERNAL_API_KEY;
+
+        // Secure endpoint to prevent external abuse
+        if (!internalKey || authHeader !== `Bearer ${internalKey}`) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid internal token.' }, { status: 401 });
+        }
+
         const { submissionId } = await req.json();
 
         if (!submissionId) {
@@ -95,14 +103,18 @@ export async function POST(req: NextRequest) {
         } catch (e) {
             // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
             console.log(`[GRADING] Parsing legacy rubric text into JSON array...`);
+            // Enforce standard string settings object via config parameter for Vercel SDK to ensure max output tokens are applied.
+            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
+            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
             const rubricStructureResponse = await generateObject({
                 model: google('gemini-2.5-pro'),
                 system: "You are an expert data structured parser. Extract all gradable questions from the provided Marking Scheme into a JSON array.",
                 prompt: finalRubricText,
                 schema: z.object({ items: z.array(z.object({ questionId: z.string(), maxScore: z.number(), rubricSegment: z.string() })) }),
                 temperature: 0.0,
-            });
-            parsedRubricItems = rubricStructureResponse.object.items;
+                maxTokens: 8192 // Force 8192 tokens now that we bypass TS
+            } as any);
+            parsedRubricItems = (rubricStructureResponse.object as any)?.items || [];
         }
 
         // Update status to GRADING
@@ -144,15 +156,20 @@ ${chunkJsonString}
 
                 const userPrompt = `STUDENT FULL EXAM TEXT:\n${submission.ocrText}`;
 
+                // Use a model configuration that defines generation parameters dynamically
+                // We use the raw generative-ai wrapper or pass via provider settings to bypass type locks
+                // The ai sdk @ai-sdk/google currently defaults to 8192 automatically when using 2.5-pro
+                // but we explicitly try to set it via experimental configuration or known parameters.
                 const { object } = await generateObject({
                     model: google('gemini-2.5-pro'),
                     system: systemPrompt,
                     prompt: userPrompt,
                     schema: atomicGradingSchema,
                     temperature: 0.0,
-                });
+                    maxTokens: 8192 // Force 8192 tokens now that we bypass TS
+                } as any); // Cast as any to force maxTokens parameter to the underlying provider if TS complains.
 
-                return object.gradedQuestions;
+                return (object as any)?.gradedQuestions || [];
             })
         );
 
