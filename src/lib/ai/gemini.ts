@@ -9,10 +9,10 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
   globalThis.DOMRect = DOMRect as any;
 }
 
-const apiKey = process.env.OPENROUTER_API_KEY || "dummy-key-for-build";
+const apiKey = process.env.GEMINI_API_KEY || "dummy-key-for-build";
 
 const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
   apiKey: apiKey,
   defaultHeaders: {
     "HTTP-Referer": "https://playbook.edu",
@@ -20,7 +20,7 @@ const openai = new OpenAI({
   }
 });
 
-// Helper: Existing OpenRouter/Gemini fetch logic
+// Helper: Existing Gemini fetch logic
 async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean = false) {
     const base64Data = imageBuffer.toString("base64");
     const dataUrl = `data:image/jpeg;base64,${base64Data}`;
@@ -52,14 +52,14 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
     });
 
     const text = response.choices[0]?.message?.content;
-    if (!text) throw new Error("No text returned from OpenRouter Vision API");
+    if (!text) throw new Error("No text returned from Gemini Vision API");
     return text;
 }
 
 // Single Image OCR (for rubrics)
 export async function ocrDocument(buffer: Buffer, mimeType: string = "application/pdf"): Promise<string> {
-    if (!process.env.OPENROUTER_API_KEY) {
-        throw new Error("OPENROUTER_API_KEY is not set. OCR service unavailable.");
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY is not set. OCR service unavailable.");
     }
     return callGeminiVisionAPI(buffer);
 }
@@ -155,7 +155,7 @@ export async function extractPagesMultimodal(pdfBuffer: Buffer): Promise<PageDat
     for await (const imageBuffer of document) {
         console.log(`[GEMINI] Processing Page ${pageNum}...`);
 
-        // Use existing OpenRouter Gemini Vision API call logic
+        // Use existing Gemini Vision API call logic
         const extractedText = await callGeminiVisionAPI(imageBuffer);
 
         pagesData.push({

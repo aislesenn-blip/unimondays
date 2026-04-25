@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { fileTypeFromBuffer } from 'file-type';
 
 const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-const openRouterClient = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY || 'dummy' });
+const geminiClient = new OpenAI({ baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/", apiKey: process.env.GEMINI_API_KEY || 'dummy' });
 export const maxDuration = 300;
 
 export const POST = verifySignatureAppRouter(
@@ -50,7 +50,7 @@ export const POST = verifySignatureAppRouter(
                 const confidenceMatch = extractedText.match(/\[CONFIDENCE:\s*([\d\.]+)\]/i);
                 if (confidenceMatch) confidenceScore = parseFloat(confidenceMatch[1]);
             } catch (aiError: any) {
-                console.error(`[FATAL-OCR] OpenRouter API Failed: ${aiError.message}`);
+                console.error(`[FATAL-OCR] Gemini API Failed: ${aiError.message}`);
                 // L8 MANDATE: Do NOT update DB to FAILED. Throw error to let QStash silently retry.
                 throw aiError;
             }
