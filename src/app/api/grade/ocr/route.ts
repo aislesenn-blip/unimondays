@@ -11,8 +11,7 @@ const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
 const geminiClient = new OpenAI({ baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/", apiKey: process.env.GEMINI_API_KEY || 'dummy' });
 export const maxDuration = 300;
 
-export const POST = verifySignatureAppRouter(
-    async (req: NextRequest) => {
+const handler = async (req: NextRequest) => {
         try {
             const { submissionId, pages, chunkIndex, pdfUrl } = await req.json();
             const cleanPath = pdfUrl?.startsWith('/') ? pdfUrl.slice(1) : pdfUrl;
@@ -92,6 +91,8 @@ export const POST = verifySignatureAppRouter(
             console.error("========================================");
             return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
         }
-    },
-    { currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || 'dummy_current_key', nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || 'dummy_next_key' }
-);
+    };
+
+export const POST = process.env.QSTASH_CURRENT_SIGNING_KEY
+    ? verifySignatureAppRouter(handler)
+    : handler;

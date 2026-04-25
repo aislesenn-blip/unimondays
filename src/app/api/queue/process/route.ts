@@ -10,8 +10,7 @@ export async function GET() {
     return NextResponse.json({ status: "Vercel OOM Protected Queue" });
 }
 
-export const POST = verifySignatureAppRouter(
-    async (req: NextRequest) => {
+const handler = async (req: NextRequest) => {
         try {
             const jobs = await prisma.job.findMany({
                 where: { status: 'PENDING', OR: [{ retryCount: { lt: 3 } }, { retryCount: null }] },
@@ -57,6 +56,8 @@ export const POST = verifySignatureAppRouter(
         } catch (fatalError: any) {
             return NextResponse.json({ error: fatalError.message }, { status: 500 });
         }
-    },
-    { currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || 'dummy_current_key', nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || 'dummy_next_key' }
-);
+    };
+
+export const POST = process.env.QSTASH_CURRENT_SIGNING_KEY
+    ? verifySignatureAppRouter(handler)
+    : handler;
