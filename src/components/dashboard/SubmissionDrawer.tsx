@@ -93,8 +93,11 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
       <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Submission Details</SheetTitle>
-          <SheetDescription className="font-medium text-foreground">
+          <div className="font-medium text-foreground">
             {submission.score?.detectedIdentity || submission.studentName || submission.studentRegNo || 'Unknown Student'}
+          </div>
+          <SheetDescription className="sr-only">
+             Detailed view of the submission including grading breakdown, appeals, and overrides.
           </SheetDescription>
           {(submission.studentRegNo || submission.user?.email) && (
              <p className="text-xs text-muted-foreground">

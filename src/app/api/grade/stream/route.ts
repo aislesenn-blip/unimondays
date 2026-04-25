@@ -31,6 +31,7 @@ const regNoSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+    let globalSubmissionId: string | null = null;
     try {
         const authHeader = req.headers.get('authorization');
         const internalKey = process.env.INTERNAL_API_KEY;
@@ -40,14 +41,15 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized: Invalid internal token.' }, { status: 401 });
         }
 
-        const { submissionId } = await req.json();
+        const body = await req.json();
+        globalSubmissionId = body.submissionId;
 
-        if (!submissionId) {
+        if (!globalSubmissionId) {
             return NextResponse.json({ error: 'Missing submissionId.' }, { status: 400 });
         }
 
         const submission = await prisma.submission.findUnique({
-            where: { id: submissionId },
+            where: { id: globalSubmissionId },
             include: { workSession: true }
         });
 
@@ -112,8 +114,7 @@ export async function POST(req: NextRequest) {
                 prompt: finalRubricText,
                 schema: z.object({ items: z.array(z.object({ questionId: z.string(), maxScore: z.number(), rubricSegment: z.string() })) }),
                 temperature: 0.0,
-                maxTokens: 8192 // Force 8192 tokens now that we bypass TS
-            } as any);
+            });
             parsedRubricItems = (rubricStructureResponse.object as any)?.items || [];
         }
 
@@ -166,8 +167,7 @@ ${chunkJsonString}
                     prompt: userPrompt,
                     schema: atomicGradingSchema,
                     temperature: 0.0,
-                    maxTokens: 8192 // Force 8192 tokens now that we bypass TS
-                } as any); // Cast as any to force maxTokens parameter to the underlying provider if TS complains.
+                });
 
                 return (object as any)?.gradedQuestions || [];
             })
@@ -231,11 +231,24 @@ ${chunkJsonString}
             }
         });
 
-        console.log(`[GRADING] Successfully graded submission ${submissionId} with score ${calculatedTotalScore}`);
+        console.log(`[GRADING] Successfully graded submission ${globalSubmissionId} with score ${calculatedTotalScore}`);
         return NextResponse.json({ success: true, score: calculatedTotalScore });
 
     } catch (error: any) {
         console.error("[FATAL-GRADING] Streaming API Failed:", error);
+
+        // Use the globally scoped submission ID to update the database without calling req.json() again
+        try {
+            if (globalSubmissionId) {
+                await prisma.submission.update({
+                    where: { id: globalSubmissionId },
+                    data: { status: 'FAILED', feedback: 'Failed to complete grading process. System encountered an error.' }
+                });
+            }
+        } catch (e) {
+            console.error("[FATAL-GRADING] Failed to update submission status to FAILED:", e);
+        }
+
         return NextResponse.json({ error: error.message || 'Grading failed.' }, { status: 500 });
     }
 }
