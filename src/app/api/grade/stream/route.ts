@@ -112,7 +112,7 @@ ${JSON.stringify(masterRubricArray.length > 0 ? masterRubricArray : finalRubricT
         });
 
         const result = await streamObject({
-            model: google('gemini-2.0-flash'),
+            model: google('gemini-2.5-flash'),
             system: systemPrompt,
             prompt: userPrompt,
             schema: gradingResultSchema,

@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         console.log("[OCR] Sending to Gemini...");
 
         const { text } = await generateText({
-            model: google('gemini-2.0-flash'),
+            model: google('gemini-2.5-flash'),
             messages: [{ role: "user", content: promptContent as any }],
             temperature: 0.0,
         });
