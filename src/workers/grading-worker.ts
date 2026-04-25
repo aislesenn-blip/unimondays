@@ -16,9 +16,9 @@ async function withRetries<T>(fn: () => Promise<T>, retries = 3, delayMs = 3000)
 }
 
 const apiBucket = new TokenBucket(5, 5);
-const deepSeekClient = new OpenAI({
-    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
-    apiKey: process.env.DEEPSEEK_API_KEY || 'dummy',
+const geminiClient = new OpenAI({
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    apiKey: process.env.GEMINI_API_KEY || 'dummy',
     timeout: 300000,
     maxRetries: 4,
 });
@@ -97,41 +97,36 @@ export async function handleAiGrade(job: any) {
         }
 
         let atomicGradingPromises: Promise<any>[] = [];
-        const isSimulationMode = process.env.DEEPSEEK_API_KEY === 'dummy' || !process.env.DEEPSEEK_API_KEY;
 
-        if (isSimulationMode) {
-             atomicGradingPromises = masterRubricArray.map((rubricItem) =>
-                 Promise.resolve({ question: rubricItem.questionId, score: Math.floor(Math.random() * (rubricItem.maxScore + 1)), max: rubricItem.maxScore, feedback: "Simulation feedback", evidenceSnippet: "Simulation" })
-             );
-        } else {
-            const pLimitLib = (await import('p-limit')).default;
-            const limit = pLimitLib(10);
-            atomicGradingPromises = masterRubricArray.map((rubricItem) =>
-                limit(async () => {
-                    try {
-                        await apiBucket.consume();
-                        const narrowContext = findRelevantPages(rubricItem.questionId, pageTextMap);
-                        const response = await deepSeekClient.chat.completions.create({
-                            model: "deepseek-chat",
-                            messages: [
-                                { role: "system", content: `Evaluate ONE question against ONE rubric segment. JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number, "feedback": "tag + micro-tutoring lesson (max 3 sentences)" }` },
-                                { role: "user", content: `QUESTION: ${rubricItem.questionId}\nMAX SCORE: ${rubricItem.maxScore}\n\nRUBRIC SEGMENT:\n${rubricItem.rubricSegment}\n\nSTUDENT ANSWER:\n${narrowContext}` }
-                            ],
-                            response_format: { type: "json_object" },
-                            temperature: 0.1,
-                            max_tokens: 8192
-                        }, { timeout: 90000 });
+        const pLimitLib = (await import('p-limit')).default;
+        const limit = pLimitLib(15); // Gemini can handle higher concurrency
 
-                        const raw = response.choices[0]?.message?.content || '{}';
-                        const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-                        const result = JSON.parse(clean);
-                        return { question: rubricItem.questionId, score: Number(result.score) || 0, max: Number(rubricItem.maxScore) || 0, feedback: result.feedback || "No feedback.", evidenceSnippet: result.extracted_evidence || "None" };
-                    } catch (e: any) {
-                        return { question: rubricItem.questionId, score: null, max: Number(rubricItem.maxScore) || 0, feedback: '[SYSTEM_ERROR] Grading failed.', evidenceSnippet: 'ERROR', error: e.message };
-                    }
-                })
-            );
-        }
+        atomicGradingPromises = masterRubricArray.map((rubricItem) =>
+            limit(async () => {
+                try {
+                    await apiBucket.consume();
+                    // Using fullExamText directly to leverage Gemini's massive context window
+                    // bypassing the brittle findRelevantPages logic
+                    const response = await geminiClient.chat.completions.create({
+                        model: "gemini-2.5-flash",
+                        messages: [
+                            { role: "system", content: `Evaluate ONE question against ONE rubric segment. You must be 100% accurate and ground your grading STRICTLY on the rubric. JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number, "feedback": "tag + micro-tutoring lesson (max 3 sentences)" }` },
+                            { role: "user", content: `QUESTION: ${rubricItem.questionId}\nMAX SCORE: ${rubricItem.maxScore}\n\nRUBRIC SEGMENT:\n${rubricItem.rubricSegment}\n\nFULL STUDENT EXAM TEXT:\n${fullExamText}` }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.0,
+                        max_tokens: 8192
+                    }, { timeout: 90000 });
+
+                    const raw = response.choices[0]?.message?.content || '{}';
+                    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const result = JSON.parse(clean);
+                    return { question: rubricItem.questionId, score: Number(result.score) || 0, max: Number(rubricItem.maxScore) || 0, feedback: result.feedback || "No feedback.", evidenceSnippet: result.extracted_evidence || "None" };
+                } catch (e: any) {
+                    return { question: rubricItem.questionId, score: null, max: Number(rubricItem.maxScore) || 0, feedback: '[SYSTEM_ERROR] Grading failed.', evidenceSnippet: 'ERROR', error: e.message };
+                }
+            })
+        );
 
         const settled = await Promise.allSettled(atomicGradingPromises);
         const formattedBreakdown = [];
