@@ -34,7 +34,10 @@ export async function POST(
                 // Await .text() so the fetch promise waits for the entire stream to finish
                 const res = await fetch(`${baseUrl}/api/grade/stream`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${process.env.INTERNAL_API_KEY || ''}`
+                    },
                     body: JSON.stringify({ submissionId: subId }),
                 });
                 await res.text();

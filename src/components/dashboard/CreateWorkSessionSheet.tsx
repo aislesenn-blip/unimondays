@@ -55,11 +55,12 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      // 2. Trigger server-side OCR which downloads from Supabase
+      // 2. Trigger server-side OCR with 'isRubric' flag to force highly structured JSON parsing
+      const isRubric = field === "markingScheme";
       const ocrRes = await fetch("/api/ocr/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filePath }),
+        body: JSON.stringify({ filePath, isRubric }),
       });
 
       const ocrData = await ocrRes.json();
@@ -67,7 +68,14 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
         throw new Error(ocrData.error || "Failed to extract text from document.");
       }
 
-      setValue(field, ocrData.text); // Store extracted text directly
+      // Store the Supabase URL in the main field (so we don't crash the DB string limits)
+      setValue(field, filePath);
+
+      // If it's a rubric, store the parsed JSON in a hidden secondary field or directly in state
+      if (isRubric) {
+          setValue('parsedRubricJson', ocrData.text);
+      }
+
       toast.success(`${field} extracted successfully`);
     } catch (error: any) {
       toast.error(`Failed to process ${field}: ${error.message}`);
@@ -89,6 +97,7 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
 
       const payload = {
         ...data,
+        rubric: data.parsedRubricJson || null, // Send the JSON separately
         calibration: JSON.stringify(calibration),
         saveAsDefault: data.saveAsDefault
       };

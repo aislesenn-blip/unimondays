@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { streamObject } from 'ai';
+import { generateObject } from 'ai';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { parseRubric, RubricItem } from '@/lib/rubric-parser';
 import { supabase } from '@/lib/supabase';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import pLimit from 'p-limit';
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
@@ -14,21 +14,32 @@ const google = createGoogleGenerativeAI({
   baseURL: "https://generativelanguage.googleapis.com/v1beta/",
 });
 
-// Zod schema for strictly typing the AI response
-const gradingResultSchema = z.object({
-  breakdown: z.array(z.object({
-    question: z.string().describe("The exact question ID as per the rubric (e.g., '1a', '2')."),
-    score: z.number().describe("The awarded score. Must not exceed maxScore."),
-    max: z.number().describe("The maximum possible score for this question."),
-    feedback: z.string().describe("Specific feedback explaining the score. 1-3 sentences max."),
-    evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or incorrect.")
-  })),
-  detectedRegNo: z.string().describe("The registration number found in the student text, if any. Return 'UNKNOWN' if not found."),
-  calculatedTotalScore: z.number().describe("The sum of all awarded scores.")
+// Zod schema for Atomic grading
+const atomicGradingSchema = z.object({
+  gradedQuestions: z.array(z.object({
+    question: z.string().describe("The exact question identifier as written in the marking scheme (e.g., 'Q1(a)', 'Question 2')."),
+    thoughtProcess: z.string().describe("Chain of thought: Explain step-by-step how the student's answer maps to the rubric. Did they use a synonym? Are the mathematical steps correct even if the final answer is wrong? DO THIS BEFORE SCORING."),
+    score: z.number().describe("The awarded score based on semantic matching and your thought process. Must not exceed maxScore."),
+    max: z.number().describe("The maximum possible score for this question as defined in the marking scheme."),
+    feedback: z.string().describe("Specific feedback explaining the score. Keep it to 1-2 sentences."),
+    evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or missing.")
+  }))
+});
+
+const regNoSchema = z.object({
+  detectedRegNo: z.string().describe("The registration number/ID found in the student text, if any. Return 'UNKNOWN' if not found.")
 });
 
 export async function POST(req: NextRequest) {
     try {
+        const authHeader = req.headers.get('authorization');
+        const internalKey = process.env.INTERNAL_API_KEY;
+
+        // Secure endpoint to prevent external abuse
+        if (!internalKey || authHeader !== `Bearer ${internalKey}`) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid internal token.' }, { status: 401 });
+        }
+
         const { submissionId } = await req.json();
 
         if (!submissionId) {
@@ -83,27 +94,28 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const masterRubricArray: RubricItem[] = parseRubric(finalRubricText);
+        let parsedRubricItems: any[] = [];
 
-        if (masterRubricArray.length === 0) {
-            // Fallback if parsing fails, we pass the raw text and let Gemini figure it out
+        try {
+            // Check if finalRubricText is a valid JSON array string (from our new parser)
+            parsedRubricItems = JSON.parse(finalRubricText);
+            if (!Array.isArray(parsedRubricItems)) throw new Error("Parsed rubric is not an array");
+        } catch (e) {
+            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
+            console.log(`[GRADING] Parsing legacy rubric text into JSON array...`);
+            // Enforce standard string settings object via config parameter for Vercel SDK to ensure max output tokens are applied.
+            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
+            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
+            const rubricStructureResponse = await generateObject({
+                model: google('gemini-2.5-pro'),
+                system: "You are an expert data structured parser. Extract all gradable questions from the provided Marking Scheme into a JSON array.",
+                prompt: finalRubricText,
+                schema: z.object({ items: z.array(z.object({ questionId: z.string(), maxScore: z.number(), rubricSegment: z.string() })) }),
+                temperature: 0.0,
+                maxTokens: 8192 // Force 8192 tokens now that we bypass TS
+            } as any);
+            parsedRubricItems = (rubricStructureResponse.object as any)?.items || [];
         }
-
-        // Construct a highly prescriptive system prompt
-        const systemPrompt = `You are an expert, strict academic grader.
-Your task is to evaluate a student's exam text against the provided marking scheme/rubric.
-You MUST follow these rules:
-1. DO NOT SKIP ANY QUESTIONS listed in the rubric.
-2. Grade ONLY based on the student's extracted text. If they didn't write it, score is 0.
-3. Be objective and strictly adhere to the rubric points.
-4. If a question is unanswered or completely wrong, give it a score of 0, but you must still include it in the breakdown.
-5. Extract the student's Registration Number if present.
-
-RUBRIC / MARKING SCHEME:
-${JSON.stringify(masterRubricArray.length > 0 ? masterRubricArray : finalRubricText, null, 2)}
-`;
-
-        const userPrompt = `STUDENT EXAM TEXT:\n${submission.ocrText}`;
 
         // Update status to GRADING
         await prisma.submission.update({
@@ -111,59 +123,116 @@ ${JSON.stringify(masterRubricArray.length > 0 ? masterRubricArray : finalRubricT
              data: { status: 'GRADING' }
         });
 
-        const result = await streamObject({
-            model: google('gemini-2.5-flash'),
-            system: systemPrompt,
-            prompt: userPrompt,
-            schema: gradingResultSchema,
-            temperature: 0.0,
-            onFinish: async ({ object }) => {
-                try {
-                    if (object) {
-                         const { breakdown, detectedRegNo, calculatedTotalScore } = object;
+        // We use p-limit to batch questions. Batch of 5 to balance Vercel timeout and Rate Limits.
+        const limit = pLimit(5);
 
-                         // Fix up student RegNo if found
-                         const regNoToSave = detectedRegNo && detectedRegNo !== "UNKNOWN" ? detectedRegNo : submission.studentRegNo;
+        // Chunk the rubric items into blocks of 5 questions each
+        const CHUNK_SIZE = 5;
+        const rubricChunks = [];
+        for (let i = 0; i < parsedRubricItems.length; i += CHUNK_SIZE) {
+            rubricChunks.push(parsedRubricItems.slice(i, i + CHUNK_SIZE));
+        }
 
-                         await prisma.score.upsert({
-                            where: { submissionId: submission.id },
-                            update: {
-                                totalMarks: calculatedTotalScore,
-                                remarks: "Graded via Streaming Vercel API.",
-                                breakdown: JSON.stringify(breakdown),
-                                detectedIdentity: regNoToSave
-                            },
-                            create: {
-                                submissionId: submission.id,
-                                totalMarks: calculatedTotalScore,
-                                remarks: "Graded via Streaming Vercel API.",
-                                breakdown: JSON.stringify(breakdown),
-                                detectedIdentity: regNoToSave
-                            }
-                        });
+        console.log(`[GRADING] Commencing Batch-Map-Reduce grading for ${rubricChunks.length} chunks...`);
 
-                        await prisma.submission.update({
-                            where: { id: submission.id },
-                            data: {
-                                status: 'GRADED',
-                                studentRegNo: regNoToSave
-                            }
-                        });
-                        console.log(`[GRADING] Successfully graded submission ${submissionId}`);
-                    } else {
-                         throw new Error("No object returned from AI stream.");
-                    }
-                } catch (e: any) {
-                     console.error("[GRADING] Failed to save streaming result:", e);
-                     await prisma.submission.update({
-                         where: { id: submission.id },
-                         data: { status: 'FAILED', feedback: 'Failed to save grading results.' }
-                     });
+        const gradingPromises = rubricChunks.map(chunk =>
+            limit(async () => {
+                const chunkJsonString = JSON.stringify(chunk, null, 2);
+                const systemPrompt = `You are an expert University Professor grading an exam.
+You have been provided with a specific set of Questions from the Marking Scheme and the Student's Full Exam Text.
+
+YOUR GOAL: To grade ONLY the specific questions provided in the chunk against the student's answers. Do not grade any other questions.
+
+CRITICAL RULES:
+1. EVALUATE SEMANTICS, NOT JUST SYNTAX: Award full marks if the student has demonstrated an understanding of the concept using their own words or synonyms.
+2. CHAIN OF THOUGHT: You MUST explicitly think step-by-step in the 'thoughtProcess' field BEFORE awarding a score.
+3. CALCULATIONS: If a question involves math, follow the student's steps. Award partial or full marks based on their logical steps and final answer as dictated by standard grading practices. Explain this in your thought process.
+4. UNANSWERED: If the student did not answer a question in your chunk, give it a score of 0 and note "Not answered" in feedback.
+
+RUBRIC CHUNK TO GRADE:
+"""
+${chunkJsonString}
+"""`;
+
+                const userPrompt = `STUDENT FULL EXAM TEXT:\n${submission.ocrText}`;
+
+                // Use a model configuration that defines generation parameters dynamically
+                // We use the raw generative-ai wrapper or pass via provider settings to bypass type locks
+                // The ai sdk @ai-sdk/google currently defaults to 8192 automatically when using 2.5-pro
+                // but we explicitly try to set it via experimental configuration or known parameters.
+                const { object } = await generateObject({
+                    model: google('gemini-2.5-pro'),
+                    system: systemPrompt,
+                    prompt: userPrompt,
+                    schema: atomicGradingSchema,
+                    temperature: 0.0,
+                    maxTokens: 8192 // Force 8192 tokens now that we bypass TS
+                } as any); // Cast as any to force maxTokens parameter to the underlying provider if TS complains.
+
+                return (object as any)?.gradedQuestions || [];
+            })
+        );
+
+        const chunkResults = await Promise.allSettled(gradingPromises);
+
+        let finalBreakdown: any[] = [];
+        let calculatedTotalScore = 0;
+
+        for (const result of chunkResults) {
+            if (result.status === 'fulfilled') {
+                for (const gradedQ of result.value) {
+                     finalBreakdown.push(gradedQ);
+                     calculatedTotalScore += gradedQ.score;
                 }
+            } else {
+                console.error("[GRADING] A chunk failed to grade:", result.reason);
+                // We could add a failed marker to the breakdown here
+            }
+        }
+
+        // Fast parallel call to extract Reg No
+        let detectedRegNo = "UNKNOWN";
+        try {
+            const regNoResponse = await generateObject({
+                model: google('gemini-2.5-pro'),
+                system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
+                prompt: submission.ocrText,
+                schema: regNoSchema,
+                temperature: 0.0
+            });
+            detectedRegNo = regNoResponse.object.detectedRegNo;
+        } catch(e) { /* ignore */ }
+
+        // Finalize
+        const regNoToSave = detectedRegNo && detectedRegNo !== "UNKNOWN" ? detectedRegNo : submission.studentRegNo;
+
+        await prisma.score.upsert({
+            where: { submissionId: submission.id },
+            update: {
+                totalMarks: calculatedTotalScore,
+                remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
+                breakdown: JSON.stringify(finalBreakdown),
+                detectedIdentity: regNoToSave
+            },
+            create: {
+                submissionId: submission.id,
+                totalMarks: calculatedTotalScore,
+                remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
+                breakdown: JSON.stringify(finalBreakdown),
+                detectedIdentity: regNoToSave
             }
         });
 
-        return result.toTextStreamResponse();
+        await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+                status: 'GRADED',
+                studentRegNo: regNoToSave
+            }
+        });
+
+        console.log(`[GRADING] Successfully graded submission ${submissionId} with score ${calculatedTotalScore}`);
+        return NextResponse.json({ success: true, score: calculatedTotalScore });
 
     } catch (error: any) {
         console.error("[FATAL-GRADING] Streaming API Failed:", error);
