@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { waitUntil } from "@vercel/functions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,10 +48,12 @@ export async function POST(req: NextRequest) {
     // Instead of doing PDF splitting in a background worker, for text-based system we just trigger the conversion.
     // For Vercel, we can await it if it's fast, or use waitUntil.
     // For now we just convert it to a standard session so users can submit via direct links.
-    fetch(`${baseUrl}/api/cloud-marking/${bulkSession.id}/convert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    }).catch(e => console.error("Failed to trigger cloud conversion", e));
+    waitUntil(
+        fetch(`${baseUrl}/api/cloud-marking/${bulkSession.id}/convert`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).catch(e => console.error("Failed to trigger cloud conversion", e))
+    );
 
     return NextResponse.json(bulkSession);
 

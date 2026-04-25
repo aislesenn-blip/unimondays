@@ -9,15 +9,14 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
   globalThis.DOMRect = DOMRect as any;
 }
 
+import { generateText } from 'ai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+
 const apiKey = process.env.GEMINI_API_KEY || "dummy-key-for-build";
 
-const openai = new OpenAI({
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+const google = createGoogleGenerativeAI({
   apiKey: apiKey,
-  defaultHeaders: {
-    "HTTP-Referer": "https://playbook.edu",
-    "X-Title": "Playbook EdTech",
-  }
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/",
 });
 
 // Helper: Existing Gemini fetch logic
@@ -30,28 +29,22 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
         ? "Extract all handwritten and printed text. You MUST find the Registration Number at the top. Return STRICTLY this JSON format: {\"registration_number\": \"...\", \"full_text\": \"...all extracted text from the page...\"}."
         : "Extract all handwritten and printed text from this document. Return it as clean markdown.";
 
-    const response = await openai.chat.completions.create({
-      model: "gemini-2.0-flash",
+    const { text } = await generateText({
+      model: google('gemini-2.0-flash'),
       messages: [
         {
           role: "user",
           content: [
             { type: "text", text: textPrompt },
             {
-              type: "image_url",
-              image_url: {
-                url: dataUrl,
-                detail: "high"
-              }
-            }
+              type: "image",
+              image: dataUrl,
+            } as any
           ],
         },
       ],
-      response_format: isStructuralOcr ? { type: "json_object" } : undefined,
-      max_tokens: 8192,
     });
 
-    const text = response.choices[0]?.message?.content;
     if (!text) throw new Error("No text returned from Gemini Vision API");
     return text;
 }
@@ -76,29 +69,24 @@ export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise
         const base64Data = imageBuffer.toString("base64");
         const dataUrl = `data:image/jpeg;base64,${base64Data}`;
 
-        const response = await openai.chat.completions.create({
-          model: "gemini-2.0-flash",
+        const response = await generateText({
+          model: google('gemini-2.0-flash'),
           messages: [
             {
               role: "user",
               content: [
                 { type: "text", text: "Extract the student's text and categorize it by question numbers (Q1, Q2, Q3...). If a student answers a question across multiple pages, concatenate them. Return strictly a JSON: {\"Q1\": \"text...\", \"Q2\": \"text...\"}. Do not lose a single word of the student's response." },
                 {
-                  type: "image_url",
-                  image_url: {
-                    url: dataUrl,
-                    detail: "high"
-                  }
-                }
+                  type: "image",
+                  image: dataUrl,
+                } as any
               ],
             },
           ],
-          max_tokens: 8192,
-          response_format: { type: "json_object" },
           temperature: 0.0,
         });
 
-        const text = response.choices[0]?.message?.content || "{}";
+        const text = response.text || "{}";
         try {
             const cleanString = text.replace(/```json/g, '').replace(/```/g, '').trim();
             const pageMap = JSON.parse(cleanString);

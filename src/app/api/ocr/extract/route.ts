@@ -5,9 +5,16 @@ import { pdf } from 'pdf-to-img';
 import { supabase } from '@/lib/supabase';
 import { cookies } from 'next/headers';
 
-const geminiClient = new OpenAI({
-    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    apiKey: process.env.GEMINI_API_KEY || 'dummy'
+// Gemini 2.0 requires dropping the openai/ from the base URL for the OpenAI SDK wrapper
+// depending on the google library version, or using correct format.
+// The error 404 indicates we need just `https://generativelanguage.googleapis.com/v1beta/openai/` with strict model name
+// Wait, looking at docs, if we use `ai` sdk Google provider, it's safer. Let's use it.
+import { generateText } from 'ai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY || 'dummy',
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/", // Drop /openai/ for native AI SDK
 });
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
@@ -48,32 +55,29 @@ export async function POST(req: NextRequest) {
             const document = await pdf(buffer, { scale: 1.0 }); // Slightly higher scale since we don't have multiple workers loading it
             let pageCount = 0;
             for await (const imageBuffer of document) {
-                promptContent.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` } });
+                promptContent.push({ type: "image", image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` });
                 pageCount++;
                 // Limit to 20 pages to prevent payload too large errors
                 if (pageCount >= 20) break;
             }
             console.log(`[OCR] PDF converted to ${pageCount} images.`);
         } else if (mime.startsWith('image/')) {
-            promptContent.push({ type: "image_url", image_url: { url: `data:${mime};base64,${buffer.toString('base64')}` } });
+            promptContent.push({ type: "image", image: `data:${mime};base64,${buffer.toString('base64')}` });
         } else {
             return NextResponse.json({ error: 'Invalid file type. Only PDF and images are supported.' }, { status: 400 });
         }
 
         console.log("[OCR] Sending to Gemini...");
 
-        const completion = await geminiClient.chat.completions.create({
-            model: "gemini-2.0-flash",
-            messages: [{ role: "user", content: promptContent }],
+        const { text } = await generateText({
+            model: google('gemini-2.0-flash'),
+            messages: [{ role: "user", content: promptContent as any }],
             temperature: 0.0,
-            max_tokens: 8192
         });
-
-        const extractedText = completion.choices[0]?.message?.content || "";
 
         console.log("[OCR] Extraction complete.");
 
-        return NextResponse.json({ success: true, text: extractedText });
+        return NextResponse.json({ success: true, text: text });
 
     } catch (error: any) {
         console.error("[FATAL-OCR] Extraction failed:", error);
