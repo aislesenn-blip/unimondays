@@ -32,7 +32,7 @@ export function SubmissionDrawer({ submission }: SubmissionDrawerProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   // Parsing JSON fields if they are strings
-  let feedback: string = typeof submission.feedback === 'string' ? submission.feedback : "";
+  const feedback: string = typeof submission.feedback === 'string' ? submission.feedback : "";
   let breakdown: any[] = [];
   let appealReason: string | null = null;
 
