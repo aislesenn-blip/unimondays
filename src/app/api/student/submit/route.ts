@@ -107,7 +107,11 @@ export async function POST(req: NextRequest) {
                     },
                     body: JSON.stringify({ submissionId: submission.id }),
                 });
-                await res.text();
+
+                const responseText = await res.text();
+                if (!res.ok) {
+                    console.error(`[SUBMIT-STREAM-ERROR] Background grading failed with status ${res.status}:`, responseText);
+                }
             } catch (e) {
                 console.error("Server-side grading stream failed to finish:", e);
             }

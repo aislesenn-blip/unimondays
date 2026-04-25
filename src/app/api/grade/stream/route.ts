@@ -31,6 +31,7 @@ const regNoSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+    let activeSubmissionId: string | undefined;
     try {
         const authHeader = req.headers.get('authorization');
         const internalKey = process.env.INTERNAL_API_KEY;
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
         }
 
         const { submissionId } = await req.json();
+        activeSubmissionId = submissionId;
 
         if (!submissionId) {
             return NextResponse.json({ error: 'Missing submissionId.' }, { status: 400 });
@@ -56,12 +58,14 @@ export async function POST(req: NextRequest) {
         }
 
         if (!submission.ocrText) {
+             await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
              return NextResponse.json({ error: 'No extracted text found for grading. OCR failed.' }, { status: 400 });
         }
 
         let finalRubricText = submission.workSession.rubric || submission.workSession.markingScheme;
 
         if (!finalRubricText) {
+             await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
              return NextResponse.json({ error: 'No rubric or marking scheme provided for this session.' }, { status: 400 });
         }
 
@@ -91,6 +95,8 @@ export async function POST(req: NextRequest) {
                 }
             } catch (e) {
                 console.error("Failed to extract legacy rubric URL", e);
+                await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
+                return NextResponse.json({ error: 'Failed to extract legacy rubric URL.' }, { status: 400 });
             }
         }
 
@@ -236,6 +242,11 @@ ${chunkJsonString}
 
     } catch (error: any) {
         console.error("[FATAL-GRADING] Streaming API Failed:", error);
+        if (activeSubmissionId) {
+            try {
+                await prisma.submission.update({ where: { id: activeSubmissionId }, data: { status: 'FAILED' } });
+            } catch(e) { /* ignore rollback error */ }
+        }
         return NextResponse.json({ error: error.message || 'Grading failed.' }, { status: 500 });
     }
 }
