@@ -108,13 +108,13 @@ export async function handleAiGrade(job: any) {
                     // Using fullExamText directly to leverage Gemini's massive context window
                     // bypassing the brittle findRelevantPages logic
                     const response = await geminiClient.chat.completions.create({
-                        model: "gemini-1.5-flash",
+                        model: "gemini-2.5-flash",
                         messages: [
-                            { role: "system", content: `Evaluate ONE question against ONE rubric segment. JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number, "feedback": "tag + micro-tutoring lesson (max 3 sentences)" }` },
+                            { role: "system", content: `Evaluate ONE question against ONE rubric segment. You must be 100% accurate and ground your grading STRICTLY on the rubric. JSON FORMAT: { "extracted_evidence": "exact quote from student", "score": number, "feedback": "tag + micro-tutoring lesson (max 3 sentences)" }` },
                             { role: "user", content: `QUESTION: ${rubricItem.questionId}\nMAX SCORE: ${rubricItem.maxScore}\n\nRUBRIC SEGMENT:\n${rubricItem.rubricSegment}\n\nFULL STUDENT EXAM TEXT:\n${fullExamText}` }
                         ],
                         response_format: { type: "json_object" },
-                        temperature: 0.1,
+                        temperature: 0.0,
                         max_tokens: 8192
                     }, { timeout: 90000 });
 
