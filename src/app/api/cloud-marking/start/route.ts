@@ -38,9 +38,16 @@ export async function POST(req: NextRequest) {
         }
     });
 
-    // 3. Trigger Serverless Process
-    // Cloud Marking uses a different worker logic than grade trigger usually, but if it translates to grade trigger:
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/cloud-marking/${bulkSession.id}/convert`, {
+    // 3. Trigger Serverless Process via waitUntil
+    const protocol = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('host') || 'localhost:3000';
+    const baseUrl = `${protocol}://${host}`;
+
+    // Cloud Marking worker logic has been simplified into synchronous conversions / direct Vercel streams.
+    // Instead of doing PDF splitting in a background worker, for text-based system we just trigger the conversion.
+    // For Vercel, we can await it if it's fast, or use waitUntil.
+    // For now we just convert it to a standard session so users can submit via direct links.
+    fetch(`${baseUrl}/api/cloud-marking/${bulkSession.id}/convert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
     }).catch(e => console.error("Failed to trigger cloud conversion", e));

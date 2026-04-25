@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import { Client } from "@upstash/qstash";
+import { waitUntil } from '@vercel/functions';
 
 export async function POST(req: NextRequest) {
     try {
@@ -55,34 +55,37 @@ export async function POST(req: NextRequest) {
             where: { submission: { workSessionId: workSessionId } }
         });
 
-        // 3. Fetch submissions to create jobs
+        // 3. Fetch submissions to grade
         const submissions = await prisma.submission.findMany({
             where: { workSessionId: workSessionId },
             select: { id: true }
         });
 
         if (submissions.length > 0) {
-        // 4. Trigger Serverless Map-Reduce for all submissions
-            const protocol = req.headers.get('x-forwarded-proto') || 'http';
-            const host = req.headers.get('host');
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-        const triggerUrl = `${baseUrl}/api/queue/process`;
+            const protocol = req.headers.get('x-forwarded-proto') || 'https';
+            const host = req.headers.get('host') || 'localhost:3000';
+            const baseUrl = `${protocol}://${host}`;
 
-        console.log(`[BATCH_REGRADE] Triggering Map-Reduce for ${submissions.length} submissions.`);
+            console.log(`[BATCH_REGRADE] Triggering grading streams for ${submissions.length} submissions.`);
 
-        for (const sub of submissions) {
-            await prisma.job.create({
-                data: {
-                    type: 'AI_GRADE_SUBMISSION',
-                    payload: JSON.stringify({ submissionId: sub.id }),
-                    retryCount: 0
-                }
-            });
-        }
-
-        // Fire detached wake-up ping
-        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-        await qstash.publish({ url: triggerUrl }).catch(err => console.error(`[BATCH_REGRADE] Failed to wake up queue:`, err));
+            // Use waitUntil to ensure background execution on Vercel without blocking the response
+            waitUntil(
+                (async () => {
+                    for (const sub of submissions) {
+                        try {
+                            // MUST await .text() or similar to ensure the stream completes before the fetch promise resolves
+                            const res = await fetch(`${baseUrl}/api/grade/stream`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ submissionId: sub.id }),
+                            });
+                            await res.text();
+                        } catch (e) {
+                            console.error(`Regrade stream failed for ${sub.id}:`, e);
+                        }
+                    }
+                })()
+            );
         }
 
         return NextResponse.json({ success: true, count: submissions.length, message: "Batch regrading initialized." });
