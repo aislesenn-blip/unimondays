@@ -44,12 +44,12 @@ export async function POST(req: NextRequest) {
         const { submissionId } = await req.json();
         activeSubmissionId = submissionId;
 
-        if (!submissionId) {
+        if (!globalSubmissionId) {
             return NextResponse.json({ error: 'Missing submissionId.' }, { status: 400 });
         }
 
         const submission = await prisma.submission.findUnique({
-            where: { id: submissionId },
+            where: { id: globalSubmissionId },
             include: { workSession: true }
         });
 
@@ -118,8 +118,7 @@ export async function POST(req: NextRequest) {
                 prompt: finalRubricText,
                 schema: z.object({ items: z.array(z.object({ questionId: z.string(), maxScore: z.number(), rubricSegment: z.string() })) }),
                 temperature: 0.0,
-                maxTokens: 8192 // Force 8192 tokens now that we bypass TS
-            } as any);
+            });
             parsedRubricItems = (rubricStructureResponse.object as any)?.items || [];
         }
 
@@ -172,8 +171,7 @@ ${chunkJsonString}
                     prompt: userPrompt,
                     schema: atomicGradingSchema,
                     temperature: 0.0,
-                    maxTokens: 8192 // Force 8192 tokens now that we bypass TS
-                } as any); // Cast as any to force maxTokens parameter to the underlying provider if TS complains.
+                });
 
                 return (object as any)?.gradedQuestions || [];
             })
@@ -237,7 +235,7 @@ ${chunkJsonString}
             }
         });
 
-        console.log(`[GRADING] Successfully graded submission ${submissionId} with score ${calculatedTotalScore}`);
+        console.log(`[GRADING] Successfully graded submission ${globalSubmissionId} with score ${calculatedTotalScore}`);
         return NextResponse.json({ success: true, score: calculatedTotalScore });
 
     } catch (error: any) {
