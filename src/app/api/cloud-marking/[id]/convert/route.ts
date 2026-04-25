@@ -33,24 +33,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
     });
 
-    // 2. Link the Existing WorkSession to this Class
-    // The worker already created a WorkSession with type='BULK' and bulkSessionId
-    const workSession = await prisma.workSession.findFirst({
+    // 2. Link or create a WorkSession to this Class
+    // Previously a background worker did this, but now we create it synchronously
+    // to allow students to submit immediately using the synchronous OCR -> Vercel streaming pipeline.
+    let workSession = await prisma.workSession.findFirst({
         where: { bulkSessionId }
     });
 
     if (!workSession) {
-        return NextResponse.json({ error: "Associated WorkSession not found. worker might have failed." }, { status: 500 });
+        workSession = await prisma.workSession.create({
+            data: {
+                title: bulkSession.title,
+                workCode: `BULK-${bulkSession.id.substring(0,6).toUpperCase()}`,
+                lecturerId: bulkSession.lecturerId,
+                classId: newClass.id,
+                type: 'WORK_SESSION', // Standard session type
+                status: 'PUBLISHED',
+                bulkSessionId: bulkSession.id,
+                totalMarks: bulkSession.totalMarks,
+                markingScheme: bulkSession.markingScheme,
+                goldStandardUrl: bulkSession.goldStandardUrl,
+                calibration: bulkSession.calibration,
+                releaseMode: "MANUAL"
+            }
+        });
+    } else {
+        await prisma.workSession.update({
+            where: { id: workSession.id },
+            data: {
+                classId: newClass.id,
+                type: 'WORK_SESSION',
+                status: 'PUBLISHED'
+            }
+        });
     }
-
-    await prisma.workSession.update({
-        where: { id: workSession.id },
-        data: {
-            classId: newClass.id,
-            type: 'WORK_SESSION', // Convert to standard session
-            status: 'PUBLISHED'
-        }
-    });
 
     // 3. Update Status
     await prisma.bulkSession.update({

@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import { supabase } from '@/lib/supabase';
-import { Client } from "@upstash/qstash";
-import { getPdfPageCount } from '@/lib/pdf-utils';
+import { waitUntil } from '@vercel/functions';
 
 export const maxDuration = 300;
-// L8 MANDATE: Strictly 1 page per worker to prevent Vercel Out-Of-Memory (OOM) crashes
-const CHUNK_SIZE = 1;
 
 export async function POST(req: NextRequest) {
-  const startTime = Date.now();
   const DEBUG_MODE = process.env.DEBUG_MODE === 'true';
 
-  if (DEBUG_MODE) console.log(`[DEBUG] [UPLOAD_STAGE] Initiating file ingestion...`);
+  if (DEBUG_MODE) console.log(`[DEBUG] [UPLOAD_STAGE] Initiating submission ingestion...`);
 
   try {
     const cookieStore = await cookies();
@@ -29,9 +24,9 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized: Missing User ID' }, { status: 401 });
 
     const body = await req.json();
-    const { filePath, workSessionId, workCode } = body;
+    const { extractedText, workSessionId, workCode } = body;
 
-    if (!filePath) return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
+    if (!extractedText) return NextResponse.json({ error: 'Missing extracted text' }, { status: 400 });
 
     let targetWorkSessionId = workSessionId;
     if (!targetWorkSessionId && workCode) {
@@ -56,20 +51,6 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    let cleanPath = filePath;
-    if (cleanPath.startsWith('/')) cleanPath = cleanPath.slice(1);
-    const folder = cleanPath.split('/').slice(0, -1).join('/');
-    const filename = cleanPath.split('/').pop();
-
-    const { data: fileList, error: listError } = await supabase.storage.from('exam_pdfs').list(folder, { search: filename });
-
-    if (listError || !fileList || fileList.length === 0) {
-        return NextResponse.json({ error: 'Security Verification Failed: Uploaded file not found.' }, { status: 400 });
-    }
-
-    const foundFile = fileList.find(f => f.name === filename);
-    if (!foundFile) return NextResponse.json({ error: 'Security Verification Failed: File mismatch.' }, { status: 400 });
-
     const workSession = await prisma.workSession.findUnique({ where: { id: targetWorkSessionId } });
     if (!workSession) return NextResponse.json({ error: 'Invalid Work Session' }, { status: 404 });
 
@@ -87,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (existingSubmission) {
         submission = await prisma.submission.update({
             where: { id: existingSubmission.id },
-            data: { filePath: cleanPath, status: 'PENDING', submittedAt: new Date(), ocrText: null, feedback: null }
+            data: { ocrText: extractedText, status: 'GRADING', submittedAt: new Date(), feedback: null }
         });
 
         // L8 BULLETPROOF GUARD: Try-catch prevents P2021 Prisma crashes if DB is not synced
@@ -100,55 +81,33 @@ export async function POST(req: NextRequest) {
         }
     } else {
         submission = await prisma.submission.create({
-            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, filePath: cleanPath, status: 'PENDING' }
+            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, ocrText: extractedText, status: 'GRADING' }
         });
     }
 
+    // Trigger background grading invisibly on the server using waitUntil
+    // This allows the frontend to just close the drawer without killing the fetch stream
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;
 
-    try {
-        const totalPages = await getPdfPageCount(submission.filePath);
-        if (totalPages <= 0) {
-            await prisma.submission.update({ where: { id: submission.id }, data: { status: 'FAILED', feedback: 'Empty PDF.' }});
-            throw new Error("PDF has 0 pages.");
-        }
+    waitUntil(
+        (async () => {
+            try {
+                // Await .text() so the fetch promise waits for the entire stream to finish
+                const res = await fetch(`${baseUrl}/api/grade/stream`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ submissionId: submission.id }),
+                });
+                await res.text();
+            } catch (e) {
+                console.error("Server-side grading stream failed to finish:", e);
+            }
+        })()
+    );
 
-        const chunks = [];
-        for (let i = 1; i <= totalPages; i += CHUNK_SIZE) {
-            const pageBatch = [];
-            for (let j = 0; j < CHUNK_SIZE && (i + j) <= totalPages; j++) pageBatch.push(i + j);
-            chunks.push(pageBatch);
-        }
-
-        await prisma.submission.update({
-            where: { id: submission.id },
-            data: { status: 'PROCESSING', totalChunks: chunks.length, processedChunks: 0, extractedData: [] }
-        });
-
-        const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-
-        // L8 MANDATE: Strict Staggering (30s delay) to prevent OpenRouter DDoS & Vercel Overlap
-        const messages = chunks.map((pageBatch, index) => ({
-            url: `${baseUrl}/api/grade/ocr`,
-            body: { submissionId: submission.id, pages: pageBatch, chunkIndex: index, pdfUrl: submission.filePath },
-            delay: `${index * 30}s`
-        }));
-
-        await qstash.batchJSON(messages as any);
-        console.log(`[SUBMIT] Successfully dispatched ${chunks.length} staggered jobs to QStash.`);
-
-        return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission queued for grading." });
-
-    } catch (dispatchError: any) {
-        console.error("[SUBMIT] Failed to dispatch to QStash:", dispatchError);
-        await prisma.submission.update({
-            where: { id: submission.id },
-            data: { status: 'FAILED', feedback: 'Failed to queue document. Please try again.' }
-        }).catch(()=>null);
-        return NextResponse.json({ error: 'Failed to queue submission.' }, { status: 500 });
-    }
+    return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission received. Grading started in background." });
   } catch (error: any) {
     console.error("Submit Error:", error);
     return NextResponse.json({ error: 'Internal error.' }, { status: 500 });

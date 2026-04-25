@@ -32,7 +32,7 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
     setLoading(true);
     try {
-      // 1. Upload to Supabase Storage (Client-side)
+      // 1. Upload to Supabase Storage (Client-side) to bypass Vercel 4.5MB payload limit
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `submissions/${filename}`;
 
@@ -45,13 +45,28 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      // 2. Submit Metadata to API
+      // 2. Trigger server-side OCR which downloads from Supabase
+      const ocrRes = await fetch("/api/ocr/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath }),
+      });
+
+      const ocrData = await ocrRes.json();
+      if (!ocrRes.ok) {
+        throw new Error(ocrData.error || "Failed to read document.");
+      }
+
+      const extractedText = ocrData.text;
+
+      // 3. Submit Text and file path to API directly
       const res = await fetch("/api/student/submit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          extractedText,
           filePath,
           workSessionId: session.id,
           filename: file.name
@@ -65,7 +80,9 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
         return;
       }
 
-      toast.success("Submitted successfully!");
+      toast.success("Submitted! Grading is happening in the background.");
+
+      // Grading is now reliably triggered on the server using waitUntil
       onSuccess();
       onOpenChange(false);
       setFile(null); // Reset file
@@ -166,8 +183,13 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
              <SheetClose asChild>
               <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
             </SheetClose>
-            <Button onClick={handleSubmit} disabled={!file || loading} className="w-full sm:w-auto">
-                {loading ? "Uploading..." : "Submit Assignment"}
+            <Button onClick={handleSubmit} disabled={!file || loading} className="w-full sm:w-auto relative">
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                    Analyzing & Submitting...
+                  </span>
+                ) : "Submit Assignment"}
             </Button>
           </SheetFooter>
         </div>

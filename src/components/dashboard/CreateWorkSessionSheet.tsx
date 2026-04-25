@@ -42,21 +42,35 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
 
     setUploading(true);
     try {
-      // Direct Client-Side Upload
+      // 1. Upload to Supabase Storage (Client-side) to bypass Vercel 4.5MB payload limit
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `rubrics/${classId}/${filename}`;
 
-      const { data, error } = await supabaseClient
+      const { error: uploadError } = await supabaseClient
         .storage
         .from('exam_pdfs')
         .upload(filePath, file);
 
-      if (error) throw new Error(error.message);
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
 
-      setValue(field, data.path); // Store path
-      toast.success(`${field} uploaded`);
+      // 2. Trigger server-side OCR which downloads from Supabase
+      const ocrRes = await fetch("/api/ocr/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath }),
+      });
+
+      const ocrData = await ocrRes.json();
+      if (!ocrRes.ok) {
+        throw new Error(ocrData.error || "Failed to extract text from document.");
+      }
+
+      setValue(field, ocrData.text); // Store extracted text directly
+      toast.success(`${field} extracted successfully`);
     } catch (error: any) {
-      toast.error(`Failed to upload ${field}: ${error.message}`);
+      toast.error(`Failed to process ${field}: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -139,21 +153,30 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
 
               <div className="space-y-2">
                 <Label>Marking Scheme / Rubric (PDF/Image)</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 relative">
                     <Input type="file" onChange={(e) => handleFileUpload(e, "markingScheme")} accept=".pdf,.jpg,.png" disabled={uploading} />
-                    {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {uploading && (
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                    )}
                 </div>
                 <Input type="hidden" {...register("markingScheme")} />
-                {markingSchemeUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded</div>}
+                {markingSchemeUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Processed successfully</div>}
               </div>
 
               <div className="space-y-2">
                 <Label>Past Graded Example (Gold Standard)</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 relative">
                     <Input type="file" onChange={(e) => handleFileUpload(e, "goldStandardUrl")} accept=".pdf,.jpg,.png" disabled={uploading} />
+                    {uploading && (
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                    )}
                 </div>
                 <Input type="hidden" {...register("goldStandardUrl")} />
-                {goldStandardUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded</div>}
+                {goldStandardUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Processed successfully</div>}
               </div>
            </div>
 

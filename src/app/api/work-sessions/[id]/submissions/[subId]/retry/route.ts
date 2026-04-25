@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Client } from "@upstash/qstash";
+import { waitUntil } from "@vercel/functions";
 
 export async function POST(
   req: NextRequest,
@@ -23,24 +23,28 @@ export async function POST(
       data: { status: "PENDING", feedback: null },
     });
 
-    // SERVERLESS MAP-REDUCE PATTERN
-    await prisma.job.create({
-        data: {
-            type: 'AI_GRADE_SUBMISSION',
-            payload: JSON.stringify({ submissionId: subId }),
-            retryCount: 0
-        }
-    });
+    // Trigger background stream invisible to user using waitUntil
+    const protocol = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('host') || 'localhost:3000';
+    const baseUrl = `${protocol}://${host}`;
 
-    const protocol = req.headers.get('x-forwarded-proto') || 'http';
-    const host = req.headers.get('host');
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const triggerUrl = `${baseUrl}/api/queue/process`;
+    waitUntil(
+        (async () => {
+            try {
+                // Await .text() so the fetch promise waits for the entire stream to finish
+                const res = await fetch(`${baseUrl}/api/grade/stream`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ submissionId: subId }),
+                });
+                await res.text();
+            } catch (e) {
+                console.error("Retry stream failed to finish:", e);
+            }
+        })()
+    );
 
-    const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-    await qstash.publish({ url: triggerUrl }).catch(e => console.error("Failed to ping queue via QStash:", e));
-
-    return NextResponse.json({ success: true, message: "Triggered Map-Reduce." });
+    return NextResponse.json({ success: true, message: "Retrying grading..." });
   } catch (error: any) {
     console.error("[RETRY API ERROR]", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
