@@ -31,7 +31,7 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
         : "Extract all handwritten and printed text from this document. Return it as clean markdown.";
 
     const response = await openai.chat.completions.create({
-      model: "gemini-2.0-flash",
+      model: "google/gemini-2.0-flash",
       messages: [
         {
           role: "user",
@@ -77,7 +77,7 @@ export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise
         const dataUrl = `data:image/jpeg;base64,${base64Data}`;
 
         const response = await openai.chat.completions.create({
-          model: "gemini-2.0-flash",
+          model: "google/gemini-2.0-flash",
           messages: [
             {
               role: "user",

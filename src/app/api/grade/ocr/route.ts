@@ -39,8 +39,8 @@ export const POST = verifySignatureAppRouter(
             let extractedText = "";
             let confidenceScore = 0.5;
             try {
-                const completion = await geminiClient.chat.completions.create({
-                    model: "gemini-2.0-flash",
+                const completion = await openRouterClient.chat.completions.create({
+                    model: "google/gemini-2.0-flash",
                     messages: [{ role: "user", content: promptContent }],
                     temperature: 0.0,
                     max_tokens: 8192
