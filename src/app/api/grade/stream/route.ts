@@ -31,7 +31,7 @@ const regNoSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-    let activeSubmissionId: string | undefined;
+    let globalSubmissionId: string | null = null;
     try {
         const authHeader = req.headers.get('authorization');
         const internalKey = process.env.INTERNAL_API_KEY;
@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized: Invalid internal token.' }, { status: 401 });
         }
 
-        const { submissionId } = await req.json();
-        activeSubmissionId = submissionId;
+        const body = await req.json();
+        globalSubmissionId = body.submissionId;
 
         if (!globalSubmissionId) {
             return NextResponse.json({ error: 'Missing submissionId.' }, { status: 400 });
@@ -58,14 +58,12 @@ export async function POST(req: NextRequest) {
         }
 
         if (!submission.ocrText) {
-             await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
              return NextResponse.json({ error: 'No extracted text found for grading. OCR failed.' }, { status: 400 });
         }
 
         let finalRubricText = submission.workSession.rubric || submission.workSession.markingScheme;
 
         if (!finalRubricText) {
-             await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
              return NextResponse.json({ error: 'No rubric or marking scheme provided for this session.' }, { status: 400 });
         }
 
@@ -95,8 +93,6 @@ export async function POST(req: NextRequest) {
                 }
             } catch (e) {
                 console.error("Failed to extract legacy rubric URL", e);
-                await prisma.submission.update({ where: { id: submissionId }, data: { status: 'FAILED' } });
-                return NextResponse.json({ error: 'Failed to extract legacy rubric URL.' }, { status: 400 });
             }
         }
 
@@ -124,7 +120,7 @@ export async function POST(req: NextRequest) {
 
         // Update status to GRADING
         await prisma.submission.update({
-             where: { id: submission.id },
+             where: { id: globalSubmissionId },
              data: { status: 'GRADING' }
         });
 
@@ -211,7 +207,7 @@ ${chunkJsonString}
         const regNoToSave = detectedRegNo && detectedRegNo !== "UNKNOWN" ? detectedRegNo : submission.studentRegNo;
 
         await prisma.score.upsert({
-            where: { submissionId: submission.id },
+            where: { submissionId: globalSubmissionId },
             update: {
                 totalMarks: calculatedTotalScore,
                 remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
@@ -219,7 +215,7 @@ ${chunkJsonString}
                 detectedIdentity: regNoToSave
             },
             create: {
-                submissionId: submission.id,
+                submissionId: globalSubmissionId,
                 totalMarks: calculatedTotalScore,
                 remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
                 breakdown: JSON.stringify(finalBreakdown),
@@ -228,7 +224,7 @@ ${chunkJsonString}
         });
 
         await prisma.submission.update({
-            where: { id: submission.id },
+            where: { id: globalSubmissionId },
             data: {
                 status: 'GRADED',
                 studentRegNo: regNoToSave
@@ -240,11 +236,19 @@ ${chunkJsonString}
 
     } catch (error: any) {
         console.error("[FATAL-GRADING] Streaming API Failed:", error);
-        if (activeSubmissionId) {
-            try {
-                await prisma.submission.update({ where: { id: activeSubmissionId }, data: { status: 'FAILED' } });
-            } catch(e) { /* ignore rollback error */ }
+
+        // Use the globally scoped submission ID to update the database without calling req.json() again
+        try {
+            if (globalSubmissionId) {
+                await prisma.submission.update({
+                    where: { id: globalSubmissionId },
+                    data: { status: 'FAILED', feedback: 'Failed to complete grading process. System encountered an error.' }
+                });
+            }
+        } catch (e) {
+            console.error("[FATAL-GRADING] Failed to update submission status to FAILED:", e);
         }
+
         return NextResponse.json({ error: error.message || 'Grading failed.' }, { status: 500 });
     }
 }
