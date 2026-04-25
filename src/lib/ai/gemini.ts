@@ -68,7 +68,7 @@ export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise
     console.log("[GEMINI] Starting Structural OCR Map Phase...");
     const document = await pdf(pdfBuffer, { scale: 1.0 });
 
-    let combinedMap: Record<string, string> = {};
+    const combinedMap: Record<string, string> = {};
     let pageNum = 1;
 
     for await (const imageBuffer of document) {

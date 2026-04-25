@@ -319,12 +319,11 @@ CREATE POLICY "Users can update own profile"
 
 -- Allow authenticated users to upload files to exam_pdfs
 -- Allow users to upload their own files to exam_pdfs
-CREATE POLICY "Allow users to upload own files to exam_pdfs"
+-- Allow users and students (anon) to upload files to exam_pdfs
+CREATE POLICY "Allow uploads to exam_pdfs"
   ON storage.objects FOR INSERT
   WITH CHECK (
     bucket_id = 'exam_pdfs'
-    AND auth.role() = 'authenticated'
-    AND auth.uid() = owner
   );
 
 -- Allow users to read only their own files from exam_pdfs
