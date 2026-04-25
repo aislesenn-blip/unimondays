@@ -61,20 +61,32 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
 
           if (uploadError) throw uploadError;
 
-          // 2. Update Database & Invalidate Cache
+          // 2. Trigger server-side OCR with 'isRubric' flag to parse immediately to structured JSON
+          const ocrRes = await fetch("/api/ocr/extract", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ filePath, isRubric: true }),
+          });
+
+          const ocrData = await ocrRes.json();
+          if (!ocrRes.ok) {
+              throw new Error(ocrData.error || "Failed to extract rubric text.");
+          }
+
+          // 3. Update Database with the structured JSON
           const res = await fetch(`/api/work-sessions/${session.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                   markingScheme: filePath,
                   rubricUrl: filePath,
-                  rubric: null // CRITICAL: Invalidates the OCR cache
+                  rubric: ocrData.text // Save the structured JSON string directly to the DB
               }),
           });
 
-          if (!res.ok) throw new Error("Failed to update rubric URL");
+          if (!res.ok) throw new Error("Failed to update session with parsed rubric");
 
-          toast.success("Marking Scheme updated. The AI will use this for the next grading run.");
+          toast.success("Marking Scheme parsed and updated successfully!");
       } catch (error: any) {
           toast.error(`Upload failed: ${error.message}`);
       } finally {

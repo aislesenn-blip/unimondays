@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ error: 'Unauthorized: No session found' }, { status: 401 });
         }
 
-        const { filePath } = await req.json();
+        const { filePath, isRubric } = await req.json();
 
         if (!filePath) {
             return NextResponse.json({ error: 'No file path provided.' }, { status: 400 });
@@ -48,7 +48,41 @@ export async function POST(req: NextRequest) {
         const type = await fileTypeFromBuffer(buffer);
         const mime = type?.mime || 'application/pdf'; // Default to PDF if undetermined
 
-        let promptContent: any[] = [{ type: "text", text: `Transcribe all handwritten and printed text precisely. Do not summarize. If it's an exam, clearly preserve the question numbers and parts.` }];
+        let promptContent: any[] = [];
+
+        if (isRubric) {
+            promptContent.push({
+                type: "text",
+                text: `You are an expert data structured parser. Your task is to extract a Marking Scheme / Rubric from the provided document images and convert it into a STRICT JSON array.
+
+CRITICAL INSTRUCTIONS:
+1. ONLY extract actual questions meant to be graded. Do NOT include page headers, footers, "page markers", or general instructions.
+2. If a question has sub-parts (e.g., 1a, 1b), treat each sub-part as a distinct item if they have separate marks. Otherwise, group them logically.
+3. You MUST output ONLY valid JSON. No markdown wrappers like \`\`\`json.
+
+The JSON MUST exactly match this format:
+[
+  {
+    "questionId": "string", // Example: "Q1", "1(a)", "Question 2"
+    "maxScore": number, // Example: 5, 2.5
+    "rubricSegment": "string" // The full detailed explanation of what is required to get the marks.
+  }
+]
+`
+            });
+        } else {
+            promptContent.push({
+                type: "text",
+                text: `You are an Intelligent Exam Collator. Your task is to read the provided student exam document and output a highly structured, logical text transcription.
+
+CRITICAL INSTRUCTIONS:
+1. Extract ALL handwritten and printed text precisely.
+2. INTELLIGENT COLLATION: Students often answer questions out of order or across multiple pages. You MUST group all parts of a single question together under a clear header, regardless of which page they appear on.
+   - Example: If Q1a is on Page 1 and Q1b is on Page 4, group them together under a "--- QUESTION 1 ---" header.
+3. REGISTRATION NUMBER: Extract the student's Registration Number/ID if present and put it clearly at the very top of the output like: "REGISTRATION NUMBER: [ID]"
+4. Output cleanly formatted text, do NOT summarize. Do NOT output JSON.`
+            });
+        }
 
         if (mime === 'application/pdf') {
             console.log("[OCR] Converting PDF to images...");
@@ -77,7 +111,21 @@ export async function POST(req: NextRequest) {
 
         console.log("[OCR] Extraction complete.");
 
-        return NextResponse.json({ success: true, text: text });
+        let finalText = text;
+
+        if (isRubric) {
+            try {
+                // Ensure it's clean JSON by stripping markdown if Gemini disobeys
+                const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                JSON.parse(cleanJson); // Validate it parses
+                finalText = cleanJson;
+            } catch (e) {
+                console.error("[OCR] Failed to parse Gemini output as JSON for Rubric:", e);
+                return NextResponse.json({ error: 'Failed to structure rubric into JSON.' }, { status: 500 });
+            }
+        }
+
+        return NextResponse.json({ success: true, text: finalText });
 
     } catch (error: any) {
         console.error("[FATAL-OCR] Extraction failed:", error);
