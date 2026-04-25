@@ -85,8 +85,12 @@ export const POST = verifySignatureAppRouter(
 
             return NextResponse.json({ success: true, pages });
         } catch (error: any) {
-            console.error("OCR Route Error:", error.message);
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            console.error("====== FATAL OCR ROUTE ERROR DUMP ======");
+            console.error("Message:", error.message);
+            console.error("Stack:", error.stack);
+            if (error.status) console.error("Status:", error.status);
+            console.error("========================================");
+            return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
         }
     },
     { currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || 'dummy_current_key', nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || 'dummy_next_key' }
