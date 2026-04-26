@@ -189,7 +189,8 @@ Count the valid points mathematically based on the rubric and assign the exact m
                 } else {
                     // Swali limefeli hata baada ya retries
                     const failedItem = batch[index];
-                    console.error(`[GRADING] Final failure grading question ${failedItem.questionId}`, result.reason);
+                    const errorReason = result.status === 'rejected' ? result.reason : "Unknown evaluation failure";
+                    console.error(`[GRADING] Final failure grading question ${failedItem.questionId}`, errorReason);
                     finalBreakdown.push({
                         question: failedItem.questionId,
                         thoughtProcess: "System failed to grade this specific question due to API limits or a persistent error.",
