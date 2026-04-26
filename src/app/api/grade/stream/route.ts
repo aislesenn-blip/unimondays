@@ -15,12 +15,12 @@ const google = createGoogleGenerativeAI({
 
 // Zod schema for Single Question grading (Parallel Map-Reduce)
 const singleQuestionSchema = z.object({
-  thoughtProcess: z.string().describe("Chain of thought: Tafuta jibu la mwanafunzi ndani ya OCR text, linganisha na rubric, kisha amua."),
-  pointsFound: z.number().optional().describe("Idadi ya pointi sahihi ulizozikuta kulingana na rubric (mfano: 5)."),
-  // HAPA NDIYO TUMEWEKA KUFUNI YA HESABU. AI hairuhusiwi kutumia .25 au .75
-  score: z.number().multipleOf(0.5).describe("Maksi halisi. Usitumie desimali za ajabu kama 0.25 au 0.75. Tumia namba kamili au nusu tu kama Rubric inaruhusu."),
-  feedback: z.string().describe("Sababu fupi kwa nini umetoa alama hizo."),
-  evidenceSnippet: z.string().describe("Nukuu kamili kutoka kwenye majibu ya mwanafunzi inayothibitisha.")
+  thoughtProcess: z.string().describe("Chain of thought: Search for the student's answer within the OCR text, compare it structurally and semantically to the rubric, and reason step-by-step before deciding the score."),
+  pointsFound: z.number().optional().describe("The exact number of correct points you found that match the rubric requirements (e.g., 5)."),
+  // STRICT MATH ENFORCEMENT
+  score: z.number().multipleOf(0.5).describe("The final calculated score. DO NOT use arbitrary decimals like 0.25 or 0.75. Only use whole numbers or 0.5 increments as permitted by the rubric max score."),
+  feedback: z.string().describe("A brief, objective justification for the awarded score."),
+  evidenceSnippet: z.string().describe("The exact direct quote from the student's text that justifies this score. Write 'None' if missing.")
 });
 
 const regNoSchema = z.object({
