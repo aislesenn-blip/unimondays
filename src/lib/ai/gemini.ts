@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { pdf } from 'pdf-to-img';
 
 // Polyfill required for pdf-to-img in Node.js/Serverless environments

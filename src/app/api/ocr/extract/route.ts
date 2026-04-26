@@ -1,23 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { fileTypeFromBuffer } from 'file-type';
 import { pdf } from 'pdf-to-img';
 import { supabase } from '@/lib/supabase';
 import { cookies } from 'next/headers';
-
-// Gemini 2.0 requires dropping the openai/ from the base URL for the OpenAI SDK wrapper
-// depending on the google library version, or using correct format.
-// The error 404 indicates we need just `https://generativelanguage.googleapis.com/v1beta/openai/` with strict model name
-// Wait, looking at docs, if we use `ai` sdk Google provider, it's safer. Let's use it.
 import { generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || 'dummy',
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/", // Drop /openai/ for native AI SDK
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/",
 });
 
-export const maxDuration = 300; // 5 minutes max duration for Vercel
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
     try {
@@ -34,7 +28,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'No file path provided.' }, { status: 400 });
         }
 
-        // Clean path and download from Supabase
         const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
         const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(cleanPath);
 
@@ -46,7 +39,7 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(arrayBuffer);
 
         const type = await fileTypeFromBuffer(buffer);
-        const mime = type?.mime || 'application/pdf'; // Default to PDF if undetermined
+        const mime = type?.mime || 'application/pdf';
 
         let promptContent: any[] = [];
 
@@ -77,21 +70,26 @@ The JSON MUST exactly match this format:
 
 CRITICAL INSTRUCTIONS:
 1. Extract ALL handwritten and printed text precisely.
-2. INTELLIGENT COLLATION: Students often answer questions out of order or across multiple pages. You MUST group all parts of a single question together under a clear header, regardless of which page they appear on.
-   - Example: If Q1a is on Page 1 and Q1b is on Page 4, group them together under a "--- QUESTION 1 ---" header.
-3. REGISTRATION NUMBER: Extract the student's Registration Number/ID if present and put it clearly at the very top of the output like: "REGISTRATION NUMBER: [ID]"
-4. Output cleanly formatted text, do NOT summarize. Do NOT output JSON.`
+2. INTELLIGENT COLLATION (MANDATORY): Do NOT just output page by page. Students often answer questions out of order or scattered across multiple pages. You MUST collate and group all parts of a single question together under a clear, distinct JSON format.
+3. REGISTRATION NUMBER: Extract the student's Registration Number/ID if present.
+4. Output STRICTLY as a JSON object where keys are the question numbers and values are the full concatenated text of the student's answer for that question.
+
+Example Output format (Strictly JSON, no markdown):
+{
+  "REGISTRATION_NUMBER": "2018-04-12551",
+  "Q1": "Student's full answer for Q1...",
+  "Q2": "Student's full answer for Q2..."
+}`
             });
         }
 
         if (mime === 'application/pdf') {
             console.log("[OCR] Converting PDF to images...");
-            const document = await pdf(buffer, { scale: 1.0 }); // Slightly higher scale since we don't have multiple workers loading it
+            const document = await pdf(buffer, { scale: 1.0 });
             let pageCount = 0;
             for await (const imageBuffer of document) {
                 promptContent.push({ type: "image", image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` });
                 pageCount++;
-                // Limit to 20 pages to prevent payload too large errors
                 if (pageCount >= 20) break;
             }
             console.log(`[OCR] PDF converted to ${pageCount} images.`);
@@ -113,15 +111,18 @@ CRITICAL INSTRUCTIONS:
 
         let finalText = text;
 
-        if (isRubric) {
-            try {
-                // Ensure it's clean JSON by stripping markdown if Gemini disobeys
-                const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                JSON.parse(cleanJson); // Validate it parses
-                finalText = cleanJson;
-            } catch (e) {
-                console.error("[OCR] Failed to parse Gemini output as JSON for Rubric:", e);
-                return NextResponse.json({ error: 'Failed to structure rubric into JSON.' }, { status: 500 });
+        try {
+            // Ensure it's clean JSON by stripping markdown if Gemini disobeys
+            const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+            JSON.parse(cleanJson); // Validate it parses
+            finalText = cleanJson;
+        } catch (e) {
+            console.error("[OCR] Failed to parse Gemini output as JSON:", e);
+            if (isRubric) {
+               return NextResponse.json({ error: 'Failed to structure rubric into JSON.' }, { status: 500 });
+            } else {
+               // If student text fails to JSON parse, fallback to raw text (not ideal for pre-chunking, but safe)
+               finalText = text;
             }
         }
 
