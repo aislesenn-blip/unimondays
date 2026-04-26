@@ -13,16 +13,12 @@ const google = createGoogleGenerativeAI({
   baseURL: "https://generativelanguage.googleapis.com/v1beta/",
 });
 
-// Zod schema for Atomic grading
-const atomicGradingSchema = z.object({
-  gradedQuestions: z.array(z.object({
-    question: z.string().describe("The exact question identifier as written in the marking scheme (e.g., 'Q1(a)', 'Question 2')."),
-    thoughtProcess: z.string().describe("Chain of thought: Explain step-by-step how the student's answer maps to the rubric. Did they use a synonym? Are the mathematical steps correct even if the final answer is wrong? DO THIS BEFORE SCORING."),
-    score: z.number().describe("The awarded score based on semantic matching and your thought process. Must not exceed maxScore."),
-    max: z.number().describe("The maximum possible score for this question as defined in the marking scheme."),
-    feedback: z.string().describe("Specific feedback explaining the score. Keep it to 1-2 sentences."),
-    evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or missing.")
-  }))
+// Zod schema for Single Question grading (Parallel Map-Reduce)
+const singleQuestionSchema = z.object({
+  thoughtProcess: z.string().describe("Chain of thought: Tafuta jibu la mwanafunzi ndani ya OCR text, linganisha na rubric, kisha amua."),
+  score: z.number().describe("Alama ulizotoa. Lazima ziwe sahihi na zisizidi Max Score."),
+  feedback: z.string().describe("Sababu fupi kwa nini umetoa alama hizo."),
+  evidenceSnippet: z.string().describe("Nukuu kamili kutoka kwenye majibu ya mwanafunzi inayothibitisha.")
 });
 
 const regNoSchema = z.object({
@@ -123,125 +119,73 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        // --- HYBRID HOLISTIC GRADING ---
-        console.log(`[GRADING] Commencing Hybrid Holistic Grading...`);
+        // --- PARALLEL MAP-REDUCE GRADING ---
+        console.log(`[GRADING] Commencing Parallel Map-Reduce Grading...`);
 
-        const systemPrompt = `You are an elite world-class Examination Evaluation Engine designed to mark academic assessments with accuracy higher than senior professors, national examination boards, and university moderation panels.
-
-Your task is to perform strict, fair, evidence-based, marking-scheme-anchored assessment of student answers using ONLY the provided official marking scheme and student responses.
-
-You must behave like a hybrid of:
-- Senior University Examiner
-- National Examination Council Chief Marker
-- External Moderator
-- Academic Quality Assurance Auditor
-- Rubric Precision Scoring Engine
-
-Your marking must be:
-- Extremely accurate
-- Strict but fair
-- Fully marking-scheme compliant
-- Resistant to hallucination
-- Resistant to over-marking
-- Resistant to under-marking
-- Resistant to bias
-- Resistant to wording variation
-- Resistant to synonym confusion
-- Resistant to paraphrase differences
-- Resistant to answer-order differences
-
-You must NEVER invent marks.
-You must NEVER assume missing content.
-You must NEVER reward unsupported claims.
-You must NEVER punish correct alternative phrasing if conceptually valid.
-You must NEVER ignore hidden partial credit opportunities if supported by the marking scheme.
-
-You must think deeply before scoring.
-
----
-
-CORE MARKING RULES
-
-RULE 1 — MARKING SCHEME IS SUPREME
-The marking scheme is the highest authority.
-If student answer is not supported by the marking scheme, do not award marks unless it is a clearly valid equivalent concept.
-Do not freestyle marking.
-
-RULE 2 — CONCEPT > EXACT WORDING
-Award marks based on: correctness of concept, accuracy of explanation, relevance to the asked question.
-Do NOT require exact wording.
-Accept: synonyms, paraphrasing, reordered explanation, technically correct alternative expression.
-Reject: vague statements, guessed statements, unrelated correctness, incomplete unsupported phrases.
-
-RULE 3 — PARTIAL CREDIT INTELLIGENCE
-If answer is partially correct: award only the exact deserved fraction.
-Do not round emotionally. Do not give “benefit of doubt marks.” Every mark must be earned.
-
-RULE 4 — NO DOUBLE REWARD
-Do not award the same concept twice across the same sub-question unless the marking scheme explicitly allows it.
-Avoid duplicate scoring.
-
-RULE 5 — STRICT STRUCTURAL MAPPING
-Correctly map all questions. Even if student writes answers out of order, infer intelligently and map accurately. Do not misplace marks.
-
-RULE 6 — JUSTIFICATION MUST BE SHORT
-For every awarded mark, provide only a very short reason in the 'feedback' field (Maximum 1 short sentence).
-Do NOT write essays. Do NOT waste tokens.
-
-REQUIRED EXECUTION PROCESS:
-1. Read the full marking scheme fully to understand expected answers and mark distribution.
-2. Read the student text carefully, locating the student's attempt for each question.
-3. Evaluate each answer against the scheme and apply partial credit precisely.
-4. Output the results strictly adhering to the JSON schema provided. Do not hallucinate marks. `;
-
-        const userPrompt = `OFFICIAL MARKING SCHEME:
-"""
-${JSON.stringify(parsedRubricItems, null, 2)}
-"""
-
-STUDENT ANSWER SCRIPT:
-"""
-${submission.ocrText}
-"""
-`;
+        const studentText = submission.ocrText;
 
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
 
-        try {
-            console.log(`[GRADING] Sending request to Gemini 2.5 Pro with Temperature 0.0...`);
-            const { object } = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: systemPrompt,
-                prompt: userPrompt,
-                schema: atomicGradingSchema,
-                temperature: 0.0,
+        // Batch Processing: Ili tusizidiwe na API Rate Limits za Google
+        // Tunachukua maswali 5 kwa wakati mmoja (Concurrency = 5)
+        const CONCURRENCY_LIMIT = 5;
+
+        for (let i = 0; i < parsedRubricItems.length; i += CONCURRENCY_LIMIT) {
+            const batch = parsedRubricItems.slice(i, i + CONCURRENCY_LIMIT);
+
+            const batchPromises = batch.map(async (rubricItem: any) => {
+                const systemPrompt = `You are an elite world-class Examination Evaluation Engine.
+Your task is to grade ONLY ONE specific question: ${rubricItem.questionId}.
+Maximum marks for this question: ${rubricItem.maxScore}.
+
+RULES:
+1. SEARCH the entire student document for any answer related to ${rubricItem.questionId}. Students may answer out of order.
+2. Compare the student's answer against the provided Rubric Segment.
+3. Be strict but fair. Do not hallucinate marks.`;
+
+                const userPrompt = `RUBRIC EXPECTATION FOR ${rubricItem.questionId}:\n${rubricItem.rubricSegment}\n\nENTIRE STUDENT EXAM TEXT:\n${studentText}`;
+
+                try {
+                    const { object } = await generateObject({
+                        model: google('gemini-2.5-pro'),
+                        system: systemPrompt,
+                        prompt: userPrompt,
+                        schema: singleQuestionSchema,
+                        temperature: 0.0,
+                    });
+
+                    // DETERMINISTIC MATH (THE IRON GATE)
+                    const trueMax = Number(rubricItem.maxScore);
+                    let safeScore = Math.max(0, Math.min(object.score, trueMax));
+
+                    return {
+                        question: rubricItem.questionId,
+                        thoughtProcess: object.thoughtProcess,
+                        score: safeScore,
+                        max: trueMax,
+                        feedback: object.feedback,
+                        evidenceSnippet: object.evidenceSnippet
+                    };
+                } catch (err) {
+                    console.error(`AI Error on question ${rubricItem.questionId}`, err);
+                    return {
+                        question: rubricItem.questionId,
+                        thoughtProcess: "AI API error during processing.",
+                        score: 0,
+                        max: Number(rubricItem.maxScore),
+                        feedback: "System could not evaluate this question.",
+                        evidenceSnippet: ""
+                    };
+                }
             });
 
-            const rawGradedQuestions = (object as any)?.gradedQuestions || [];
+            const batchResults = await Promise.all(batchPromises);
 
-            // Post-processing to enforce deterministic math and max scores based on source rubric
-            finalBreakdown = rawGradedQuestions.map((gradedQ: any) => {
-                // Find the original rubric item to get the true maxScore
-                const originalRubricItem = parsedRubricItems.find((c: any) => c.questionId === gradedQ.question || c.questionId.includes(gradedQ.question));
-                const trueMax = originalRubricItem ? originalRubricItem.maxScore : gradedQ.max;
-
-                // Ensure score doesn't exceed true max, and default to 0 if negative or not a number
-                let safeScore = typeof gradedQ.score === 'number' ? gradedQ.score : 0;
-                safeScore = Math.max(0, Math.min(safeScore, trueMax));
-
-                calculatedTotalScore += safeScore;
-
-                return {
-                    ...gradedQ,
-                    score: safeScore,
-                    max: trueMax
-                };
+            batchResults.forEach(result => {
+                finalBreakdown.push(result);
+                calculatedTotalScore += result.score;
             });
-
-        } catch (gradingError) {
-            console.error(`[GRADING] Hybrid Holistic Grading failed:`, gradingError);
-            throw gradingError;
         }
 
         // Fast parallel call to extract Reg No
