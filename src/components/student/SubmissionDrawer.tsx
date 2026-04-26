@@ -124,81 +124,64 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                 </div>
             )}
 
-            {!file ? (
-                <div className="relative border-2 border-dashed rounded-xl p-10 text-center hover:bg-muted/50 transition-colors cursor-pointer group">
-                    <input
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                        onChange={(e) => {
-                            const selected = e.target.files?.[0];
-                            if (selected) {
-                                // MANDATE 1: 20MB Limit
-                                if (selected.size > 20 * 1024 * 1024) {
-                                    toast.error("File is too large. Please upload a file smaller than 20MB.");
-                                    e.target.value = ""; // Clear input
-                                    setFile(null);
-                                    return;
-                                }
-                                // Strict Type Check
-                                const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-                                if (!allowedTypes.includes(selected.type)) {
-                                    toast.error("Invalid file type. Only PDF, PNG, and JPG are allowed.");
-                                    e.target.value = "";
-                                    setFile(null);
-                                    return;
-                                }
-                                setFile(selected);
-                            } else {
+            <div className="relative border-2 border-dashed rounded-xl p-10 text-center hover:bg-muted/50 transition-colors cursor-pointer group">
+                <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    onChange={(e) => {
+                        const selected = e.target.files?.[0];
+                        if (selected) {
+                            // MANDATE 1: 20MB Limit
+                            if (selected.size > 20 * 1024 * 1024) {
+                                toast.error("File is too large. Please upload a file smaller than 20MB.");
+                                e.target.value = ""; // Clear input
                                 setFile(null);
+                                return;
                             }
-                        }}
-                    />
-                    <div className="flex flex-col items-center gap-3 pointer-events-none">
-                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
-                            <Upload className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <div className="font-medium text-foreground">Click to Upload</div>
-                            <div className="text-xs text-muted-foreground">PDF, PNG, JPG (Max 20MB)</div>
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    <div className="border rounded-xl p-4 bg-muted/20">
-                        <div className="flex items-start gap-4">
-                            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                            // Strict Type Check
+                            const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+                            if (!allowedTypes.includes(selected.type)) {
+                                toast.error("Invalid file type. Only PDF, PNG, and JPG are allowed.");
+                                e.target.value = "";
+                                setFile(null);
+                                return;
+                            }
+                            setFile(selected);
+                        } else {
+                            setFile(null);
+                        }
+                    }}
+                />
+                <div className="flex flex-col items-center gap-3 pointer-events-none">
+                    {file ? (
+                        <>
+                            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                 <FileText className="h-6 w-6" />
                             </div>
-                            <div className="flex-1 overflow-hidden">
-                                <h4 className="font-semibold text-sm truncate" title={file.name}>{file.name}</h4>
-                                <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                            <div>
+                                <div className="font-medium text-foreground">{file.name}</div>
+                                <div className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
                             </div>
-                            {!loading && (
-                                <Button variant="ghost" size="sm" onClick={() => setFile(null)} className="h-8 text-xs text-muted-foreground hover:text-destructive">
-                                    Change File
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="bg-muted/50 border rounded-lg p-4 text-sm">
-                        <h4 className="font-semibold flex items-center gap-2 mb-2">
-                            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                            Review Your Submission
-                        </h4>
-                        <p className="text-muted-foreground">
-                            Please ensure this is the correct file. Once submitted, it will be sent directly to your professor for review and cannot be modified.
-                        </p>
-                    </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
+                                <Upload className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <div className="font-medium text-foreground">Click to Upload</div>
+                                <div className="text-xs text-muted-foreground">PDF, PNG, JPG (Max 20MB)</div>
+                            </div>
+                        </>
+                    )}
                 </div>
-            )}
+            </div>
           </div>
 
           <SheetFooter className="sm:justify-between gap-4">
              <SheetClose asChild>
-              <Button variant="outline" className="w-full sm:w-auto" disabled={loading}>Cancel</Button>
+              <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
             </SheetClose>
             <Button onClick={handleSubmit} disabled={!file || loading} className="w-full sm:w-auto relative">
                 {loading ? (

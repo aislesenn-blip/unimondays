@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import {
   SheetClose
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Plus, UploadCloud, Loader2, Edit3, CheckCircle2, Trash2 } from "lucide-react";
+import { Plus, Upload, FileText, Loader2, Save } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase-client";
 import { v4 as uuidv4 } from "uuid";
 
@@ -26,32 +26,23 @@ interface CreateWorkSessionSheetProps {
   classId: string;
 }
 
-interface RubricItem {
-  questionId: string;
-  maxScore: number;
-  rubricSegment: string;
-}
-
 export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm();
-
   const [uploading, setUploading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
 
-  // State for parsed rubric UI
-  const [rubricItems, setRubricItems] = useState<RubricItem[]>([]);
-  const [isRubricParsed, setIsRubricParsed] = useState(false);
+  const rubricUrl = watch("rubricUrl");
+  const markingSchemeUrl = watch("markingScheme"); // This is actually a URL now
+  const goldStandardUrl = watch("goldStandardUrl");
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const totalCalculatedMarks = rubricItems.reduce((sum, item) => sum + Number(item.maxScore), 0);
-
-  const handleFileProcess = async (file: File) => {
     setUploading(true);
     try {
-      // 1. Upload to Supabase Storage
+      // 1. Upload to Supabase Storage (Client-side) to bypass Vercel 4.5MB payload limit
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `rubrics/${classId}/${filename}`;
 
@@ -64,11 +55,12 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      // 2. Trigger server-side OCR with 'isRubric' flag
+      // 2. Trigger server-side OCR with 'isRubric' flag to force highly structured JSON parsing
+      const isRubric = field === "markingScheme";
       const ocrRes = await fetch("/api/ocr/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filePath, isRubric: true }),
+        body: JSON.stringify({ filePath, isRubric }),
       });
 
       const ocrData = await ocrRes.json();
@@ -76,89 +68,38 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
         throw new Error(ocrData.error || "Failed to extract text from document.");
       }
 
-      setValue("markingScheme", filePath);
+      // Store the Supabase URL in the main field (so we don't crash the DB string limits)
+      setValue(field, filePath);
 
-      // Parse the JSON and set it to state for visual confirmation
-      try {
-         const parsed = JSON.parse(ocrData.text);
-         if (Array.isArray(parsed)) {
-             setRubricItems(parsed);
-             setIsRubricParsed(true);
-             setValue("totalMarks", parsed.reduce((sum, item) => sum + Number(item.maxScore), 0));
-             toast.success("Marking Scheme Extracted Successfully!");
-         } else {
-             throw new Error("Extracted format is not an array");
-         }
-      } catch (parseErr) {
-          throw new Error("AI failed to return a strict JSON array. Please ensure the document is clear.");
+      // If it's a rubric, store the parsed JSON in a hidden secondary field or directly in state
+      if (isRubric) {
+          setValue('parsedRubricJson', ocrData.text);
       }
 
+      toast.success(`${field} extracted successfully`);
     } catch (error: any) {
-      toast.error(`Extraction Failed: ${error.message}`);
+      toast.error(`Failed to process ${field}: ${error.message}`);
     } finally {
       setUploading(false);
     }
   };
 
-  const onDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragActive(true);
-  };
-
-  const onDragLeave = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragActive(false);
-  };
-
-  const onDrop = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragActive(false);
-
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-          handleFileProcess(e.dataTransfer.files[0]);
-      }
-  };
-
-  const handleManualUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-          handleFileProcess(e.target.files[0]);
-      }
-  };
-
-  const updateRubricItem = (index: number, field: keyof RubricItem, value: any) => {
-      const newItems = [...rubricItems];
-      if (field === 'maxScore') {
-          newItems[index][field] = Number(value) || 0;
-      } else {
-          newItems[index][field] = value as string;
-      }
-      setRubricItems(newItems);
-      // Auto update total marks
-      setValue("totalMarks", newItems.reduce((sum, item) => sum + Number(item.maxScore), 0));
-  };
-
-  const removeRubricItem = (index: number) => {
-      const newItems = rubricItems.filter((_, i) => i !== index);
-      setRubricItems(newItems);
-      setValue("totalMarks", newItems.reduce((sum, item) => sum + Number(item.maxScore), 0));
-      if (newItems.length === 0) setIsRubricParsed(false);
-  };
-
-
   const onSubmit = async (data: any) => {
     try {
-      if (rubricItems.length === 0) {
-          toast.error("Please upload and verify a Marking Scheme before saving.");
-          return;
-      }
+      // Construct calibration object
+      const calibration = {
+        methodology: data.cal_methodology,
+        grammar: data.cal_grammar,
+        verbosity: data.cal_verbosity,
+        incomplete: data.cal_incomplete,
+        custom: data.cal_custom
+      };
 
       const payload = {
         ...data,
-        rubric: JSON.stringify(rubricItems), // Strictly save the verified JSON
-        totalMarks: totalCalculatedMarks,
+        rubric: data.parsedRubricJson || null, // Send the JSON separately
+        calibration: JSON.stringify(calibration),
+        saveAsDefault: data.saveAsDefault
       };
 
       const res = await fetch(`/api/classes/${classId}/work-sessions`, {
@@ -176,8 +117,6 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
       toast.success(`Session ${session.workCode} created`);
       setOpen(false);
       reset();
-      setRubricItems([]);
-      setIsRubricParsed(false);
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
@@ -192,11 +131,11 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
           New Session
         </Button>
       </SheetTrigger>
-      <SheetContent className="sm:max-w-xl overflow-y-auto w-full">
+      <SheetContent className="sm:max-w-md overflow-y-auto w-full">
         <SheetHeader>
           <SheetTitle>Create Work Session</SheetTitle>
           <SheetDescription>
-            Create a new assignment or exam and upload the marking scheme for verification.
+            Create a new assignment or exam. Configure the AI grading persona below.
           </SheetDescription>
         </SheetHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 py-6">
@@ -210,118 +149,109 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
             <Label htmlFor="deadline" className="flex items-center gap-1">
               Deadline (Optional)
               <span className="text-xs text-muted-foreground ml-1 font-normal">
-                (Sets the cutoff time for student submissions.)
+                (Sets the cutoff time for student submissions. It is also used to trigger automated result releases if 'Release on Deadline' mode is selected.)
               </span>
             </Label>
             <Input id="deadline" type="datetime-local" {...register("deadline")} />
           </div>
 
-           {/* Marking Scheme Upload & Verification UI */}
-           <div className="space-y-4">
-              <Label className="font-semibold">Marking Scheme / Rubric</Label>
+           {/* Gold Standard Inputs */}
+           <div className="space-y-4 border p-4 rounded-md bg-muted/20">
+              <h3 className="font-semibold text-sm">Gold Standard Data (Internal Only)</h3>
+              <p className="text-xs text-muted-foreground">These files are used by the AI for grading and are NEVER shown to students.</p>
 
-              {!isRubricParsed ? (
-                  <div
-                      className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'} ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
-                      onDragOver={onDragOver}
-                      onDragLeave={onDragLeave}
-                      onDrop={onDrop}
-                      onClick={() => !uploading && fileInputRef.current?.click()}
-                  >
-                      <input
-                          type="file"
-                          ref={fileInputRef}
-                          className="hidden"
-                          accept=".pdf,.jpg,.png"
-                          onChange={handleManualUpload}
-                      />
+              <div className="space-y-2">
+                <Label>Marking Scheme / Rubric (PDF/Image)</Label>
+                <div className="flex items-center gap-2 relative">
+                    <Input type="file" onChange={(e) => handleFileUpload(e, "markingScheme")} accept=".pdf,.jpg,.png" disabled={uploading} />
+                    {uploading && (
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                    )}
+                </div>
+                <Input type="hidden" {...register("markingScheme")} />
+                {markingSchemeUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Processed successfully</div>}
+              </div>
 
-                      {uploading ? (
-                          <div className="flex flex-col items-center justify-center space-y-3">
-                              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                              <p className="text-sm font-medium">Please be patient as we extract the marking scheme...</p>
-                          </div>
-                      ) : (
-                          <div className="flex flex-col items-center justify-center space-y-3 cursor-pointer">
-                              <div className="p-3 bg-muted rounded-full">
-                                  <UploadCloud className="h-6 w-6 text-muted-foreground" />
-                              </div>
-                              <div>
-                                  <p className="text-sm font-medium">Click or drag & drop PDF/Image here</p>
-                                  <p className="text-xs text-muted-foreground mt-1">We will automatically extract the questions and max scores.</p>
-                              </div>
-                          </div>
-                      )}
-                  </div>
-              ) : (
-                  <div className="space-y-3 border rounded-lg p-4 bg-muted/10">
-                      <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-sm font-medium flex items-center text-green-600">
-                              <CheckCircle2 className="w-4 h-4 mr-2" /> Verified Marking Scheme
-                          </h4>
-                          <span className="text-sm font-bold bg-primary/10 text-primary px-2 py-1 rounded">
-                              Total: {totalCalculatedMarks} Marks
-                          </span>
-                      </div>
-
-                      <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                          {rubricItems.map((item, index) => (
-                              <div key={index} className="flex gap-3 items-start p-3 bg-background border rounded shadow-sm">
-                                  <div className="flex-1 space-y-2">
-                                      <div className="flex gap-2">
-                                          <Input
-                                              value={item.questionId}
-                                              onChange={(e) => updateRubricItem(index, 'questionId', e.target.value)}
-                                              className="w-24 h-8 text-sm font-semibold"
-                                              placeholder="Q ID"
-                                          />
-                                          <div className="relative w-24">
-                                              <Input
-                                                  type="number"
-                                                  step="0.5"
-                                                  value={item.maxScore}
-                                                  onChange={(e) => updateRubricItem(index, 'maxScore', e.target.value)}
-                                                  className="pl-2 pr-8 h-8 text-sm"
-                                                  placeholder="Score"
-                                              />
-                                              <span className="absolute right-2 top-1.5 text-xs text-muted-foreground">pts</span>
-                                          </div>
-                                      </div>
-                                      <Textarea
-                                          value={item.rubricSegment}
-                                          onChange={(e) => updateRubricItem(index, 'rubricSegment', e.target.value)}
-                                          className="min-h-[60px] text-xs resize-y"
-                                          placeholder="Expected answer or rubric details..."
-                                      />
-                                  </div>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => removeRubricItem(index)}>
-                                      <Trash2 className="h-4 w-4" />
-                                  </Button>
-                              </div>
-                          ))}
-                      </div>
-
-                      <div className="flex justify-between mt-2 pt-2 border-t">
-                          <Button type="button" variant="outline" size="sm" onClick={() => {
-                              setRubricItems([...rubricItems, { questionId: `Q${rubricItems.length + 1}`, maxScore: 1, rubricSegment: "" }]);
-                          }}>
-                              <Plus className="w-3 h-3 mr-1" /> Add Question
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => {
-                              setRubricItems([]);
-                              setIsRubricParsed(false);
-                          }}>
-                              <Edit3 className="w-3 h-3 mr-1" /> Re-upload
-                          </Button>
-                      </div>
-                  </div>
-              )}
+              <div className="space-y-2">
+                <Label>Past Graded Example (Gold Standard)</Label>
+                <div className="flex items-center gap-2 relative">
+                    <Input type="file" onChange={(e) => handleFileUpload(e, "goldStandardUrl")} accept=".pdf,.jpg,.png" disabled={uploading} />
+                    {uploading && (
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                    )}
+                </div>
+                <Input type="hidden" {...register("goldStandardUrl")} />
+                {goldStandardUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Processed successfully</div>}
+              </div>
            </div>
 
            <div className="space-y-2">
              <Label>Instructions to Students</Label>
-             <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour')." {...register("instructions")} />
+             <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour'). Do NOT paste the marking scheme here." {...register("instructions")} />
            </div>
+
+           {/* Calibration Engine */}
+           <div className="space-y-4 border p-4 rounded-md bg-blue-50/50">
+              <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-sm text-blue-900">AI Grading Persona (Calibration)</h3>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">1. Methodology & Steps</Label>
+                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_methodology")}>
+                    <option value="partial_marks">Award partial marks for correct steps (Lenient)</option>
+                    <option value="final_answer_only">Strictly grade final answer only</option>
+                    <option value="steps_mandatory">Steps are mandatory for full marks</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">2. Grammar & Language</Label>
+                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_grammar")}>
+                    <option value="ignore_grammar">Ignore grammar, focus only on facts</option>
+                    <option value="penalize_poor">Penalize poor grammar/spelling</option>
+                    <option value="strict_language">Strict academic language required</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">3. Verbosity</Label>
+                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_verbosity")}>
+                    <option value="ignore_noise">Search for the fact, ignore the noise</option>
+                    <option value="concise">Penalize excessive verbosity (Be concise)</option>
+                    <option value="detailed">Reward detailed explanations</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">4. Incomplete Sections</Label>
+                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_incomplete")}>
+                    <option value="grade_available">Grade part A, give 0 to B</option>
+                    <option value="zero_if_incomplete">Zero if section is incomplete</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">5. Custom Expectations</Label>
+                <Textarea placeholder="Specific instructions (e.g. 'Allow Swahili keywords', 'Check for units')" className="h-20" {...register("cal_custom")} />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <input type="checkbox" id="saveDefault" className="h-4 w-4 rounded border-gray-300" {...register("saveAsDefault")} />
+                <label htmlFor="saveDefault" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Save as my default settings
+                </label>
+              </div>
+           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="totalMarks">Total Marks</Label>
+            <Input id="totalMarks" type="number" defaultValue={100} {...register("totalMarks")} />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="releaseMode">Result Release Mode</Label>
@@ -339,7 +269,7 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
             <SheetClose asChild>
                 <Button variant="outline" type="button">Cancel</Button>
             </SheetClose>
-            <Button type="submit" disabled={isSubmitting || uploading || rubricItems.length === 0}>
+            <Button type="submit" disabled={isSubmitting || uploading}>
               {isSubmitting ? "Creating..." : "Create Session"}
             </Button>
           </SheetFooter>
