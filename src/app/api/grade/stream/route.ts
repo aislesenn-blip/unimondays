@@ -115,21 +115,24 @@ export async function POST(req: NextRequest) {
             const batch = parsedRubricItems.slice(i, i + CONCURRENCY_LIMIT);
 
             const batchPromises = batch.map(async (rubricItem: any) => {
-                const systemPrompt = `You are a strict Examination Evaluator.
-Question: ${rubricItem.questionId}
-Max Marks: ${rubricItem.maxScore}
-Task: Grade ONLY this question based on the student's text. Be extremely strict about partial credits.
+                const systemPrompt = `You are a Global Examination Evaluation Engine. Your goal is to provide a highly accurate, fair, and evidence-based score for any academic subject.
 
-UNIVERSAL GRADING RULES:
-1. SEARCH BOUNDARIES: You may scan the entire document because students sometimes answer out of order. HOWEVER, you must strictly respect the student's numbering.
-2. NO CROSS-WIRING (NO RECYCLING): If a block of text is explicitly labeled by the student as an answer to a completely DIFFERENT question, you MUST NOT use it to award marks for the current question (${rubricItem.questionId}).
-3. ELIGIBLE TEXT: Only evaluate text that is explicitly labeled for ${rubricItem.questionId}, or text that is completely unlabeled/ambiguous.
+CURRENT CONTEXT:
+- Target Question ID: ${rubricItem.questionId}
+- Maximum Allowed Score: ${rubricItem.maxScore}
 
-SCORING MATH RULES:
-- DO NOT INVENT DECIMALS LIKE 0.25 OR 0.75.
-- Only use whole numbers or 0.5 increments.
-- Count the valid points mathematically based on the rubric and assign the exact matching score.
-- NEVER exceed the Max Marks (${rubricItem.maxScore}).`;
+UNIVERSAL GRADING PROTOCOLS:
+1. SCOPE OF SEARCH: You must scan the entire provided student text. Students often answer questions out of numerical order or continue answers on later pages.
+2. STRUCTURAL INTEGRITY: If the student has explicitly labeled a section of text as an answer to a different Question ID, you MUST NOT use that text to award marks for the current question (${rubricItem.questionId}).
+3. SEMANTIC EVALUATION: Focus on the substance and correctness of the answer based on the EXPECTED RUBRIC. Do not penalize for minor handwriting transcription errors or spelling unless it changes the scientific/technical meaning.
+4. DIAGRAMS & DRAWINGS: You cannot physically see diagrams. However, the student's OCR text contains detailed AI-generated descriptions of any drawings they made. You must fully trust and evaluate these text descriptions as if you were looking at the actual diagram.
+5. FULL MARK ADHERENCE: If the student's answer meets all the criteria defined in the rubric, you MUST award the maximum score of ${rubricItem.maxScore}. Do not deduct marks for "style" or "format" unless explicitly required by the rubric.
+6. EVIDENCE REQUIREMENT: You must identify and quote the specific part of the student's text that justifies the marks awarded.
+
+SCORING CONSTRAINTS:
+- No arbitrary decimals. Use only whole numbers or 0.5 increments.
+- Under no circumstances shall the score exceed ${rubricItem.maxScore}.
+- If the student provides no relevant information for this specific question, the score must be 0.`;
 
                 const userPrompt = `EXPECTED RUBRIC:\n${rubricItem.rubricSegment}\n\nSTUDENT FULL TEXT:\n${studentText}`;
 
