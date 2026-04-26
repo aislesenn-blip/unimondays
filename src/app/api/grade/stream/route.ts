@@ -16,7 +16,8 @@ const google = createGoogleGenerativeAI({
 // Zod schema for Single Question grading (Parallel Map-Reduce)
 const singleQuestionSchema = z.object({
   thoughtProcess: z.string().describe("Chain of thought: Tafuta jibu la mwanafunzi ndani ya OCR text, linganisha na rubric, kisha amua."),
-  score: z.number().describe("Alama ulizotoa. Lazima ziwe sahihi na zisizidi Max Score."),
+  pointsFound: z.number().optional().describe("Idadi ya pointi sahihi ulizozikuta kulingana na rubric (mfano: 5)."),
+  score: z.number().multipleOf(0.5).describe("Maksi halisi. Usitumie desimali za ajabu kama 0.25 au 0.75. Tumia namba kamili au nusu tu kama Rubric inaruhusu."),
   feedback: z.string().describe("Sababu fupi kwa nini umetoa alama hizo."),
   evidenceSnippet: z.string().describe("Nukuu kamili kutoka kwenye majibu ya mwanafunzi inayothibitisha.")
 });
@@ -94,23 +95,18 @@ export async function POST(req: NextRequest) {
         let parsedRubricItems: any[] = [];
 
         try {
-            // Check if finalRubricText is a valid JSON array string (from our new parser)
             parsedRubricItems = JSON.parse(finalRubricText);
-            if (!Array.isArray(parsedRubricItems)) throw new Error("Parsed rubric is not an array");
+            if (!Array.isArray(parsedRubricItems) || parsedRubricItems.length === 0) {
+                throw new Error("Invalid Rubric Format");
+            }
         } catch (e) {
-            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
-            console.log(`[GRADING] Parsing legacy rubric text into JSON array...`);
-            // Enforce standard string settings object via config parameter for Vercel SDK to ensure max output tokens are applied.
-            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
-            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
-            const rubricStructureResponse = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: "You are an expert data structured parser. Extract all gradable questions from the provided Marking Scheme into a JSON array.",
-                prompt: finalRubricText,
-                schema: z.object({ items: z.array(z.object({ questionId: z.string(), maxScore: z.number(), rubricSegment: z.string() })) }),
-                temperature: 0.0,
+            console.error("[GRADING] Rubric is not a valid JSON array.", e);
+            // We fail early here. The frontend/upload phase must ensure the rubric is a perfect JSON array before grading starts.
+            await prisma.submission.update({
+                where: { id: globalSubmissionId },
+                data: { status: 'FAILED', feedback: 'Rubric is not a verified JSON array. Please re-upload and verify the marking scheme.' }
             });
-            parsedRubricItems = (rubricStructureResponse.object as any)?.items || [];
+            return NextResponse.json({ error: 'Rubric is not a verified JSON array.' }, { status: 400 });
         }
 
         // Update status to GRADING
@@ -128,63 +124,81 @@ export async function POST(req: NextRequest) {
         let calculatedTotalScore = 0;
 
         // Batch Processing: Ili tusizidiwe na API Rate Limits za Google
-        // Tunachukua maswali 5 kwa wakati mmoja (Concurrency = 5)
-        const CONCURRENCY_LIMIT = 5;
+        const CONCURRENCY_LIMIT = 3; // Salama zaidi kwa Vercel na Gemini Rate Limits
 
         for (let i = 0; i < parsedRubricItems.length; i += CONCURRENCY_LIMIT) {
             const batch = parsedRubricItems.slice(i, i + CONCURRENCY_LIMIT);
 
             const batchPromises = batch.map(async (rubricItem: any) => {
-                const systemPrompt = `You are an elite world-class Examination Evaluation Engine.
-Your task is to grade ONLY ONE specific question: ${rubricItem.questionId}.
-Maximum marks for this question: ${rubricItem.maxScore}.
+                const systemPrompt = `You are a strict Examination Evaluator.
+Question: ${rubricItem.questionId}
+Max Marks: ${rubricItem.maxScore}
+Task: Grade ONLY this question based on the student's text. Be extremely strict about partial credits.
 
-RULES:
-1. SEARCH the entire student document for any answer related to ${rubricItem.questionId}. Students may answer out of order.
-2. Compare the student's answer against the provided Rubric Segment.
-3. Be strict but fair. Do not hallucinate marks.`;
+SCORING MATH RULES:
+DO NOT INVENT DECIMALS.
+Count the valid points mathematically based on the rubric and assign the exact matching score.`;
 
-                const userPrompt = `RUBRIC EXPECTATION FOR ${rubricItem.questionId}:\n${rubricItem.rubricSegment}\n\nENTIRE STUDENT EXAM TEXT:\n${studentText}`;
+                const userPrompt = `EXPECTED RUBRIC:\n${rubricItem.rubricSegment}\n\nSTUDENT FULL TEXT:\n${studentText}`;
 
-                try {
-                    const { object } = await generateObject({
-                        model: google('gemini-2.5-pro'),
-                        system: systemPrompt,
-                        prompt: userPrompt,
-                        schema: singleQuestionSchema,
-                        temperature: 0.0,
-                    });
+                // Retry logic: Jaribu mara 2 ikiwa API italeta "Too Many Requests" au "Timeout"
+                let retries = 2;
+                while (retries > 0) {
+                    try {
+                        const { object } = await generateObject({
+                            model: google('gemini-2.5-pro'),
+                            system: systemPrompt,
+                            prompt: userPrompt,
+                            schema: singleQuestionSchema,
+                            temperature: 0.0,
+                        });
 
-                    // DETERMINISTIC MATH (THE IRON GATE)
-                    const trueMax = Number(rubricItem.maxScore);
-                    let safeScore = Math.max(0, Math.min(object.score, trueMax));
+                        // DETERMINISTIC MATH (THE IRON GATE)
+                        const trueMax = Number(rubricItem.maxScore);
+                        let safeScore = Math.max(0, Math.min(object.score, trueMax));
 
-                    return {
-                        question: rubricItem.questionId,
-                        thoughtProcess: object.thoughtProcess,
-                        score: safeScore,
-                        max: trueMax,
-                        feedback: object.feedback,
-                        evidenceSnippet: object.evidenceSnippet
-                    };
-                } catch (err) {
-                    console.error(`AI Error on question ${rubricItem.questionId}`, err);
-                    return {
-                        question: rubricItem.questionId,
-                        thoughtProcess: "AI API error during processing.",
-                        score: 0,
-                        max: Number(rubricItem.maxScore),
-                        feedback: "System could not evaluate this question.",
-                        evidenceSnippet: ""
-                    };
+                        return {
+                            question: rubricItem.questionId,
+                            thoughtProcess: object.thoughtProcess,
+                            score: safeScore,
+                            max: trueMax,
+                            feedback: object.feedback,
+                            evidenceSnippet: object.evidenceSnippet
+                        };
+                    } catch (err: any) {
+                        const errMsg = err?.message || String(err);
+                        if (errMsg.includes('429') || errMsg.includes('Too Many Requests') || errMsg.includes('timeout') || errMsg.includes('fetch failed')) {
+                            retries--;
+                            console.warn(`[GRADING] Transient error for Q ${rubricItem.questionId}. Retries left: ${retries}. Err: ${errMsg}`);
+                            if (retries === 0) throw err;
+                            await new Promise(res => setTimeout(res, 2000)); // Subiri sekunde 2 kisha jaribu tena
+                        } else {
+                            throw err; // Sio rate limit, ni error nyingine
+                        }
+                    }
                 }
             });
 
-            const batchResults = await Promise.all(batchPromises);
+            // Tumia Promise.allSettled ili swali moja lisiharibu yote
+            const batchResults = await Promise.allSettled(batchPromises);
 
-            batchResults.forEach(result => {
-                finalBreakdown.push(result);
-                calculatedTotalScore += result.score;
+            batchResults.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value) {
+                    finalBreakdown.push(result.value);
+                    calculatedTotalScore += (result.value as any).score;
+                } else {
+                    // Swali limefeli hata baada ya retries
+                    const failedItem = batch[index];
+                    console.error(`[GRADING] Final failure grading question ${failedItem.questionId}`, result.reason);
+                    finalBreakdown.push({
+                        question: failedItem.questionId,
+                        thoughtProcess: "System failed to grade this specific question due to API limits or a persistent error.",
+                        score: 0,
+                        max: Number(failedItem.maxScore),
+                        feedback: "Manual review required.",
+                        evidenceSnippet: ""
+                    });
+                }
             });
         }
 
