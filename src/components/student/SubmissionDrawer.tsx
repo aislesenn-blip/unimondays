@@ -183,13 +183,13 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                         </div>
                     </div>
 
-                    <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 text-sm text-blue-800">
+                    <div className="bg-muted/50 border rounded-lg p-4 text-sm">
                         <h4 className="font-semibold flex items-center gap-2 mb-2">
-                            <AlertTriangle className="h-4 w-4 text-blue-600" />
-                            Hakiki Kazi Yako
+                            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                            Review Your Submission
                         </h4>
-                        <p>
-                            Tafadhali hakikisha huu ndio mtihani/kazi sahihi uliyokusudia kutuma kwa Profesa. Ukibonyeza "Submit", kazi yako itatumwa moja kwa moja kwa ukaguzi na haitaweza kubadilishwa tena.
+                        <p className="text-muted-foreground">
+                            Please ensure this is the correct file. Once submitted, it will be sent directly to your professor for review and cannot be modified.
                         </p>
                     </div>
                 </div>
@@ -200,13 +200,13 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
              <SheetClose asChild>
               <Button variant="outline" className="w-full sm:w-auto" disabled={loading}>Cancel</Button>
             </SheetClose>
-            <Button onClick={handleSubmit} disabled={!file || loading} className="w-full sm:w-auto relative bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSubmit} disabled={!file || loading} className="w-full sm:w-auto relative">
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                    Inatuma kwa Profesa...
+                    Analyzing & Submitting...
                   </span>
-                ) : "Submit to Professor"}
+                ) : "Submit Assignment"}
             </Button>
           </SheetFooter>
         </div>
