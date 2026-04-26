@@ -120,6 +120,11 @@ Question: ${rubricItem.questionId}
 Max Marks: ${rubricItem.maxScore}
 Task: Grade ONLY this question based on the student's text. Be extremely strict about partial credits.
 
+UNIVERSAL GRADING RULES:
+1. SEARCH BOUNDARIES: You may scan the entire document because students sometimes answer out of order. HOWEVER, you must strictly respect the student's numbering.
+2. NO CROSS-WIRING (NO RECYCLING): If a block of text is explicitly labeled by the student as an answer to a completely DIFFERENT question, you MUST NOT use it to award marks for the current question (${rubricItem.questionId}).
+3. ELIGIBLE TEXT: Only evaluate text that is explicitly labeled for ${rubricItem.questionId}, or text that is completely unlabeled/ambiguous.
+
 SCORING MATH RULES:
 - DO NOT INVENT DECIMALS LIKE 0.25 OR 0.75.
 - Only use whole numbers or 0.5 increments.
