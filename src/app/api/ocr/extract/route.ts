@@ -52,7 +52,7 @@ CRITICAL INSTRUCTIONS:
 1. ONLY extract actual questions meant to be graded. Do NOT include page headers, footers, "page markers", or general instructions.
 2. If a question has sub-parts (e.g., 1a, 1b), treat each sub-part as a distinct item if they have separate marks. Otherwise, group them logically.
 3. You MUST output ONLY valid JSON. No markdown wrappers like \`\`\`json.
-4. BE 100% ACCURATE on the maxScore. Do not guess or hallucinate numbers. Read exactly what is on the paper.
+4. BE 100% ACCURATE on the maxScore. Do not guess or hallucinate numbers. Read exactly what is on the paper. Pay extremely close attention to the difference between 3.5 and 5.5, or 1 and 7. DO NOT misread marks!
 
 The JSON MUST exactly match this format:
 [
