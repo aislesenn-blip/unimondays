@@ -5,7 +5,6 @@ import { prisma } from '@/lib/prisma';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { supabase } from '@/lib/supabase';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
-import pLimit from 'p-limit';
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
@@ -124,145 +123,125 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        // --- PASS 1: INTELLIGENT EXTRACTION (Pre-Chunking) ---
-        console.log(`[GRADING] Commencing Pass 1: Intelligent Extraction...`);
+        // --- HYBRID HOLISTIC GRADING ---
+        console.log(`[GRADING] Commencing Hybrid Holistic Grading...`);
 
-        // Define the schema for mapping extracted text to Question IDs
-        const extractionSchema = z.object({
-            mappedAnswers: z.array(z.object({
-                questionId: z.string().describe("The ID of the question from the rubric (e.g., '1a', '2', 'Q3')"),
-                studentText: z.string().describe("The exact text the student wrote as their answer")
-            })).describe("Student answers mapped to specific question IDs"),
-            unmappedText: z.string().describe("Any text from the exam that could not be mapped to a specific question ID, or text that is ambiguous. Do not lose any text!")
-        });
+        const systemPrompt = `You are an elite world-class Examination Evaluation Engine designed to mark academic assessments with accuracy higher than senior professors, national examination boards, and university moderation panels.
 
-        // We only want to give it the list of Question IDs so it knows what to map to.
-        const questionIdsList = parsedRubricItems.map((item: any) => item.questionId).join(', ');
+Your task is to perform strict, fair, evidence-based, marking-scheme-anchored assessment of student answers using ONLY the provided official marking scheme and student responses.
 
-        let extractedAnswers: { mappedAnswers: { questionId: string, studentText: string }[], unmappedText: string } = {
-            mappedAnswers: [],
-            unmappedText: submission.ocrText // Fallback to entire text if Pass 1 fails
-        };
+You must behave like a hybrid of:
+- Senior University Examiner
+- National Examination Council Chief Marker
+- External Moderator
+- Academic Quality Assurance Auditor
+- Rubric Precision Scoring Engine
 
-        try {
-            const extractionResponse = await generateObject({
-                model: google('gemini-2.5-pro'), // Use pro for better structural reasoning
-                system: `You are an expert Data Extraction engine for University Exams.
-Your task is to organize a student's raw exam text into a structured mapping based on the provided Question IDs.
+Your marking must be:
+- Extremely accurate
+- Strict but fair
+- Fully marking-scheme compliant
+- Resistant to hallucination
+- Resistant to over-marking
+- Resistant to under-marking
+- Resistant to bias
+- Resistant to wording variation
+- Resistant to synonym confusion
+- Resistant to paraphrase differences
+- Resistant to answer-order differences
 
-AVAILABLE QUESTION IDS: ${questionIdsList}
+You must NEVER invent marks.
+You must NEVER assume missing content.
+You must NEVER reward unsupported claims.
+You must NEVER punish correct alternative phrasing if conceptually valid.
+You must NEVER ignore hidden partial credit opportunities if supported by the marking scheme.
 
-INSTRUCTIONS:
-1. Scan the student's text and identify sections corresponding to the available Question IDs.
-2. Extract the exact words the student wrote for each identified question into the 'mappedAnswers' array.
-3. CRITICAL: Any text that you cannot confidently map to a specific question (e.g., unlabeled continuations, random notes, or ambiguous answers) MUST be placed into the 'unmappedText' field.
-4. DO NOT SUMMARIZE. Preserve the student's original phrasing and calculations.
-5. If the student answered out of order, make sure you still map it correctly based on their labels.`,
-                prompt: `STUDENT FULL EXAM TEXT:\n${submission.ocrText}`,
-                schema: extractionSchema,
-                temperature: 0.0,
-            });
-            extractedAnswers = extractionResponse.object;
-            console.log(`[GRADING] Pass 1 Extraction complete. Found ${extractedAnswers.mappedAnswers.length} mapped answers. Unmapped text length: ${extractedAnswers.unmappedText.length}`);
-        } catch (extractionError) {
-            console.error(`[GRADING] Pass 1 Extraction failed, falling back to full text:`, extractionError);
-            // extractedAnswers is already initialized to fall back to the full text in unmappedText
-        }
+You must think deeply before scoring.
 
-        // --- PASS 2: BATCH GRADING (Map-Reduce) ---
-        // We use p-limit to batch questions. Batch of 5 to balance Vercel timeout and Rate Limits.
-        const limit = pLimit(5);
+---
 
-        // Chunk the rubric items into blocks of 5 questions each
-        const CHUNK_SIZE = 5;
-        const rubricChunks = [];
-        for (let i = 0; i < parsedRubricItems.length; i += CHUNK_SIZE) {
-            rubricChunks.push(parsedRubricItems.slice(i, i + CHUNK_SIZE));
-        }
+CORE MARKING RULES
 
-        console.log(`[GRADING] Commencing Pass 2: Batch-Map-Reduce grading for ${rubricChunks.length} chunks...`);
+RULE 1 — MARKING SCHEME IS SUPREME
+The marking scheme is the highest authority.
+If student answer is not supported by the marking scheme, do not award marks unless it is a clearly valid equivalent concept.
+Do not freestyle marking.
 
-        const gradingPromises = rubricChunks.map(chunk =>
-            limit(async () => {
-                const chunkJsonString = JSON.stringify(chunk, null, 2);
+RULE 2 — CONCEPT > EXACT WORDING
+Award marks based on: correctness of concept, accuracy of explanation, relevance to the asked question.
+Do NOT require exact wording.
+Accept: synonyms, paraphrasing, reordered explanation, technically correct alternative expression.
+Reject: vague statements, guessed statements, unrelated correctness, incomplete unsupported phrases.
 
-                // Get the extracted text relevant to this specific chunk
-                const chunkQuestionIds = chunk.map((c: any) => c.questionId);
-                const relevantMappedAnswers = extractedAnswers.mappedAnswers.filter((ans: any) =>
-                    chunkQuestionIds.includes(ans.questionId) ||
-                    chunkQuestionIds.some((id: string) => ans.questionId.includes(id) || id.includes(ans.questionId))
-                );
+RULE 3 — PARTIAL CREDIT INTELLIGENCE
+If answer is partially correct: award only the exact deserved fraction.
+Do not round emotionally. Do not give “benefit of doubt marks.” Every mark must be earned.
 
-                // Build the reduced payload for this chunk
-                const reducedStudentPayload = {
-                    specificallyMappedAnswers: relevantMappedAnswers,
-                    unmappedTextFallback: extractedAnswers.unmappedText
-                };
+RULE 4 — NO DOUBLE REWARD
+Do not award the same concept twice across the same sub-question unless the marking scheme explicitly allows it.
+Avoid duplicate scoring.
 
-                const systemPrompt = `You are an expert University Professor grading an exam.
-You have been provided with a specific set of Questions from the Marking Scheme. You will also receive an optimized payload containing the student's answers mapped to these specific questions, plus an "unmapped text" fallback containing text that could not be confidently mapped.
+RULE 5 — STRICT STRUCTURAL MAPPING
+Correctly map all questions. Even if student writes answers out of order, infer intelligently and map accurately. Do not misplace marks.
 
-YOUR GOAL: To grade ONLY the specific questions provided in the chunk against the student's provided text.
+RULE 6 — JUSTIFICATION MUST BE SHORT
+For every awarded mark, provide only a very short reason in the 'feedback' field (Maximum 1 short sentence).
+Do NOT write essays. Do NOT waste tokens.
 
-CRITICAL SEARCH RULES (PREVENTING DATA LOSS):
-1. Evaluate the \`specificallyMappedAnswers\` first, as they are most likely to contain the targeted answer.
-2. If the answer is incomplete or missing in the mapped section, you MUST carefully search the \`unmappedTextFallback\` before deciding the student did not answer.
-3. DO NOT SKIP: Never claim the student "did not answer" unless you have verified both the mapped answers and the fallback text.
+REQUIRED EXECUTION PROCESS:
+1. Read the full marking scheme fully to understand expected answers and mark distribution.
+2. Read the student text carefully, locating the student's attempt for each question.
+3. Evaluate each answer against the scheme and apply partial credit precisely.
+4. Output the results strictly adhering to the JSON schema provided. Do not hallucinate marks. `;
 
-CRITICAL GRADING RULES:
-1. EVALUATE SEMANTICS, NOT JUST SYNTAX: Award full marks if the student has demonstrated an understanding of the concept using their own words or synonyms. Do not penalize for missing specific keywords unless strictly required by the rubric.
-2. CHAIN OF THOUGHT: You MUST explicitly think step-by-step in the 'thoughtProcess' field BEFORE awarding a score.
-3. CALCULATIONS: If a question involves math, follow the student's steps. Award partial or full marks based on their logical steps and final answer as dictated by standard grading practices. Explain this in your thought process.
-4. UNANSWERED: Only if the answer is genuinely missing from both the mapped section and fallback text, give it a score of 0.
-
-RUBRIC CHUNK TO GRADE:
+        const userPrompt = `OFFICIAL MARKING SCHEME:
 """
-${chunkJsonString}
-"""`;
+${JSON.stringify(parsedRubricItems, null, 2)}
+"""
 
-                const userPrompt = `OPTIMIZED STUDENT TEXT PAYLOAD:\n${JSON.stringify(reducedStudentPayload, null, 2)}`;
-
-                // Use a model configuration that defines generation parameters dynamically
-                // We use the raw generative-ai wrapper or pass via provider settings to bypass type locks
-                // The ai sdk @ai-sdk/google currently defaults to 8192 automatically when using 2.5-pro
-                // but we explicitly try to set it via experimental configuration or known parameters.
-                const { object } = await generateObject({
-                    model: google('gemini-2.5-pro'),
-                    system: systemPrompt,
-                    prompt: userPrompt,
-                    schema: atomicGradingSchema,
-                    temperature: 0.0,
-                });
-
-                // FIX 2: Hardcode maxScore from the rubric to prevent AI hallucinations mutating the base marks.
-                const safeGradedQuestions = ((object as any)?.gradedQuestions || []).map((gradedQ: any) => {
-                    // Find the original rubric item to get the true maxScore
-                    const originalRubricItem = chunk.find((c: any) => c.questionId === gradedQ.question || c.questionId.includes(gradedQ.question));
-                    return {
-                        ...gradedQ,
-                        max: originalRubricItem ? originalRubricItem.maxScore : gradedQ.max // Enforce truth
-                    };
-                });
-
-                return safeGradedQuestions;
-            })
-        );
-
-        const chunkResults = await Promise.allSettled(gradingPromises);
+STUDENT ANSWER SCRIPT:
+"""
+${submission.ocrText}
+"""
+`;
 
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
 
-        for (const result of chunkResults) {
-            if (result.status === 'fulfilled') {
-                for (const gradedQ of result.value) {
-                     finalBreakdown.push(gradedQ);
-                     calculatedTotalScore += gradedQ.score;
-                }
-            } else {
-                console.error("[GRADING] A chunk failed to grade:", result.reason);
-                // We could add a failed marker to the breakdown here
-            }
+        try {
+            console.log(`[GRADING] Sending request to Gemini 2.5 Pro with Temperature 0.0...`);
+            const { object } = await generateObject({
+                model: google('gemini-2.5-pro'),
+                system: systemPrompt,
+                prompt: userPrompt,
+                schema: atomicGradingSchema,
+                temperature: 0.0,
+            });
+
+            const rawGradedQuestions = (object as any)?.gradedQuestions || [];
+
+            // Post-processing to enforce deterministic math and max scores based on source rubric
+            finalBreakdown = rawGradedQuestions.map((gradedQ: any) => {
+                // Find the original rubric item to get the true maxScore
+                const originalRubricItem = parsedRubricItems.find((c: any) => c.questionId === gradedQ.question || c.questionId.includes(gradedQ.question));
+                const trueMax = originalRubricItem ? originalRubricItem.maxScore : gradedQ.max;
+
+                // Ensure score doesn't exceed true max, and default to 0 if negative or not a number
+                let safeScore = typeof gradedQ.score === 'number' ? gradedQ.score : 0;
+                safeScore = Math.max(0, Math.min(safeScore, trueMax));
+
+                calculatedTotalScore += safeScore;
+
+                return {
+                    ...gradedQ,
+                    score: safeScore,
+                    max: trueMax
+                };
+            });
+
+        } catch (gradingError) {
+            console.error(`[GRADING] Hybrid Holistic Grading failed:`, gradingError);
+            throw gradingError;
         }
 
         // Fast parallel call to extract Reg No
