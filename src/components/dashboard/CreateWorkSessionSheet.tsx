@@ -155,10 +155,10 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
             <Input id="deadline" type="datetime-local" {...register("deadline")} />
           </div>
 
-           {/* Gold Standard Inputs */}
+           {/* Gold Standard Marking Scheme Upload */}
            <div className="space-y-4 border p-4 rounded-md bg-muted/20">
-              <h3 className="font-semibold text-sm">Gold Standard Data (Internal Only)</h3>
-              <p className="text-xs text-muted-foreground">These files are used by the AI for grading and are NEVER shown to students.</p>
+              <h3 className="font-semibold text-sm">Marking Scheme Data</h3>
+              <p className="text-xs text-muted-foreground">Upload the rubric. The AI will parse it into a strict JSON structure. You MUST verify it before saving.</p>
 
               <div className="space-y-2">
                 <Label>Marking Scheme / Rubric (PDF/Image)</Label>
@@ -171,81 +171,23 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
                     )}
                 </div>
                 <Input type="hidden" {...register("markingScheme")} />
-                {markingSchemeUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Processed successfully</div>}
+                {markingSchemeUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Uploaded successfully</div>}
               </div>
 
-              <div className="space-y-2">
-                <Label>Past Graded Example (Gold Standard)</Label>
-                <div className="flex items-center gap-2 relative">
-                    <Input type="file" onChange={(e) => handleFileUpload(e, "goldStandardUrl")} accept=".pdf,.jpg,.png" disabled={uploading} />
-                    {uploading && (
-                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        </div>
-                    )}
-                </div>
-                <Input type="hidden" {...register("goldStandardUrl")} />
-                {goldStandardUrl && <div className="text-xs text-green-600 flex items-center gap-1"><FileText className="w-3 h-3"/> Processed successfully</div>}
+              <div className="space-y-2 pt-2">
+                 <Label className="text-xs font-semibold text-destructive">Visual Verification (Mandatory)</Label>
+                 <p className="text-[10px] text-muted-foreground mb-1">Please verify the AI parsed the exact marks correctly. Edit if needed before creating the session.</p>
+                 <Textarea
+                     {...register("parsedRubricJson")}
+                     className="font-mono text-xs h-40 bg-black text-green-400"
+                     placeholder="[ { 'questionId': 'Q1', 'maxScore': 10, 'rubricSegment': 'Award 5 marks for...' } ]"
+                 />
               </div>
            </div>
 
            <div className="space-y-2">
              <Label>Instructions to Students</Label>
              <Textarea placeholder="Instructions visible to students (e.g. 'Answer all questions', 'Time limit 1 hour'). Do NOT paste the marking scheme here." {...register("instructions")} />
-           </div>
-
-           {/* Calibration Engine */}
-           <div className="space-y-4 border p-4 rounded-md bg-blue-50/50">
-              <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-sm text-blue-900">AI Grading Persona (Calibration)</h3>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">1. Methodology & Steps</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_methodology")}>
-                    <option value="partial_marks">Award partial marks for correct steps (Lenient)</option>
-                    <option value="final_answer_only">Strictly grade final answer only</option>
-                    <option value="steps_mandatory">Steps are mandatory for full marks</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">2. Grammar & Language</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_grammar")}>
-                    <option value="ignore_grammar">Ignore grammar, focus only on facts</option>
-                    <option value="penalize_poor">Penalize poor grammar/spelling</option>
-                    <option value="strict_language">Strict academic language required</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">3. Verbosity</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_verbosity")}>
-                    <option value="ignore_noise">Search for the fact, ignore the noise</option>
-                    <option value="concise">Penalize excessive verbosity (Be concise)</option>
-                    <option value="detailed">Reward detailed explanations</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">4. Incomplete Sections</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" {...register("cal_incomplete")}>
-                    <option value="grade_available">Grade part A, give 0 to B</option>
-                    <option value="zero_if_incomplete">Zero if section is incomplete</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">5. Custom Expectations</Label>
-                <Textarea placeholder="Specific instructions (e.g. 'Allow Swahili keywords', 'Check for units')" className="h-20" {...register("cal_custom")} />
-              </div>
-
-              <div className="flex items-center space-x-2 pt-2">
-                <input type="checkbox" id="saveDefault" className="h-4 w-4 rounded border-gray-300" {...register("saveAsDefault")} />
-                <label htmlFor="saveDefault" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Save as my default settings
-                </label>
-              </div>
            </div>
 
           <div className="space-y-2">
