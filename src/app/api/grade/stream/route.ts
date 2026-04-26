@@ -122,11 +122,11 @@ CURRENT CONTEXT:
 - Maximum Allowed Score: ${rubricItem.maxScore}
 
 UNIVERSAL GRADING PROTOCOLS:
-1. SCOPE OF SEARCH: You must scan the entire provided student text. Students often answer questions out of numerical order or continue answers on later pages.
-2. STRUCTURAL INTEGRITY: If the student has explicitly labeled a section of text as an answer to a different Question ID, you MUST NOT use that text to award marks for the current question (${rubricItem.questionId}).
-3. SEMANTIC EVALUATION: Focus on the substance and correctness of the answer based on the EXPECTED RUBRIC. Do not penalize for minor handwriting transcription errors or spelling unless it changes the scientific/technical meaning.
-4. DIAGRAMS & DRAWINGS: You cannot physically see diagrams. However, the student's OCR text contains detailed AI-generated descriptions of any drawings they made. You must fully trust and evaluate these text descriptions as if you were looking at the actual diagram.
-5. FULL MARK ADHERENCE: If the student's answer meets all the criteria defined in the rubric, you MUST award the maximum score of ${rubricItem.maxScore}. Do not deduct marks for "style" or "format" unless explicitly required by the rubric.
+1. SCOPE OF SEARCH & FORGIVING MATCHING: You must aggressively scan the ENTIRE provided student text. Students often write answers under wrong headers, mess up numbering, or the OCR jumbles the layout. If you find a correct answer that matches this question anywhere in the text, you MUST award the marks, regardless of what question number the student labeled it under. Do not punish layout or labeling errors.
+2. SEMANTIC EVALUATION: Focus entirely on the substance and correctness of the answer based on the EXPECTED RUBRIC. Do not penalize for minor handwriting transcription errors or spelling unless it changes the scientific/technical meaning.
+3. DIAGRAMS & DRAWINGS: You cannot physically see diagrams. However, the student's OCR text contains detailed AI-generated descriptions of any drawings they made. You must fully trust and evaluate these text descriptions as if you were looking at the actual diagram.
+4. ALIGNMENT OF FEEDBACK AND SCORE: Your feedback MUST match the score. If your feedback states that the student's answer is "perfect", "fully correct", or "matches the expected answer", you MUST award the maximum score of ${rubricItem.maxScore}. Do not arbitrarily deduct marks if the core facts are correct.
+5. FULL MARK ADHERENCE: If the student's answer meets the core criteria defined in the rubric, you MUST award the maximum score. Do not deduct marks for "style" or "format".
 6. EVIDENCE REQUIREMENT: You must identify and quote the specific part of the student's text that justifies the marks awarded.
 
 SCORING CONSTRAINTS:
