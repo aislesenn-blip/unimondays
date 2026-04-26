@@ -124,42 +124,52 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        // W3 Optimization: Pre-Chunking the OCR Text into a structured map
-        // to prevent Context Bloat and "Lost in the Middle" hallucination loops.
-        console.log(`[GRADING] Pre-chunking student exam text to reduce token bloat...`);
-        let structuredStudentAnswers: Record<string, string> = {};
+        // --- PASS 1: INTELLIGENT EXTRACTION (Pre-Chunking) ---
+        console.log(`[GRADING] Commencing Pass 1: Intelligent Extraction...`);
+
+        // Define the schema for mapping extracted text to Question IDs
+        const extractionSchema = z.object({
+            mappedAnswers: z.array(z.object({
+                questionId: z.string().describe("The ID of the question from the rubric (e.g., '1a', '2', 'Q3')"),
+                studentText: z.string().describe("The exact text the student wrote as their answer")
+            })).describe("Student answers mapped to specific question IDs"),
+            unmappedText: z.string().describe("Any text from the exam that could not be mapped to a specific question ID, or text that is ambiguous. Do not lose any text!")
+        });
+
+        // We only want to give it the list of Question IDs so it knows what to map to.
+        const questionIdsList = parsedRubricItems.map((item: any) => item.questionId).join(', ');
+
+        let extractedAnswers: { mappedAnswers: { questionId: string, studentText: string }[], unmappedText: string } = {
+            mappedAnswers: [],
+            unmappedText: submission.ocrText // Fallback to entire text if Pass 1 fails
+        };
+
         try {
-            // First, ask Gemini to map the student's raw text to the known question IDs from the rubric.
-            const allQuestionIds = parsedRubricItems.map(item => item.questionId);
+            const extractionResponse = await generateObject({
+                model: google('gemini-2.5-pro'), // Use pro for better structural reasoning
+                system: `You are an expert Data Extraction engine for University Exams.
+Your task is to organize a student's raw exam text into a structured mapping based on the provided Question IDs.
 
-            // We use a dynamic Zod schema to force it to return a dictionary of strings.
-            // We generate the schema keys from the rubric array dynamically.
-            const shape: Record<string, any> = {};
-            for (const qId of allQuestionIds) {
-                shape[qId] = z.string().describe(`The student's answer for question ${qId}. If missing, return an empty string.`);
-            }
-            const preChunkSchema = z.object(shape);
+AVAILABLE QUESTION IDS: ${questionIdsList}
 
-            const chunkingResponse = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: `You are an expert data collator. You have been given a student's full raw exam text and a list of specific question IDs from the marking scheme.
-
-YOUR TASK: Map the student's answers to the correct question IDs.
-- Some answers might be scattered. Gather all parts of a student's answer for a specific question ID and concatenate them.
-- If a student did not answer a specific question ID, return an empty string "" for that key.
-- DO NOT invent answers. Simply copy the student's text exactly into the matching field.`,
-                prompt: `QUESTION IDs TO FIND: ${allQuestionIds.join(", ")}\n\nSTUDENT FULL EXAM TEXT:\n"""\n${submission.ocrText}\n"""`,
-                schema: preChunkSchema,
+INSTRUCTIONS:
+1. Scan the student's text and identify sections corresponding to the available Question IDs.
+2. Extract the exact words the student wrote for each identified question into the 'mappedAnswers' array.
+3. CRITICAL: Any text that you cannot confidently map to a specific question (e.g., unlabeled continuations, random notes, or ambiguous answers) MUST be placed into the 'unmappedText' field.
+4. DO NOT SUMMARIZE. Preserve the student's original phrasing and calculations.
+5. If the student answered out of order, make sure you still map it correctly based on their labels.`,
+                prompt: `STUDENT FULL EXAM TEXT:\n${submission.ocrText}`,
+                schema: extractionSchema,
                 temperature: 0.0,
             });
-            structuredStudentAnswers = chunkingResponse.object;
-            console.log(`[GRADING] Successfully pre-chunked answers. Ready for focused evaluation.`);
-        } catch (e) {
-            console.error(`[GRADING] Pre-chunking failed. Falling back to Full Text Context.`, e);
-            // If it fails, we fall back to just passing the whole text
-            structuredStudentAnswers = {};
+            extractedAnswers = extractionResponse.object;
+            console.log(`[GRADING] Pass 1 Extraction complete. Found ${extractedAnswers.mappedAnswers.length} mapped answers. Unmapped text length: ${extractedAnswers.unmappedText.length}`);
+        } catch (extractionError) {
+            console.error(`[GRADING] Pass 1 Extraction failed, falling back to full text:`, extractionError);
+            // extractedAnswers is already initialized to fall back to the full text in unmappedText
         }
 
+        // --- PASS 2: BATCH GRADING (Map-Reduce) ---
         // We use p-limit to batch questions. Batch of 5 to balance Vercel timeout and Rate Limits.
         const limit = pLimit(5);
 
@@ -170,38 +180,47 @@ YOUR TASK: Map the student's answers to the correct question IDs.
             rubricChunks.push(parsedRubricItems.slice(i, i + CHUNK_SIZE));
         }
 
-        console.log(`[GRADING] Commencing Batch-Map-Reduce grading for ${rubricChunks.length} chunks...`);
+        console.log(`[GRADING] Commencing Pass 2: Batch-Map-Reduce grading for ${rubricChunks.length} chunks...`);
 
         const gradingPromises = rubricChunks.map(chunk =>
             limit(async () => {
                 const chunkJsonString = JSON.stringify(chunk, null, 2);
+
+                // Get the extracted text relevant to this specific chunk
+                const chunkQuestionIds = chunk.map((c: any) => c.questionId);
+                const relevantMappedAnswers = extractedAnswers.mappedAnswers.filter((ans: any) =>
+                    chunkQuestionIds.includes(ans.questionId) ||
+                    chunkQuestionIds.some((id: string) => ans.questionId.includes(id) || id.includes(ans.questionId))
+                );
+
+                // Build the reduced payload for this chunk
+                const reducedStudentPayload = {
+                    specificallyMappedAnswers: relevantMappedAnswers,
+                    unmappedTextFallback: extractedAnswers.unmappedText
+                };
+
                 const systemPrompt = `You are an expert University Professor grading an exam.
-You have been provided with a specific set of Questions from the Marking Scheme and the Student's Answers for those specific questions.
+You have been provided with a specific set of Questions from the Marking Scheme. You will also receive an optimized payload containing the student's answers mapped to these specific questions, plus an "unmapped text" fallback containing text that could not be confidently mapped.
 
-YOUR GOAL: To grade ONLY the specific questions provided in the chunk against the student's answers. Do not grade any other questions.
+YOUR GOAL: To grade ONLY the specific questions provided in the chunk against the student's provided text.
 
-CRITICAL RULES:
-1. EVALUATE SEMANTICS, NOT JUST SYNTAX: Award full marks if the student has demonstrated an understanding of the concept using their own words or synonyms.
+CRITICAL SEARCH RULES (PREVENTING DATA LOSS):
+1. Evaluate the \`specificallyMappedAnswers\` first, as they are most likely to contain the targeted answer.
+2. If the answer is incomplete or missing in the mapped section, you MUST carefully search the \`unmappedTextFallback\` before deciding the student did not answer.
+3. DO NOT SKIP: Never claim the student "did not answer" unless you have verified both the mapped answers and the fallback text.
+
+CRITICAL GRADING RULES:
+1. EVALUATE SEMANTICS, NOT JUST SYNTAX: Award full marks if the student has demonstrated an understanding of the concept using their own words or synonyms. Do not penalize for missing specific keywords unless strictly required by the rubric.
 2. CHAIN OF THOUGHT: You MUST explicitly think step-by-step in the 'thoughtProcess' field BEFORE awarding a score.
 3. CALCULATIONS: If a question involves math, follow the student's steps. Award partial or full marks based on their logical steps and final answer as dictated by standard grading practices. Explain this in your thought process.
-4. UNANSWERED: If the student's answer text is empty or blank, give it a score of 0 and note "Not answered" in feedback.
+4. UNANSWERED: Only if the answer is genuinely missing from both the mapped section and fallback text, give it a score of 0.
 
 RUBRIC CHUNK TO GRADE:
 """
 ${chunkJsonString}
 """`;
 
-                // Reconstruct the user prompt based on Pre-Chunking success
-                let userPrompt = "STUDENT EXAM TEXT FOR THESE QUESTIONS:\n";
-                if (Object.keys(structuredStudentAnswers).length > 0) {
-                    for (const rubricItem of chunk) {
-                         const studentAns = structuredStudentAnswers[rubricItem.questionId] || "No answer provided by student.";
-                         userPrompt += `--- Answer for ${rubricItem.questionId} ---\n${studentAns}\n\n`;
-                    }
-                } else {
-                    // Fallback to the whole giant text if chunking failed
-                    userPrompt = `STUDENT FULL EXAM TEXT:\n${submission.ocrText}`;
-                }
+                const userPrompt = `OPTIMIZED STUDENT TEXT PAYLOAD:\n${JSON.stringify(reducedStudentPayload, null, 2)}`;
 
                 // Use a model configuration that defines generation parameters dynamically
                 // We use the raw generative-ai wrapper or pass via provider settings to bypass type locks
@@ -215,7 +234,17 @@ ${chunkJsonString}
                     temperature: 0.0,
                 });
 
-                return (object as any)?.gradedQuestions || [];
+                // FIX 2: Hardcode maxScore from the rubric to prevent AI hallucinations mutating the base marks.
+                const safeGradedQuestions = ((object as any)?.gradedQuestions || []).map((gradedQ: any) => {
+                    // Find the original rubric item to get the true maxScore
+                    const originalRubricItem = chunk.find((c: any) => c.questionId === gradedQ.question || c.questionId.includes(gradedQ.question));
+                    return {
+                        ...gradedQ,
+                        max: originalRubricItem ? originalRubricItem.maxScore : gradedQ.max // Enforce truth
+                    };
+                });
+
+                return safeGradedQuestions;
             })
         );
 
