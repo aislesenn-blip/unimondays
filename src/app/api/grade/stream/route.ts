@@ -121,18 +121,19 @@ CURRENT CONTEXT:
 - Target Question ID: ${rubricItem.questionId}
 - Maximum Allowed Score: ${rubricItem.maxScore} (CRITICAL: Ignore any other score values that might be accidentally embedded in the rubric text. ${rubricItem.maxScore} is the ONLY valid maximum).
 
-UNIVERSAL GRADING PROTOCOLS (GUIDED AUTONOMY):
-1. INTELLIGENT MATCHING: You must aggressively scan the ENTIRE provided student text. Use your deep cognitive reasoning to identify the correct answer even if the student wrote it under the wrong header, messed up the numbering, or if the OCR jumbled the layout. Do not punish layout errors; reward correct knowledge.
-2. SEMANTIC EVALUATION: Focus entirely on the substance and correctness of the answer based on the EXPECTED RUBRIC. Do not penalize for minor handwriting transcription errors or spelling unless it changes the scientific/technical meaning. Use your intelligence to understand the student's true intent.
-3. DIAGRAMS & DRAWINGS: You cannot physically see diagrams. However, the student's OCR text contains detailed AI-generated descriptions of any drawings they made. You must fully trust and analytically evaluate these text descriptions as if you were looking at the actual diagram.
-4. ALIGNMENT OF FEEDBACK AND SCORE: Your feedback MUST match the score. If your cognitive evaluation determines that the student's answer is "perfect", "fully correct", or "matches the expected answer perfectly", you MUST award the EXACT maximum score of ${rubricItem.maxScore}. Do not arbitrarily deduct marks if the core facts are correct.
-5. FULL MARK ADHERENCE: If the student's answer meets all the core criteria defined in the rubric, you MUST award the maximum score of ${rubricItem.maxScore}. Do not deduct marks for "style" or "format".
-6. EVIDENCE REQUIREMENT: You must identify and quote the specific part of the student's text that justifies the marks awarded.
+UNIVERSAL GRADING PROTOCOLS (STRICT ENFORCEMENT):
+1. ABSOLUTE STRUCTURAL ISOLATION (NO SCAVENGING): You are BLIND to any text written under a different question number. If the student explicitly labeled a section as "Question 4", you MUST NOT use ANY information from that section to grade "Question 1". If the student left the current question (${rubricItem.questionId}) blank or answered it incorrectly, give them a 0. DO NOT steal correct answers from other parts of the exam.
+2. PROPORTIONAL MATH LOGIC: Read the rubric carefully. If the rubric asks for 5 points for 7.5 marks, do not invent a rule requiring 7 points. Calculate the weight of each point based on the rubric text and multiply it by the number of correct points found.
+3. BINARY SCORING FOR SMALL MARKS: For questions worth 0.5 or 1.0 marks, do not give weird partial credits unless explicitly instructed by the rubric. It is either correct or incorrect.
+4. SEMANTIC EVALUATION: Focus entirely on the substance and correctness of the answer based on the EXPECTED RUBRIC within the valid boundaries. Do not penalize for spelling unless it changes the scientific meaning.
+5. DIAGRAMS & DRAWINGS: You cannot physically see diagrams. You must fully trust and analytically evaluate the text descriptions of diagrams provided in the OCR as if you were looking at the actual diagram.
+6. ALIGNMENT OF FEEDBACK AND SCORE: Your feedback MUST match the score. If your cognitive evaluation determines that the student's answer is "perfect" or "fully correct", you MUST award the EXACT maximum score of ${rubricItem.maxScore}.
+7. EVIDENCE REQUIREMENT: You must identify and quote the specific part of the student's text that justifies the marks awarded.
 
 SCORING CONSTRAINTS:
-- No arbitrary decimals. Use only whole numbers or 0.5 increments.
+- DO NOT INVENT DECIMALS. Use only whole numbers or 0.5 increments.
 - Under no circumstances shall the score exceed ${rubricItem.maxScore}.
-- If the student provides no relevant information for this specific question, the score must be 0.`;
+- If the student provides no relevant information explicitly for this specific question, the score must be 0.`;
 
                 const userPrompt = `EXPECTED RUBRIC:\n${rubricItem.rubricSegment}\n\nSTUDENT FULL TEXT:\n${studentText}`;
 
