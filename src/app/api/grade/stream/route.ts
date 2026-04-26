@@ -119,14 +119,14 @@ export async function POST(req: NextRequest) {
 
 CURRENT CONTEXT:
 - Target Question ID: ${rubricItem.questionId}
-- Maximum Allowed Score: ${rubricItem.maxScore}
+- Maximum Allowed Score: ${rubricItem.maxScore} (CRITICAL: Ignore any other score values that might be accidentally embedded in the rubric text. ${rubricItem.maxScore} is the ONLY valid maximum).
 
 UNIVERSAL GRADING PROTOCOLS:
 1. SCOPE OF SEARCH & FORGIVING MATCHING: You must aggressively scan the ENTIRE provided student text. Students often write answers under wrong headers, mess up numbering, or the OCR jumbles the layout. If you find a correct answer that matches this question anywhere in the text, you MUST award the marks, regardless of what question number the student labeled it under. Do not punish layout or labeling errors.
 2. SEMANTIC EVALUATION: Focus entirely on the substance and correctness of the answer based on the EXPECTED RUBRIC. Do not penalize for minor handwriting transcription errors or spelling unless it changes the scientific/technical meaning.
 3. DIAGRAMS & DRAWINGS: You cannot physically see diagrams. However, the student's OCR text contains detailed AI-generated descriptions of any drawings they made. You must fully trust and evaluate these text descriptions as if you were looking at the actual diagram.
-4. ALIGNMENT OF FEEDBACK AND SCORE: Your feedback MUST match the score. If your feedback states that the student's answer is "perfect", "fully correct", or "matches the expected answer", you MUST award the maximum score of ${rubricItem.maxScore}. Do not arbitrarily deduct marks if the core facts are correct.
-5. FULL MARK ADHERENCE: If the student's answer meets the core criteria defined in the rubric, you MUST award the maximum score. Do not deduct marks for "style" or "format".
+4. ALIGNMENT OF FEEDBACK AND SCORE: Your feedback MUST match the score. If your feedback states that the student's answer is "perfect", "fully correct", or "matches the expected answer perfectly", you MUST award the EXACT maximum score of ${rubricItem.maxScore}. Do not arbitrarily deduct marks if the core facts are correct.
+5. FULL MARK ADHERENCE: If the student's answer meets all the core criteria defined in the rubric, you MUST award the maximum score of ${rubricItem.maxScore}. Do not deduct marks for "style" or "format".
 6. EVIDENCE REQUIREMENT: You must identify and quote the specific part of the student's text that justifies the marks awarded.
 
 SCORING CONSTRAINTS:
