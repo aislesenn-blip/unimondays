@@ -3,8 +3,8 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { supabase } from '@/lib/supabase';
-import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
+// NOTE: Tumeondoa supabase na function za extractPagesMultimodal kwa sababu
+// hili faili sasa halihusiki tena na kusoma PDF za rubric. Linahusika na Grading TU!
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
@@ -17,6 +17,7 @@ const google = createGoogleGenerativeAI({
 const singleQuestionSchema = z.object({
   thoughtProcess: z.string().describe("Chain of thought: Tafuta jibu la mwanafunzi ndani ya OCR text, linganisha na rubric, kisha amua."),
   pointsFound: z.number().optional().describe("Idadi ya pointi sahihi ulizozikuta kulingana na rubric (mfano: 5)."),
+  // HAPA NDIYO TUMEWEKA KUFUNI YA HESABU. AI hairuhusiwi kutumia .25 au .75
   score: z.number().multipleOf(0.5).describe("Maksi halisi. Usitumie desimali za ajabu kama 0.25 au 0.75. Tumia namba kamili au nusu tu kama Rubric inaruhusu."),
   feedback: z.string().describe("Sababu fupi kwa nini umetoa alama hizo."),
   evidenceSnippet: z.string().describe("Nukuu kamili kutoka kwenye majibu ya mwanafunzi inayothibitisha.")
@@ -63,48 +64,31 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ error: 'No rubric or marking scheme provided for this session.' }, { status: 400 });
         }
 
-        // Fix Legacy Data: If markingScheme is a URL, extract it first.
-        if (finalRubricText.includes('/') || finalRubricText.toLowerCase().endsWith('.pdf') || finalRubricText.toLowerCase().endsWith('.png') || finalRubricText.toLowerCase().endsWith('.jpg')) {
-            try {
-                const cleanPath = finalRubricText.startsWith('/') ? finalRubricText.slice(1) : finalRubricText;
-                const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(cleanPath);
-
-                if (fileData && !downloadError) {
-                    const arrayBuffer = await fileData.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-
-                    if (finalRubricText.toLowerCase().endsWith('.pdf')) {
-                        const pages = await extractPagesMultimodal(buffer);
-                        finalRubricText = pages.map(p => p.text).join('\n\n');
-                    } else {
-                        const mimeType = finalRubricText.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-                        finalRubricText = await ocrDocument(buffer, mimeType);
-                    }
-
-                    // Cache the extracted rubric to save future API calls
-                    await prisma.workSession.update({
-                        where: { id: submission.workSessionId },
-                        data: { rubric: finalRubricText }
-                    });
-                }
-            } catch (e) {
-                console.error("Failed to extract legacy rubric URL", e);
-            }
-        }
-
+        // ============================================================================
+        // 🚨 THE IRON GATE: RUBRIC VALIDATION (HAKUNA KUBASHIRI HAPA)
+        // Tumefuta kodi zote zilizokuwa zinaiambia AI isome PDF au kutengeneza JSON upya.
+        // Kama Rubric sio JSON, tunakataa kusahihisha ili kuzuia "Garbage In, Garbage Out"
+        // ============================================================================
         let parsedRubricItems: any[] = [];
 
         try {
             parsedRubricItems = JSON.parse(finalRubricText);
             if (!Array.isArray(parsedRubricItems) || parsedRubricItems.length === 0) {
-                throw new Error("Invalid Rubric Format");
+                throw new Error("Invalid Rubric Format - Not an Array");
             }
+
+            // Hakikisha maxScore imesimama kama namba, sio String, ili hesabu zikubali chini.
+            parsedRubricItems = parsedRubricItems.map(item => ({
+                ...item,
+                maxScore: Number(item.maxScore)
+            }));
+
         } catch (e) {
-            console.error("[GRADING] Rubric is not a valid JSON array.", e);
-            // We fail early here. The frontend/upload phase must ensure the rubric is a perfect JSON array before grading starts.
+            console.error("[GRADING-FATAL] Rubric is not a valid JSON array.", e);
+            // Tunafail early. Haturuhusu AI kuanza kutunga maksi hewa.
             await prisma.submission.update({
                 where: { id: globalSubmissionId },
-                data: { status: 'FAILED', feedback: 'Rubric is not a verified JSON array. Please re-upload and verify the marking scheme.' }
+                data: { status: 'FAILED', feedback: 'System Error: Marking scheme is not a valid JSON array. Please recreate the rubric correctly before grading.' }
             });
             return NextResponse.json({ error: 'Rubric is not a verified JSON array.' }, { status: 400 });
         }
@@ -115,16 +99,17 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        // --- PARALLEL MAP-REDUCE GRADING ---
-        console.log(`[GRADING] Commencing Parallel Map-Reduce Grading...`);
+        // ============================================================================
+        // 🚀 PARALLEL MAP-REDUCE GRADING ENGINE
+        // ============================================================================
+        console.log(`[GRADING] Commencing Parallel Map-Reduce Grading for Submission: ${globalSubmissionId}`);
 
         const studentText = submission.ocrText;
-
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
 
-        // Batch Processing: Ili tusizidiwe na API Rate Limits za Google
-        const CONCURRENCY_LIMIT = 3; // Salama zaidi kwa Vercel na Gemini Rate Limits
+        // Tumeacha 3 ili Vercel na Google Rate Limits zisikate mawasiliano (Timeout)
+        const CONCURRENCY_LIMIT = 3;
 
         for (let i = 0; i < parsedRubricItems.length; i += CONCURRENCY_LIMIT) {
             const batch = parsedRubricItems.slice(i, i + CONCURRENCY_LIMIT);
@@ -136,12 +121,14 @@ Max Marks: ${rubricItem.maxScore}
 Task: Grade ONLY this question based on the student's text. Be extremely strict about partial credits.
 
 SCORING MATH RULES:
-DO NOT INVENT DECIMALS.
-Count the valid points mathematically based on the rubric and assign the exact matching score.`;
+- DO NOT INVENT DECIMALS LIKE 0.25 OR 0.75.
+- Only use whole numbers or 0.5 increments.
+- Count the valid points mathematically based on the rubric and assign the exact matching score.
+- NEVER exceed the Max Marks (${rubricItem.maxScore}).`;
 
                 const userPrompt = `EXPECTED RUBRIC:\n${rubricItem.rubricSegment}\n\nSTUDENT FULL TEXT:\n${studentText}`;
 
-                // Retry logic: Jaribu mara 2 ikiwa API italeta "Too Many Requests" au "Timeout"
+                // Retry logic: Imarisha ustahimilivu dhidi ya Google API Limits
                 let retries = 2;
                 while (retries > 0) {
                     try {
@@ -153,9 +140,16 @@ Count the valid points mathematically based on the rubric and assign the exact m
                             temperature: 0.0,
                         });
 
-                        // DETERMINISTIC MATH (THE IRON GATE)
+                        // ============================================================================
+                        // 🧮 DETERMINISTIC MATH ENFORCEMENT (HAKUNA KUKOSEA TENA)
+                        // ============================================================================
                         const trueMax = Number(rubricItem.maxScore);
+
+                        // 1. Hakikisha haizidi Max Score wala kuwa chini ya 0
                         let safeScore = Math.max(0, Math.min(object.score, trueMax));
+
+                        // 2. Hakikisha ni increments za 0.5 (Inaondoa ujinga wa 6.25 kwa nguvu ya JavaScript)
+                        safeScore = Math.round(safeScore * 2) / 2;
 
                         return {
                             question: rubricItem.questionId,
@@ -167,19 +161,20 @@ Count the valid points mathematically based on the rubric and assign the exact m
                         };
                     } catch (err: any) {
                         const errMsg = err?.message || String(err);
-                        if (errMsg.includes('429') || errMsg.includes('Too Many Requests') || errMsg.includes('timeout') || errMsg.includes('fetch failed')) {
+                        // Kama Google italeta shida ya Too Many Requests, tunasubiri na kujaribu tena
+                        if (errMsg.includes('429') || errMsg.includes('Too Many Requests') || errMsg.includes('timeout') || errMsg.includes('fetch failed') || errMsg.includes('Overloaded')) {
                             retries--;
                             console.warn(`[GRADING] Transient error for Q ${rubricItem.questionId}. Retries left: ${retries}. Err: ${errMsg}`);
                             if (retries === 0) throw err;
-                            await new Promise(res => setTimeout(res, 2000)); // Subiri sekunde 2 kisha jaribu tena
+                            await new Promise(res => setTimeout(res, 2000)); // Subiri sekunde 2
                         } else {
-                            throw err; // Sio rate limit, ni error nyingine
+                            throw err; // Kama ni error nyingine, tupa nje
                         }
                     }
                 }
             });
 
-            // Tumia Promise.allSettled ili swali moja lisiharibu yote
+            // Tumia Promise.allSettled ili swali moja lisiharibu maswali mengine yote
             const batchResults = await Promise.allSettled(batchPromises);
 
             batchResults.forEach((result, index) => {
@@ -187,27 +182,31 @@ Count the valid points mathematically based on the rubric and assign the exact m
                     finalBreakdown.push(result.value);
                     calculatedTotalScore += (result.value as any).score;
                 } else {
-                    // Swali limefeli hata baada ya retries
+                    // Kama swali limefeli kabisa baada ya retries, tunaweka 0 ili mtihani usi-crash
                     const failedItem = batch[index];
                     const errorReason = result.status === 'rejected' ? result.reason : "Unknown evaluation failure";
                     console.error(`[GRADING] Final failure grading question ${failedItem.questionId}`, errorReason);
+
+                    const trueMaxFallback = Number(failedItem.maxScore) || 0;
                     finalBreakdown.push({
                         question: failedItem.questionId,
                         thoughtProcess: "System failed to grade this specific question due to API limits or a persistent error.",
                         score: 0,
-                        max: Number(failedItem.maxScore),
-                        feedback: "Manual review required.",
+                        max: trueMaxFallback,
+                        feedback: "Manual review required. API Error encountered.",
                         evidenceSnippet: ""
                     });
                 }
             });
         }
 
-        // Fast parallel call to extract Reg No
+        // ============================================================================
+        // 🆔 IDENTITY EXTRACTION (Tunatumia 'flash' kwa spidi, sio 'pro')
+        // ============================================================================
         let detectedRegNo = "UNKNOWN";
         try {
             const regNoResponse = await generateObject({
-                model: google('gemini-2.5-pro'),
+                model: google('gemini-2.5-flash'),
                 system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
                 prompt: submission.ocrText,
                 schema: regNoSchema,
@@ -216,21 +215,23 @@ Count the valid points mathematically based on the rubric and assign the exact m
             detectedRegNo = regNoResponse.object.detectedRegNo;
         } catch(e) { /* ignore */ }
 
-        // Finalize
+        // ============================================================================
+        // 💾 SAVE RESULTS TO DATABASE
+        // ============================================================================
         const regNoToSave = detectedRegNo && detectedRegNo !== "UNKNOWN" ? detectedRegNo : submission.studentRegNo;
 
         await prisma.score.upsert({
             where: { submissionId: globalSubmissionId },
             update: {
                 totalMarks: calculatedTotalScore,
-                remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
+                remarks: "Graded via Atomic Map-Reduce (L9 Architecture).",
                 breakdown: JSON.stringify(finalBreakdown),
                 detectedIdentity: regNoToSave
             },
             create: {
                 submissionId: globalSubmissionId,
                 totalMarks: calculatedTotalScore,
-                remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
+                remarks: "Graded via Atomic Map-Reduce (L9 Architecture).",
                 breakdown: JSON.stringify(finalBreakdown),
                 detectedIdentity: regNoToSave
             }
@@ -250,7 +251,6 @@ Count the valid points mathematically based on the rubric and assign the exact m
     } catch (error: any) {
         console.error("[FATAL-GRADING] Streaming API Failed:", error);
 
-        // Use the globally scoped submission ID to update the database without calling req.json() again
         try {
             if (globalSubmissionId) {
                 await prisma.submission.update({
