@@ -124,6 +124,42 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
+        // W3 Optimization: Pre-Chunking the OCR Text into a structured map
+        // to prevent Context Bloat and "Lost in the Middle" hallucination loops.
+        console.log(`[GRADING] Pre-chunking student exam text to reduce token bloat...`);
+        let structuredStudentAnswers: Record<string, string> = {};
+        try {
+            // First, ask Gemini to map the student's raw text to the known question IDs from the rubric.
+            const allQuestionIds = parsedRubricItems.map(item => item.questionId);
+
+            // We use a dynamic Zod schema to force it to return a dictionary of strings.
+            // We generate the schema keys from the rubric array dynamically.
+            const shape: Record<string, any> = {};
+            for (const qId of allQuestionIds) {
+                shape[qId] = z.string().describe(`The student's answer for question ${qId}. If missing, return an empty string.`);
+            }
+            const preChunkSchema = z.object(shape);
+
+            const chunkingResponse = await generateObject({
+                model: google('gemini-2.5-pro'),
+                system: `You are an expert data collator. You have been given a student's full raw exam text and a list of specific question IDs from the marking scheme.
+
+YOUR TASK: Map the student's answers to the correct question IDs.
+- Some answers might be scattered. Gather all parts of a student's answer for a specific question ID and concatenate them.
+- If a student did not answer a specific question ID, return an empty string "" for that key.
+- DO NOT invent answers. Simply copy the student's text exactly into the matching field.`,
+                prompt: `QUESTION IDs TO FIND: ${allQuestionIds.join(", ")}\n\nSTUDENT FULL EXAM TEXT:\n"""\n${submission.ocrText}\n"""`,
+                schema: preChunkSchema,
+                temperature: 0.0,
+            });
+            structuredStudentAnswers = chunkingResponse.object;
+            console.log(`[GRADING] Successfully pre-chunked answers. Ready for focused evaluation.`);
+        } catch (e) {
+            console.error(`[GRADING] Pre-chunking failed. Falling back to Full Text Context.`, e);
+            // If it fails, we fall back to just passing the whole text
+            structuredStudentAnswers = {};
+        }
+
         // We use p-limit to batch questions. Batch of 5 to balance Vercel timeout and Rate Limits.
         const limit = pLimit(5);
 
@@ -140,7 +176,7 @@ export async function POST(req: NextRequest) {
             limit(async () => {
                 const chunkJsonString = JSON.stringify(chunk, null, 2);
                 const systemPrompt = `You are an expert University Professor grading an exam.
-You have been provided with a specific set of Questions from the Marking Scheme and the Student's Full Exam Text.
+You have been provided with a specific set of Questions from the Marking Scheme and the Student's Answers for those specific questions.
 
 YOUR GOAL: To grade ONLY the specific questions provided in the chunk against the student's answers. Do not grade any other questions.
 
@@ -148,14 +184,24 @@ CRITICAL RULES:
 1. EVALUATE SEMANTICS, NOT JUST SYNTAX: Award full marks if the student has demonstrated an understanding of the concept using their own words or synonyms.
 2. CHAIN OF THOUGHT: You MUST explicitly think step-by-step in the 'thoughtProcess' field BEFORE awarding a score.
 3. CALCULATIONS: If a question involves math, follow the student's steps. Award partial or full marks based on their logical steps and final answer as dictated by standard grading practices. Explain this in your thought process.
-4. UNANSWERED: If the student did not answer a question in your chunk, give it a score of 0 and note "Not answered" in feedback.
+4. UNANSWERED: If the student's answer text is empty or blank, give it a score of 0 and note "Not answered" in feedback.
 
 RUBRIC CHUNK TO GRADE:
 """
 ${chunkJsonString}
 """`;
 
-                const userPrompt = `STUDENT FULL EXAM TEXT:\n${submission.ocrText}`;
+                // Reconstruct the user prompt based on Pre-Chunking success
+                let userPrompt = "STUDENT EXAM TEXT FOR THESE QUESTIONS:\n";
+                if (Object.keys(structuredStudentAnswers).length > 0) {
+                    for (const rubricItem of chunk) {
+                         const studentAns = structuredStudentAnswers[rubricItem.questionId] || "No answer provided by student.";
+                         userPrompt += `--- Answer for ${rubricItem.questionId} ---\n${studentAns}\n\n`;
+                    }
+                } else {
+                    // Fallback to the whole giant text if chunking failed
+                    userPrompt = `STUDENT FULL EXAM TEXT:\n${submission.ocrText}`;
+                }
 
                 // Use a model configuration that defines generation parameters dynamically
                 // We use the raw generative-ai wrapper or pass via provider settings to bypass type locks
