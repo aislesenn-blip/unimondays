@@ -41,12 +41,20 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                 base64Images.push(await fileToBase64(selectedFile));
             }
 
-            const rubricItemsRes = await fetch(`/api/work-sessions/${workSessionId}`);
-            if (!rubricItemsRes.ok) throw new Error("Failed to fetch work session data");
-            const rubricData = await rubricItemsRes.json();
+            // TUMIA NJIA MPYA SALAMA INAYOZUIA 403 FORBIDDEN
+            console.log("Stage 2: Fetching Safe Question IDs...");
+            const questionsRes = await fetch(`/api/student/get-questions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ workSessionId })
+            });
 
-            const rawTargetQuestions = (JSON.parse(rubricData.rubric || "[]")).map((i: any) => i.qId || i.questionId);
-            const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
+            if (!questionsRes.ok) throw new Error("Imeshindwa kuvuta orodha ya maswali. Seva imegoma.");
+
+            const { questionIds } = await questionsRes.json();
+
+            // Normalize IDs tayari kwa AI Extraction
+            const targetQuestions = questionIds.map((id: string) => normalizeQuestionId(id));
 
             const apiKey = await getClientGeminiKey();
             const extractedMap = await extractStudentExamsClient(base64Images, targetQuestions, apiKey);
