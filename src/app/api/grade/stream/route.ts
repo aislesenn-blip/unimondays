@@ -3,6 +3,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import pLimit from 'p-limit';
 
 export const maxDuration = 300;
 
@@ -83,10 +84,12 @@ export async function POST(req: NextRequest) {
 Your task is to scan the entire student's exam text and strictly map their written answers to the Expected Question IDs: [${rubricQuestionIds}].
 
 COGNITIVE ROUTING DIRECTIVES:
-1. STRICT DEMARCATION: Isolate the text meant for each specific question. Do not allow answers to bleed into one another.
-2. CONTEXT PRESERVATION: If a student scattered their answer for Q1 across multiple pages, intelligently stitch those exact parts together into a single string.
-3. ZERO HALLUCINATION & NO GRADING: Do NOT correct their spelling. Do NOT grade. Your ONLY job is to extract verbatim what they wrote and route it.
-4. ABSENCE HANDLING: If the student completely skipped a question, you MUST return an empty string ("") for that Question ID.`;
+1. HANDLE OCR TYPOS & MESSY HANDWRITING: Students often have terrible handwriting which causes OCR typos (e.g., 'A i)' might look like 'A :)' or '4)', 'A ii)' might look like 'A it)'). You must use contextual clues and margin numbers to map every single block of text to the correct questionId.
+2. OUT-OF-ORDER ANSWERS: Students often answer questions out of order (e.g., Q6, then Q3, then Q2). Pay close attention to the visual markdown demarcations (\`=== QUESTION X ===\`) and margin notes to correctly group the text.
+3. STRICT DEMARCATION: Isolate the text meant for each specific question based on visual boundaries and context. Do not allow answers to bleed into one another.
+4. CONTEXT PRESERVATION: If a student scattered their answer for Q1 across multiple pages, intelligently stitch those exact parts together into a single string.
+5. ZERO HALLUCINATION & NO GRADING: Do NOT correct their spelling. Do NOT grade. Your ONLY job is to extract verbatim what they wrote and route it.
+6. ABSENCE HANDLING: If the student completely skipped a question, you MUST return an empty string ("") for that Question ID.`;
 
         const { object: routingObject } = await generateObject({
             model: google('gemini-2.5-pro'),
@@ -107,15 +110,30 @@ COGNITIVE ROUTING DIRECTIVES:
         console.log(`[GRADING] Commencing Isolated Parallel Grading...`);
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
-        const CONCURRENCY_LIMIT = 3;
 
-        for (let i = 0; i < parsedRubricItems.length; i += CONCURRENCY_LIMIT) {
-            const batch = parsedRubricItems.slice(i, i + CONCURRENCY_LIMIT);
-            const batchPromises = batch.map(async (rubricItem: any) => {
-                const trueMax = Number(rubricItem.maxScore);
-                const isolatedStudentAnswer = studentAnswersDict[rubricItem.questionId] || "";
+        const limit = pLimit(5); // Process up to 5 questions concurrently
 
-                if (isolatedStudentAnswer === "") {
+        const gradingPromises = parsedRubricItems.map((rubricItem: any) => limit(async () => {
+            const trueMax = Number(rubricItem.maxScore);
+            let isolatedStudentAnswer = studentAnswersDict[rubricItem.questionId] || "";
+
+            // SAFETY FALLBACK: If the Semantic Router missed it, but the question ID appears in the raw OCR text,
+            // do not give a 0. Instead, pass the entire raw text (or a hint) to the grading engine so it can search for the answer itself.
+            if (isolatedStudentAnswer === "") {
+                // Extract base question number (e.g. from "3Ai" -> "3", or "1Bii" -> "1")
+                const match = rubricItem.questionId.match(/^(\d+)/);
+                const baseQNum = match ? match[1] : null;
+
+                const mightHaveAnswer = (
+                    studentText.includes(rubricItem.questionId) ||
+                    (baseQNum && (studentText.includes(`0${baseQNum} Question`) || studentText.includes(`${baseQNum} Question`))) ||
+                    studentText.includes(`=== QUESTION ${baseQNum} ===`)
+                );
+
+                if (mightHaveAnswer) {
+                    console.warn(`[SAFETY FALLBACK] Semantic Router returned empty for ${rubricItem.questionId}, but text indicates it might exist. Falling back to FULL text search.`);
+                    isolatedStudentAnswer = studentText; // Provide the full text as a fallback
+                } else {
                     return {
                         question: rubricItem.questionId,
                         thoughtProcess: "Execution Halted: The Semantic Router confirmed the student did not attempt this question. No grading API call made.",
@@ -125,8 +143,9 @@ COGNITIVE ROUTING DIRECTIVES:
                         evidenceSnippet: "None"
                     };
                 }
+            }
 
-                const systemPrompt = `You are a Global Examination Evaluation Engine. Your goal is to provide a highly accurate, fair, and evidence-based score for any academic subject.
+            const systemPrompt = `You are a Global Examination Evaluation Engine. Your goal is to provide a highly accurate, fair, and evidence-based score for any academic subject.
 
 CURRENT CONTEXT:
 - Target Question ID: ${rubricItem.questionId}
@@ -145,54 +164,53 @@ SCORING CONSTRAINTS:
 - DO NOT INVENT DECIMALS. Use only whole numbers or 0.5 increments.
 - Under no circumstances shall the score exceed ${trueMax}.`;
 
-                const userPrompt = `EXPECTED RUBRIC:\n${rubricItem.rubricSegment}\n\nSTUDENT ISOLATED ANSWER:\n${isolatedStudentAnswer}`;
+            const userPrompt = `EXPECTED RUBRIC:\n${rubricItem.rubricSegment}\n\nSTUDENT ISOLATED ANSWER:\n${isolatedStudentAnswer}`;
 
-                let retries = 2;
-                while (retries > 0) {
-                    try {
-                        const { object } = await generateObject({
-                            model: google('gemini-2.5-pro'),
-                            system: systemPrompt,
-                            prompt: userPrompt,
-                            schema: singleQuestionSchema,
-                            temperature: 0.0,
-                        });
+            let retries = 2;
+            while (retries > 0) {
+                try {
+                    const { object } = await generateObject({
+                        model: google('gemini-2.5-pro'),
+                        system: systemPrompt,
+                        prompt: userPrompt,
+                        schema: singleQuestionSchema,
+                        temperature: 0.0,
+                    });
 
-                        let safeScore = Math.max(0, Math.min(object.score, trueMax));
-                        safeScore = Math.round(safeScore * 2) / 2;
+                    let safeScore = Math.max(0, Math.min(object.score, trueMax));
+                    safeScore = Math.round(safeScore * 2) / 2;
 
-                        return {
-                            question: rubricItem.questionId,
-                            thoughtProcess: object.thoughtProcess,
-                            score: safeScore,
-                            max: trueMax,
-                            feedback: object.feedback,
-                            evidenceSnippet: object.evidenceSnippet
-                        };
-                    } catch (err: any) {
-                        const errMsg = err?.message || String(err);
-                        if (errMsg.includes('429') || errMsg.includes('timeout') || errMsg.includes('fetch failed') || errMsg.includes('Overloaded')) {
-                            retries--;
-                            console.warn(`[GRADING] Transient error for Q ${rubricItem.questionId}. Retries left: ${retries}.`);
-                            if (retries === 0) throw err;
-                            await new Promise(res => setTimeout(res, 2000));
-                        } else { throw err; }
-                    }
+                    return {
+                        question: rubricItem.questionId,
+                        thoughtProcess: object.thoughtProcess,
+                        score: safeScore,
+                        max: trueMax,
+                        feedback: object.feedback,
+                        evidenceSnippet: object.evidenceSnippet
+                    };
+                } catch (err: any) {
+                    const errMsg = err?.message || String(err);
+                    if (errMsg.includes('429') || errMsg.includes('timeout') || errMsg.includes('fetch failed') || errMsg.includes('Overloaded')) {
+                        retries--;
+                        console.warn(`[GRADING] Transient error for Q ${rubricItem.questionId}. Retries left: ${retries}.`);
+                        if (retries === 0) throw err;
+                        await new Promise(res => setTimeout(res, 2000));
+                    } else { throw err; }
                 }
-            });
+            }
+        }));
 
-            const batchResults = await Promise.allSettled(batchPromises);
-            batchResults.forEach((result, index) => {
-                if (result.status === 'fulfilled' && result.value) {
-                    finalBreakdown.push(result.value);
-                    calculatedTotalScore += (result.value as any).score;
-                } else {
-                    const failedItem = batch[index];
-                    console.error(`[GRADING] Final failure grading question ${failedItem.questionId}`);
-                    finalBreakdown.push({ question: failedItem.questionId, thoughtProcess: "System failed to grade this specific question.", score: 0, max: Number(failedItem.maxScore) || 0, feedback: "API Error encountered.", evidenceSnippet: "" });
-                }
-            });
-        }
+        const batchResults = await Promise.allSettled(gradingPromises);
+        batchResults.forEach((result, index) => {
+            if (result.status === 'fulfilled' && result.value) {
+                finalBreakdown.push(result.value);
+                calculatedTotalScore += (result.value as any).score;
+            } else {
+                const failedItem = parsedRubricItems[index];
+                console.error(`[GRADING] Final failure grading question ${failedItem.questionId}`);
+                finalBreakdown.push({ question: failedItem.questionId, thoughtProcess: "System failed to grade this specific question.", score: 0, max: Number(failedItem.maxScore) || 0, feedback: "API Error encountered.", evidenceSnippet: "" });
+            }
+        });
 
         // ============================================================================
         // 🆔 IDENTITY EXTRACTION (USING PRO MODEL)

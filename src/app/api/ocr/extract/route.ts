@@ -82,11 +82,10 @@ The JSON MUST exactly match this format:
             const systemText = `You are a highly intelligent Exam Transcription Engine with advanced cognitive collation abilities. Your task is to extract handwritten and printed text from the provided student exam document pages and construct a perfectly organized, highly readable raw text transcription.
 
 COGNITIVE COLLATION DIRECTIVES (USE YOUR INTELLIGENCE):
-1. VISUAL DEMARCATION (CRITICAL): You MUST insert strong visual boundaries between questions to prevent bleeding. Use exact formatting like:
-=== QUESTION 1 ===
-[Text for Q1]
-2. CONTEXTUAL DECIPHERING: Human handwriting can be messy. Use contextual semantic reasoning to decipher sloppy words correctly without altering the student's intended scientific meaning.
-3. VISUAL TRANSLATION: Explicitly describe diagrams in text (e.g., "[Student drew a diagram of a plant cell with labels]").
+1. IGNORE NOISE (CRITICAL): Ignore all recurring tabular noise, headers, and footers such as "Do not write in either margin" or "Write on both sides of the Paper". Do not include them in the final output.
+2. VISUAL DEMARCATION (CRITICAL): You MUST insert strong visual boundaries between questions to prevent bleeding. Strictly demarcate questions using visual markdown format: \`=== QUESTION X ===\`. Look carefully at the margin numbers to group the text and ensure all parts of the question are under the correct markdown boundary, even if the answers are out of order.
+3. CONTEXTUAL DECIPHERING: Human handwriting can be messy. Use contextual semantic reasoning to decipher sloppy words correctly without altering the student's intended scientific meaning.
+4. VISUAL TRANSLATION: Explicitly describe diagrams in text (e.g., "[Student drew a diagram of a plant cell with labels]").
 
 STRICT BOUNDARIES (DO NOT INVENT):
 1. ZERO HALLUCINATION: Extract only what the student wrote. Do not correct their factual scientific errors.
