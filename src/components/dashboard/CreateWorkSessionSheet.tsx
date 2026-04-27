@@ -12,18 +12,15 @@ import { toast } from "sonner";
 import { Plus, UploadCloud, Loader2, Edit3, CheckCircle2, Trash2 } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase-client";
 import { v4 as uuidv4 } from "uuid";
-import { convertPdfToImagesClient, fileToBase64, optimizeMarkingSchemeClient } from "@/lib/ai/client-engine";
 
 interface CreateWorkSessionSheetProps {
   classId: string;
 }
 
 interface RubricItem {
-  qId?: string;
-  questionId?: string; // fallback
+  questionId: string;
   maxScore: number;
-  rubricSegment?: string; // fallback
-  criteria?: any[]; // new atomic format
+  rubricSegment: string;
 }
 
 export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps) {
@@ -45,37 +42,36 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
   const handleFileProcess = async (file: File) => {
     setUploading(true);
     try {
-      // 1. Convert to Base64 Images Client-Side
-      let base64Images: string[] = [];
-      if (file.type === "application/pdf") {
-          base64Images = await convertPdfToImagesClient(file);
-      } else if (file.type.startsWith("image/")) {
-          const b64 = await fileToBase64(file);
-          base64Images.push(b64);
-      } else {
-          throw new Error("Invalid file type.");
-      }
-
-      // 2. Client-Side AI Optimization Call
-      const parsedItems = await optimizeMarkingSchemeClient(base64Images);
-
-      // 3. Upload raw file to Supabase for storage
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `rubrics/${classId}/${filename}`;
+
       const { error: uploadError } = await supabaseClient.storage.from('exam_pdfs').upload(filePath, file);
 
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-      // 4. Update UI state
+      const ocrRes = await fetch("/api/ocr/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath, isRubric: true }),
+      });
+
+      const ocrData = await ocrRes.json();
+      if (!ocrRes.ok) throw new Error(ocrData.error || "Failed to extract text from document.");
+
       setValue("markingScheme", filePath);
 
-      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
-          setRubricItems(parsedItems);
-          setIsRubricParsed(true);
-          setValue("totalMarks", parsedItems.reduce((sum, item) => sum + Number(item.maxScore || 0), 0));
-          toast.success("Marking Scheme Extracted Successfully!");
-      } else {
-          throw new Error("AI failed to return valid grading criteria.");
+      try {
+         const parsed = JSON.parse(ocrData.text);
+         if (Array.isArray(parsed)) {
+             setRubricItems(parsed);
+             setIsRubricParsed(true);
+             setValue("totalMarks", parsed.reduce((sum, item) => sum + Number(item.maxScore), 0));
+             toast.success("Marking Scheme Extracted Successfully!");
+         } else {
+             throw new Error("Extracted format is not an array");
+         }
+      } catch (parseErr) {
+          throw new Error("AI failed to return a strict JSON array. Please ensure the document is clear.");
       }
 
     } catch (error: any) {
@@ -96,9 +92,9 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
   };
 
   const updateRubricItem = (index: number, field: keyof RubricItem, value: any) => {
-      const newItems = [...rubricItems] as any[];
+      const newItems = [...rubricItems];
       if (field === 'maxScore') newItems[index][field] = Number(value) || 0;
-      else newItems[index][field] = value;
+      else newItems[index][field] = value as string;
       setRubricItems(newItems);
       setValue("totalMarks", newItems.reduce((sum, item) => sum + Number(item.maxScore), 0));
   };
@@ -207,25 +203,20 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
                               <div key={index} className="flex gap-3 items-start p-3 bg-background border rounded shadow-sm">
                                   <div className="flex-1 space-y-2">
                                       <div className="flex gap-2">
-                                          <Input value={item.qId || item.questionId || ""} onChange={(e) => updateRubricItem(index, 'qId', e.target.value)} className="w-24 h-8 text-sm font-semibold" placeholder="Q ID" />
+                                          <Input value={item.questionId} onChange={(e) => updateRubricItem(index, 'questionId', e.target.value)} className="w-24 h-8 text-sm font-semibold" placeholder="Q ID" />
                                           <div className="relative w-24">
                                               <Input type="number" step="0.5" value={item.maxScore} onChange={(e) => updateRubricItem(index, 'maxScore', e.target.value)} className="pl-2 pr-8 h-8 text-sm" placeholder="Score" />
                                               <span className="absolute right-2 top-1.5 text-xs text-muted-foreground">pts</span>
                                           </div>
                                       </div>
-                                      <Textarea
-                                          value={item.criteria ? (typeof item.criteria === 'string' ? item.criteria : JSON.stringify(item.criteria, null, 2)) : (item.rubricSegment || "")}
-                                          onChange={(e) => updateRubricItem(index, item.criteria ? 'criteria' : 'rubricSegment', e.target.value)}
-                                          className="min-h-[60px] text-xs resize-y font-mono"
-                                          placeholder="Expected answer or rubric details..."
-                                      />
+                                      <Textarea value={item.rubricSegment} onChange={(e) => updateRubricItem(index, 'rubricSegment', e.target.value)} className="min-h-[60px] text-xs resize-y" placeholder="Expected answer or rubric details..." />
                                   </div>
                                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => removeRubricItem(index)}><Trash2 className="h-4 w-4" /></Button>
                               </div>
                           ))}
                       </div>
                       <div className="flex justify-between mt-2 pt-2 border-t">
-                          <Button type="button" variant="outline" size="sm" onClick={() => { setRubricItems([...rubricItems, { qId: `Q${rubricItems.length + 1}`, maxScore: 1, criteria: [] }]); }}><Plus className="w-3 h-3 mr-1" /> Add Question</Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => { setRubricItems([...rubricItems, { questionId: `Q${rubricItems.length + 1}`, maxScore: 1, rubricSegment: "" }]); }}><Plus className="w-3 h-3 mr-1" /> Add Question</Button>
                           <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setRubricItems([]); setIsRubricParsed(false); }}><Edit3 className="w-3 h-3 mr-1" /> Re-upload</Button>
                       </div>
                   </div>
