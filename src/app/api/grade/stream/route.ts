@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
                 normalizedStudentAnswers[normalizeQuestionId(key)] = val;
             }
 
-            const gradingPromises = parsedRubricItems.map(rubricItem => {
+            const gradingPromises = parsedRubricItems.map((rubricItem: any) => {
                 return limit(async () => {
                     const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;

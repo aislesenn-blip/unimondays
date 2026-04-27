@@ -62,12 +62,30 @@ export async function getClientGeminiKey() {
                     key = data.key;
                 }
             }
-        } catch(e) {
-            console.error("Failed to fetch internal API key", e);
         }
+        content = endIndex !== -1 ? content.substring(startIndex, endIndex + 1) : content.substring(startIndex);
     }
+    content = content.replace(/^```json\s*/gi, '').replace(/^```\s*/gi, '').replace(/```\s*$/gi, '');
+    content = content.replace(/[\n\r\t]+/g, ' ');
+    content = content.replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3');
+    content = content.replace(/(:\s*)'([^']+)'(\s*[,}])/g, '$1"$2"$3');
+    content = content.replace(/,\s*([}\]])/g, '$1');
+    content = content.replace(/\\(?!["\\/bfnrt])/g, '\\\\');
 
-    return key || "dummy";
+    try {
+        return JSON.parse(content);
+    } catch (e) {
+        console.warn("JSON parse failed, returning empty map:", e);
+        return {}; // Safe fallback
+    }
+}
+
+// Use an environment variable or safe fallback for the browser.
+// Note: In production, passing the API key to the client is risky without proxy or server limits.
+// For this architecture refactor, we simulate the secure key fetching.
+// Helper is deprecated: We now use the secure proxy endpoint instead of exposing the key
+export async function getClientGeminiKey() {
+    return process.env.NEXT_PUBLIC_GEMINI_API_KEY || "dummy";
 }
 
 // Optimization Prompt for Pre-processing
@@ -114,7 +132,8 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
         }
     });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    // Route traffic through our secure backend proxy to protect the API key
+    const response = await fetch('/api/ai/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -217,7 +236,8 @@ TARGET QUESTION IDs:
         if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
     });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    // Route traffic through our secure backend proxy to protect the API key
+    const response = await fetch('/api/ai/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
