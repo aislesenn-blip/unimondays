@@ -75,12 +75,6 @@ export function DashboardSidebar({ className, collapsed = false, onToggleCollaps
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-3">
-          {!collapsed && (
-            <div className="mb-6 px-1">
-               <ScriptsUsageMeter />
-            </div>
-          )}
-
           <nav className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
@@ -131,19 +125,11 @@ export function DashboardSidebar({ className, collapsed = false, onToggleCollaps
         </div>
 
         <div className="border-t p-4">
-          <div className={cn("flex items-center gap-3 mb-4", collapsed ? "justify-center" : "px-2")}>
-            <img
-              src={displayUser.avatar}
-              alt={displayUser.fullName || "User"}
-              className="h-10 w-10 rounded-full object-cover border border-border shrink-0"
-            />
-            {!collapsed && (
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-sm font-medium truncate">{displayUser.fullName}</span>
-                <span className="text-xs text-muted-foreground truncate">{displayUser.institution}</span>
+          {!collapsed && (
+              <div className="flex flex-col overflow-hidden mb-4 px-2">
+                <span className="text-sm font-semibold truncate text-foreground">{displayUser.fullName}</span>
               </div>
-            )}
-          </div>
+          )}
 
           <button
             onClick={handleLogout}

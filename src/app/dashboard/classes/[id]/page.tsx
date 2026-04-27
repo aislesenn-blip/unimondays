@@ -76,7 +76,9 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between border-b pb-6">
         <div>
-            <h1 className="text-3xl font-bold tracking-tight">{classItem.code}</h1>
+            <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold tracking-tight">{classItem.code}</h1>
+            </div>
             <p className="text-muted-foreground mt-1">{classItem.name}</p>
         </div>
         <div className="flex gap-2">
