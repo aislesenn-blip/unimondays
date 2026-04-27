@@ -10,6 +10,13 @@ import { normalizeQuestionId } from "@/lib/ai/client-engine";
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
+// Replicate normalizeQuestionId here because client-engine.ts imports pdfjsLib which might not run properly in Edge or Node without extra setup.
+const normalizeQuestionId = (id: string): string => {
+    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || 'dummy',
   baseURL: "https://generativelanguage.googleapis.com/v1beta/",
