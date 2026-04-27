@@ -1,212 +1,103 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-    convertPdfToImagesClient,
-    fileToBase64,
-    extractStudentExamsClient,
-    normalizeQuestionId
+import { 
+    getClientGeminiKey, 
+    convertPdfToImagesClient, 
+    fileToBase64, 
+    extractStudentExamsClient, 
+    normalizeQuestionId 
 } from "@/lib/ai/client-engine";
 import { supabaseClient } from "@/lib/supabase-client";
-import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { Upload, FileText, AlertTriangle } from "lucide-react";
-import { toast } from "sonner";
-import { v4 as uuidv4 } from "uuid";
 
 interface SubmissionDrawerProps {
-  session: any;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+    workSessionId: string;
 }
 
-export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: SubmissionDrawerProps) {
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+export function SubmissionDrawer({ workSessionId }: SubmissionDrawerProps) {
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "uploading" | "success" | "error">("idle");
 
-  const handleSubmit = async () => {
-    if (!file) return;
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setSelectedFile(e.target.files[0]);
+        }
+    };
 
-    setLoading(true);
-    try {
-      let base64Images: string[] = [];
-      if (file.type === 'application/pdf') {
-          base64Images = await convertPdfToImagesClient(file);
-      } else {
-          base64Images.push(await fileToBase64(file));
-      }
+    const handleUploadClick = async () => {
+        if (!selectedFile) return;
+        setLoadingState("extracting");
+        
+        try {
+            let base64Images: string[] = [];
+            if (selectedFile.type === 'application/pdf') {
+                base64Images = await convertPdfToImagesClient(selectedFile);
+            } else {
+                base64Images.push(await fileToBase64(selectedFile));
+            }
 
-      const rubricItemsRes = await fetch(`/api/work-sessions/${session.id}`);
-      if (!rubricItemsRes.ok) throw new Error("Failed to load work session context.");
+            const rubricItemsRes = await fetch(`/api/work-sessions/${workSessionId}`);
+            if (!rubricItemsRes.ok) throw new Error("Failed to fetch work session data");
+            const rubricData = await rubricItemsRes.json();
+            
+            const rawTargetQuestions = (rubricData.rubricData || JSON.parse(rubricData.rubricText || "[]")).map((i: any) => i.qId || i.questionId);
+            const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
 
-      const rubricData = await rubricItemsRes.json();
+            const apiKey = await getClientGeminiKey();
+            const extractedMap = await extractStudentExamsClient(base64Images, targetQuestions, apiKey);
 
-      let rawTargetQuestions: string[] = [];
-      try {
-          const parsedRubric = JSON.parse(rubricData.rubricText || "[]");
-          rawTargetQuestions = parsedRubric.map((item: any) => item.questionId);
-      } catch (e) {
-          if (Array.isArray(rubricData.rubricData)) {
-               rawTargetQuestions = rubricData.rubricData.map((item: any) => item.qId);
-          }
-      }
+            setLoadingState("uploading");
+            
+            // TUMETUMIA SUPABASE CLIENT MOJA KWA MOJA KUZUIA ERROR
+            const fileExt = selectedFile.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `submissions/${fileName}`;
+            
+            const { error: uploadError } = await supabaseClient.storage
+                .from("exam_pdfs")
+                .upload(filePath, selectedFile);
 
-      const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
+            if (uploadError) throw new Error(`Supabase upload failed: ${uploadError.message}`);
 
-      const extractedTextMap = await extractStudentExamsClient(base64Images, targetQuestions);
+            const res = await fetch("/api/student/upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    workSessionId,
+                    extractedText: JSON.stringify([extractedMap]), 
+                    filePath
+                }),
+            });
 
-      const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const filePath = `submissions/${filename}`;
+            if (!res.ok) throw new Error("Backend upload failed");
+            setLoadingState("success");
+            
+        } catch (err) { 
+            console.error("Submission processing failed:", err);
+            setLoadingState("error");
+        }
+    };
 
-      const { error: uploadError } = await supabaseClient
-        .storage
-        .from('exam_pdfs')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      const res = await fetch("/api/student/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          extractedText: JSON.stringify([extractedTextMap]), // Send the map to backend Evaluator
-          filePath,
-          workSessionId: session.id,
-          filename: file.name
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.error || "Submission failed");
-        return;
-      }
-
-      toast.success("Submitted! Grading is happening in the background.");
-
-      onSuccess();
-      onOpenChange(false);
-      setFile(null); // Reset file
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "An unexpected error occurred during submission");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!session) return null;
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[90vh] sm:h-auto sm:max-h-[90vh] overflow-y-auto">
-        <div className="mx-auto w-full max-w-lg">
-          <SheetHeader>
-            <SheetTitle>Submit your work</SheetTitle>
-            <SheetDescription>
-                {session.title} • {session.lecturerName}
-                <br />
-                Due {new Date(session.deadline).toLocaleString()}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="py-6 space-y-6">
-            {session.isOverdue && (
-                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    Deadline has passed. Late submissions may be penalized.
-                </div>
-            )}
-
-            {session.instructions && (
-                <div className="bg-muted/50 p-4 rounded-lg text-sm">
-                    <div className="font-semibold mb-1">Instructions:</div>
-                    {session.instructions}
-                </div>
-            )}
-
-            <div className="relative border-2 border-dashed rounded-xl p-10 text-center hover:bg-muted/50 transition-colors cursor-pointer group">
-                <input
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    onChange={(e) => {
-                        const selected = e.target.files?.[0];
-                        if (selected) {
-                            if (selected.size > 20 * 1024 * 1024) {
-                                toast.error("File is too large. Please upload a file smaller than 20MB.");
-                                e.target.value = "";
-                                setFile(null);
-                                return;
-                            }
-                            const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-                            if (!allowedTypes.includes(selected.type)) {
-                                toast.error("Invalid file type. Only PDF, PNG, and JPG are allowed.");
-                                e.target.value = "";
-                                setFile(null);
-                                return;
-                            }
-                            setFile(selected);
-                        } else {
-                            setFile(null);
-                        }
-                    }}
-                />
-                <div className="flex flex-col items-center gap-3 pointer-events-none">
-                    {file ? (
-                        <>
-                            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                                <FileText className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <div className="font-medium text-foreground">{file.name}</div>
-                                <div className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
-                                <Upload className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <div className="font-medium text-foreground">Click to Upload</div>
-                                <div className="text-xs text-muted-foreground">PDF, PNG, JPG (Max 20MB)</div>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-          </div>
-
-          <SheetFooter className="sm:justify-between gap-4">
-             <SheetClose asChild>
-              <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
-            </SheetClose>
-            <Button onClick={handleSubmit} disabled={!file || loading} className="w-full sm:w-auto relative">
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                    Analyzing & Submitting...
-                  </span>
-                ) : "Submit Assignment"}
-            </Button>
-          </SheetFooter>
+    return (
+        <div className="p-6 bg-white rounded-lg shadow-md max-w-md mx-auto mt-10">
+            <h2 className="text-xl font-bold mb-4">Submit Your Exam</h2>
+            <input 
+                type="file" 
+                accept="application/pdf,image/*" 
+                onChange={handleFileChange} 
+                className="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            />
+            <button 
+                onClick={handleUploadClick} 
+                disabled={!selectedFile || loadingState === "extracting" || loadingState === "uploading"}
+                className="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md disabled:bg-gray-400"
+            >
+                {loadingState === "idle" && "Upload and Grade"}
+                {loadingState === "extracting" && "Analyzing Document..."}
+                {loadingState === "uploading" && "Submitting..."}
+                {loadingState === "success" && "Submission Complete!"}
+                {loadingState === "error" && "Upload Failed. Try Again."}
+            </button>
         </div>
-      </SheetContent>
-    </Sheet>
-  );
+    );
 }

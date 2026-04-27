@@ -7,26 +7,24 @@ import pLimit from 'p-limit';
 
 export const maxDuration = 300;
 
-const normalizeQuestionId = (id: string): string => {
-    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-};
-
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const atomicGradingSchema = z.object({
     thoughtProcess: z.string(),
-    scoresArray: z.array(z.number()),
+    scoresArray: z.array(z.number()), 
     feedback: z.string(),
     evidenceSnippet: z.string()
 });
 
 export async function POST(req: NextRequest) {
-    let globalSubmissionId: string = "";
-
+    // THE FIX: Tumebadilisha kutoka 'string | null' kuwa 'string' tu kuzuia TypeScript Error
+    let globalSubmissionId: string = ""; 
+    
     try {
         const body = await req.json();
         globalSubmissionId = body.submissionId;
 
+        // THE FIX: Guard clause kuhakikisha ID ipo kabla ya kwenda Prisma
         if (!globalSubmissionId) {
             return NextResponse.json({ error: "Submission ID is required" }, { status: 400 });
         }
@@ -35,21 +33,17 @@ export async function POST(req: NextRequest) {
             where: { id: globalSubmissionId },
             include: { workSession: true }
         });
-
+        
         if (!submission || !submission.workSession) {
             throw new Error("Submission or WorkSession not found");
         }
 
-        // Bypass TypeScript strict typing temporarily to guarantee a successful Vercel Build.
-        // Agent should align 'rubricData' with the exact column name in schema.prisma.
-        const workSessionAny = submission.workSession as any;
-        const rawRubric = workSessionAny.rubric || workSessionAny.rubricData || workSessionAny.rubricText || "[]";
-        const parsedRubricItems = JSON.parse(rawRubric as string);
-
+        const parsedRubricItems = JSON.parse(submission.workSession.rubricData as string || "[]");
+        
         let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
         let parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
 
-        const limit = pLimit(10);
+        const limit = pLimit(10); 
 
         const normalizedStudentAnswers: Record<string, string> = {};
         for (const [key, val] of Object.entries(parsedStudentAnswers)) {
@@ -61,14 +55,14 @@ export async function POST(req: NextRequest) {
                 const originalQId = rubricItem.qId || rubricItem.questionId;
                 const maxScore = rubricItem.maxScore;
                 const normalizedTargetId = normalizeQuestionId(originalQId);
-
+                
                 let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
 
                 if (studentAnswerForQ === undefined) {
                     const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
                     studentAnswerForQ = fallbackKey ? normalizedStudentAnswers[fallbackKey] : "";
                 }
-
+                
                 if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
                     return { question: originalQId, score: 0, thoughtProcess: "Answer completely missing or skipped.", feedback: "No answer provided.", max: maxScore, evidenceSnippet: "None" };
                 }
@@ -92,11 +86,11 @@ STUDENT ANSWER: ${studentAnswerForQ}
                             schema: atomicGradingSchema,
                             temperature: 0.0,
                         });
-
+                        
                         let rawSum = object.scoresArray.reduce((sum, val) => sum + val, 0);
                         finalScore = Math.max(0, Math.min(rawSum, maxScore));
                         gradingObject = { thoughtProcess: object.thoughtProcess, feedback: object.feedback, evidenceSnippet: object.evidenceSnippet };
-                        break;
+                        break; 
                     } catch (err: any) {
                         attempt++;
                         if (attempt >= 3) {
