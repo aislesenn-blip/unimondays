@@ -130,35 +130,54 @@ Example Output format (Strictly JSON, no markdown):
 
         console.log("[OCR] Extraction complete.");
 
-        // For rubrics or single-batch student exams, just use the first output.
-        // For multi-batch student exams, we need to stitch the JSON back together if it was split.
-        // For simplicity right now, we will assume Gemini PRO handles 5-page chunks well and
-        // we can attempt to merge the JSON outputs if needed, or simply let the frontend handle the combined string.
-        let finalText = textOutputs.join('\n\n');
+        let finalText = "";
 
-        try {
-            // Ensure it's clean JSON by stripping markdown if Gemini disobeys
-            const cleanJson = finalText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        if (isRubric) {
+            // Rubrics expect an Array. Stitch multiple arrays together.
+            try {
+                let mergedRubric: any[] = [];
+                for (const text of textOutputs) {
+                    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(cleanJson);
+                    if (Array.isArray(parsed)) mergedRubric.push(...parsed);
+                }
+                if (mergedRubric.length === 0) throw new Error("No array found");
+                finalText = JSON.stringify(mergedRubric);
+            } catch (e) {
+                console.warn("[OCR] Rubric array stitching failed. Falling back to plain text.");
+                finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
+            }
+        } else {
+            // Student exams expect an Object. Stitch multiple objects together (Semantic Router).
+            try {
+                let mergedStudentAnswers: Record<string, string> = {};
+                for (const text of textOutputs) {
+                    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    try {
+                        const parsed = JSON.parse(cleanJson);
+                        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                            // Merge keys, appending text if the question spans multiple batches
+                            for (const [key, value] of Object.entries(parsed)) {
+                                if (mergedStudentAnswers[key]) {
+                                    mergedStudentAnswers[key] += "\n\n" + String(value);
+                                } else {
+                                    mergedStudentAnswers[key] = String(value);
+                                }
+                            }
+                        }
+                    } catch (parseIterErr) {
+                        console.warn(`[OCR] Failed to parse one student batch:`, parseIterErr);
+                        // Fallback: dump unparseable batch into a generic key
+                        mergedStudentAnswers["UNPARSED_BATCH_" + Date.now()] = text;
+                    }
+                }
 
-            // Basic JSON Stitching for multi-batch arrays or objects
-            // If the user uploads a huge exam, we might get multiple valid JSON chunks.
-            // In a robust system, we would parse each one and merge the objects/arrays.
-            // For now, we attempt to parse the entire concatenated string if it's one batch,
-            // or return the cleaned string for the frontend/backend to handle.
-
-            // Try to parse just to validate if it's a clean single JSON (common for < 5 pages)
-            JSON.parse(cleanJson);
-            finalText = cleanJson;
-        } catch (e) {
-            console.error("[OCR] Failed to parse Gemini output as strict JSON:", e);
-            if (isRubric) {
-               // We don't fail hard here anymore because a 5-page batch might output multiple JSON blocks.
-               // We let the frontend/backend handle the string parsing fallback.
-               console.warn("Rubric extraction didn't parse as a single JSON object. Returning text fallback.");
-               finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
-            } else {
-               // Student text fallback
-               finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
+                if (Object.keys(mergedStudentAnswers).length === 0) throw new Error("No object found");
+                finalText = JSON.stringify(mergedStudentAnswers);
+                console.log(`[OCR] Successfully stitched student JSON into Semantic Map.`);
+            } catch (e) {
+                console.warn("[OCR] Student object stitching failed. Falling back to plain text.");
+                finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
             }
         }
 
