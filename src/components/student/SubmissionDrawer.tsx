@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
+import {
+    convertPdfToImagesClient,
+    fileToBase64,
+    extractStudentExamsClient,
+    normalizeQuestionId
+} from "@/lib/ai/client-engine";
+import { supabaseClient } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -13,9 +20,7 @@ import {
 } from "@/components/ui/sheet";
 import { Upload, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { supabaseClient } from "@/lib/supabase-client";
 import { v4 as uuidv4 } from "uuid";
-import { getClientGeminiKey, convertPdfToImagesClient, fileToBase64, extractStudentExamsClient, normalizeQuestionId } from "@/lib/ai/client-engine";
 
 interface SubmissionDrawerProps {
   session: any;
@@ -33,18 +38,13 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
     setLoading(true);
     try {
-      // 1. Convert to Base64 Images Client-Side
       let base64Images: string[] = [];
-      if (file.type === "application/pdf") {
+      if (file.type === 'application/pdf') {
           base64Images = await convertPdfToImagesClient(file);
-      } else if (file.type.startsWith("image/")) {
-          const b64 = await fileToBase64(file);
-          base64Images.push(b64);
       } else {
-          throw new Error("Invalid file type.");
+          base64Images.push(await fileToBase64(file));
       }
 
-      // 2. Gather target questions from session rubric
       const rubricItemsRes = await fetch(`/api/work-sessions/${session.id}`);
       if (!rubricItemsRes.ok) throw new Error("Failed to load work session context.");
 
@@ -60,14 +60,10 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
           }
       }
 
-      // Tunavuta IDs na kuzinormalize palepale kabla hazijaenda kwa AI
       const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
 
-      // 3. Client-Side AI Extraction Call (Single-Pass Semantic Router)
-      const apiKey = await getClientGeminiKey();
-      const extractedTextMap = await extractStudentExamsClient(base64Images, targetQuestions, apiKey);
+      const extractedTextMap = await extractStudentExamsClient(base64Images, targetQuestions);
 
-      // 4. Upload raw file to Supabase for storage
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `submissions/${filename}`;
 
@@ -80,7 +76,6 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      // 5. Submit Semantic JSON Map and file path to API directly
       const res = await fetch("/api/student/submit", {
         method: "POST",
         headers: {
@@ -103,7 +98,6 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
       toast.success("Submitted! Grading is happening in the background.");
 
-      // Grading is now reliably triggered on the server using waitUntil
       onSuccess();
       onOpenChange(false);
       setFile(null); // Reset file
@@ -153,14 +147,12 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                     onChange={(e) => {
                         const selected = e.target.files?.[0];
                         if (selected) {
-                            // MANDATE 1: 20MB Limit
                             if (selected.size > 20 * 1024 * 1024) {
                                 toast.error("File is too large. Please upload a file smaller than 20MB.");
-                                e.target.value = ""; // Clear input
+                                e.target.value = "";
                                 setFile(null);
                                 return;
                             }
-                            // Strict Type Check
                             const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
                             if (!allowedTypes.includes(selected.type)) {
                                 toast.error("Invalid file type. Only PDF, PNG, and JPG are allowed.");
