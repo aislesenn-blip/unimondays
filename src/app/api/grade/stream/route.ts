@@ -122,57 +122,63 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        const rawStudentText = submission.ocrText || "";
-
-        // --- L9 MULTI-AGENT WORKFLOW ---
-
-        // --- PASS 1: The Segmentation Map ---
-        console.log(`[GRADING] [PASS 1] Commencing The Mapper...`);
-        const allRubricQuestionIds = parsedRubricItems.map(item => item.qId || item.questionId).join(", ");
-
-        const pass1Schema = z.object({
-            attemptedQuestions: z.array(z.string()).describe("A list of exact Question IDs from the expected list that the student appears to have attempted.")
-        });
-
-        let attemptedQuestionIds: string[] = [];
+        // Parse the Semantic JSON Map coming from the Client-Side Engine
+        let parsedStudentAnswers: Record<string, string> = {};
+        let extractedStudentIdentity = "UNKNOWN";
         try {
-            const pass1Response = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: `You are the Master Mapper. Scan the entire student exam text. Identify EVERY question from the Expected Question IDs that the student attempted.
+            let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
+            // The client engine returns an array containing the map object
+            if (Array.isArray(extractedMap) && extractedMap.length > 0) {
+                const mapObj = extractedMap[0];
+                extractedStudentIdentity = mapObj.student_id || mapObj.student_name || "UNKNOWN";
 
-EXPECTED QUESTION IDs: [${allRubricQuestionIds}]
-
-DO NOT TRANSCRIBE THE ANSWERS YET. Just state if they attempted the question or skipped it. Use deep contextual reasoning if they numbered it differently (e.g. A ii) instead of 1Aii).`,
-                prompt: rawStudentText,
-                schema: pass1Schema,
-                temperature: 0.0
-            });
-            attemptedQuestionIds = pass1Response.object.attemptedQuestions;
-            console.log(`[GRADING] [PASS 1] Detected attempts for:`, attemptedQuestionIds);
+                if (Array.isArray(mapObj.questions)) {
+                    mapObj.questions.forEach((q: any) => {
+                        if (q.questionId) {
+                            parsedStudentAnswers[q.questionId] = q.text || "No text extracted.";
+                        }
+                    });
+                }
+            } else if (typeof extractedMap === 'object') {
+                 // Fallback if it returned just the object
+                 parsedStudentAnswers = extractedMap as unknown as Record<string, string>;
+            }
         } catch (e) {
-            console.error("[GRADING] [PASS 1] Mapper failed. Falling back to all questions.", e);
-            attemptedQuestionIds = parsedRubricItems.map(item => item.qId || item.questionId);
+            console.warn(`[GRADING] Failed to parse student semantic map. Expected JSON.`, e);
         }
 
-        // --- PASS 1B & PASS 2: Parallel Extraction & Evaluation ---
-        console.log(`[GRADING] Commencing PASS 1B (Extraction) and PASS 2 (Evaluation)...`);
+        // --- L9 EVALUATOR (PASS 2) ---
+        console.log(`[GRADING] Commencing The Evaluator...`);
 
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
 
         try {
-            const limit = pLimit(10); // L9 Parallel Batching Strategy
+            const limit = pLimit(10); // Parallel Batching Strategy
+
+            // Fuzzy ID Normalizer helper to match keys robustly
+            const normalizeId = (id: string) => (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            const normalizedStudentAnswers: Record<string, string> = {};
+            for (const [key, val] of Object.entries(parsedStudentAnswers)) {
+                normalizedStudentAnswers[normalizeId(key)] = val;
+            }
 
             const gradingPromises = parsedRubricItems.map(rubricItem => {
                 return limit(async () => {
-                    const qId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
+                    const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;
 
-                    // Fast absence handling
-                    if (!attemptedQuestionIds.includes(qId)) {
+                    const normalizedQId = normalizeId(originalQId);
+
+                    // Route to the extracted verbatim answer mapped from the Client-Side PASS 1B
+                    const studentAnswerForQ = normalizedStudentAnswers[normalizedQId] || "";
+
+                    if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
+                        // Fast path: Empty or un-extracted answer instantly receives 0
                         return {
-                            question: qId,
-                            thoughtProcess: "Student skipped this question (detected by PASS 1).",
+                            question: originalQId,
+                            thoughtProcess: "Student provided no answer (Client Engine found 'No text extracted').",
                             score: 0,
                             max: maxScore,
                             feedback: "No answer provided.",
@@ -180,41 +186,7 @@ DO NOT TRANSCRIBE THE ANSWERS YET. Just state if they attempted the question or 
                         };
                     }
 
-                    // --- PASS 1B: Single Question Extraction ---
-                    console.log(`[GRADING] [PASS 1B] Extracting specific answer for Box ${qId}...`);
-                    const pass1BSchema = z.object({
-                        verbatimAnswer: z.string().describe("The exact, verbatim transcription of the student's answer for this specific question. Return empty string if not found.")
-                    });
-
-                    let studentAnswerForQ = "";
-                    try {
-                        const pass1bResponse = await generateObject({
-                            model: google('gemini-2.5-pro'),
-                            system: `You MUST act as a literal transcriber. Find where the student answered the specific question. Quote their exact phrases, math, and steps exactly as written. DO NOT invent, assume, or inject terms from the marking scheme. Do NOT grade it. If you cannot find the answer, return an empty string.
-
-TARGET QUESTION ID TO EXTRACT: ${qId}`,
-                            prompt: rawStudentText,
-                            schema: pass1BSchema,
-                            temperature: 0.0
-                        });
-                        studentAnswerForQ = pass1bResponse.object.verbatimAnswer;
-                    } catch (e) {
-                        console.error(`[GRADING] [PASS 1B] Extraction failed for ${qId}`, e);
-                    }
-
-                    if (!studentAnswerForQ.trim()) {
-                        return {
-                            question: qId,
-                            thoughtProcess: "Student provided no answer (failed to extract in PASS 1B).",
-                            score: 0,
-                            max: maxScore,
-                            feedback: "No answer provided.",
-                            evidenceSnippet: "None"
-                        };
-                    }
-
-                    // --- PASS 2: The Evaluator (Atomic Grading) ---
-                    console.log(`[GRADING] [PASS 2] Grading Box ${qId}...`);
+                    console.log(`[GRADING] Evaluating Box ${originalQId}...`);
 
                     const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
 
@@ -223,7 +195,7 @@ Do NOT invent marks. Do NOT penalize correct alternative phrasing.
 Ensure absolute precision.`;
 
                     const boxPrompt = `
-EVALUATE THIS SPECIFIC QUESTION ONLY: ${qId}
+EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
 MAXIMUM MARKS: ${maxScore}
 
 ATOMIC MARKING CRITERIA:
@@ -254,7 +226,7 @@ ${studentAnswerForQ}
                         let safeScore = Math.max(0, Math.min(rawSum, maxScore));
 
                         return {
-                            question: qId,
+                            question: originalQId,
                             thoughtProcess: object.thoughtProcess,
                             score: safeScore,
                             max: maxScore,
@@ -262,9 +234,9 @@ ${studentAnswerForQ}
                             evidenceSnippet: object.evidenceSnippet
                         };
                     } catch (boxError) {
-                        console.error(`[GRADING] Box ${qId} failed evaluation:`, boxError);
+                        console.error(`[GRADING] Box ${originalQId} failed evaluation:`, boxError);
                         return {
-                            question: qId,
+                            question: originalQId,
                             thoughtProcess: "Evaluation failed for this specific question due to an AI processing error.",
                             score: 0,
                             max: maxScore,
@@ -281,25 +253,12 @@ ${studentAnswerForQ}
             calculatedTotalScore = rawGradedQuestions.reduce((acc, curr) => acc + curr.score, 0);
 
         } catch (gradingError) {
-            console.error(`[GRADING] Multi-Agent Workflow failed:`, gradingError);
+            console.error(`[GRADING] Evaluation Workflow failed:`, gradingError);
             throw gradingError;
         }
 
-        // Fast parallel call to extract Reg No from whole text
-        let detectedRegNo = "UNKNOWN";
-        try {
-            const regNoResponse = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
-                prompt: rawStudentText,
-                schema: regNoSchema,
-                temperature: 0.0
-            });
-            detectedRegNo = regNoResponse.object.detectedRegNo;
-        } catch(e) { /* ignore */ }
-
         // Finalize
-        const regNoToSave = detectedRegNo && detectedRegNo !== "UNKNOWN" ? detectedRegNo : submission.studentRegNo;
+        const regNoToSave = extractedStudentIdentity && extractedStudentIdentity !== "UNKNOWN" ? extractedStudentIdentity : submission.studentRegNo;
 
         await prisma.score.upsert({
             where: { submissionId: globalSubmissionId },
