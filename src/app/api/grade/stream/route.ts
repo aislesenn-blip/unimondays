@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { supabase } from '@/lib/supabase';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
+import pLimit from 'p-limit';
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
@@ -15,14 +16,12 @@ const google = createGoogleGenerativeAI({
 
 // Zod schema for Atomic grading
 const atomicGradingSchema = z.object({
-  gradedQuestions: z.array(z.object({
-    question: z.string().describe("The exact question identifier as written in the marking scheme (e.g., 'Q1(a)', 'Question 2')."),
-    thoughtProcess: z.string().describe("Chain of thought: Explain step-by-step how the student's answer maps to the rubric. Did they use a synonym? Are the mathematical steps correct even if the final answer is wrong? DO THIS BEFORE SCORING."),
-    score: z.number().describe("The awarded score based on semantic matching and your thought process. Must not exceed maxScore."),
-    max: z.number().describe("The maximum possible score for this question as defined in the marking scheme."),
-    feedback: z.string().describe("Specific feedback explaining the score. Keep it to 1-2 sentences."),
-    evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or missing.")
-  }))
+  question: z.string().describe("The exact question identifier being graded."),
+  thoughtProcess: z.string().describe("Chain of thought: Explain step-by-step how the student's answer maps to the specific rubric criteria. Did they hit the required atomic concepts? DO THIS BEFORE SCORING."),
+  score: z.number().describe("The total awarded score based on semantic matching of the criteria and your thought process. Must not exceed the provided maxScore."),
+  max: z.number().describe("The maximum possible score for this question as defined in the marking scheme."),
+  feedback: z.string().describe("Specific feedback explaining the score. Keep it to 1-2 sentences."),
+  evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or missing.")
 });
 
 const regNoSchema = z.object({
@@ -123,138 +122,114 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        // --- HYBRID HOLISTIC GRADING ---
-        console.log(`[GRADING] Commencing Hybrid Holistic Grading...`);
+        // Parse student text as JSON mapping (if possible) for routing
+        let parsedStudentAnswers: Record<string, string> = {};
+        try {
+            parsedStudentAnswers = JSON.parse(submission.ocrText || "{}");
+        } catch (e) {
+            console.log(`[GRADING] Student text is not structured JSON. Falling back to whole text.`);
+            parsedStudentAnswers = { "ALL": submission.ocrText || "" };
+        }
 
-        const systemPrompt = `You are an elite world-class Examination Evaluation Engine designed to mark academic assessments with accuracy higher than senior professors, national examination boards, and university moderation panels.
+        // --- ATOMIC MAP-REDUCE GRADING ---
+        console.log(`[GRADING] Commencing Atomic Map-Reduce Grading...`);
 
-Your task is to perform strict, fair, evidence-based, marking-scheme-anchored assessment of student answers using ONLY the provided official marking scheme and student responses.
+        const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
 
-You must behave like a hybrid of:
-- Senior University Examiner
-- National Examination Council Chief Marker
-- External Moderator
-- Academic Quality Assurance Auditor
-- Rubric Precision Scoring Engine
-
-Your marking must be:
-- Extremely accurate
-- Strict but fair
-- Fully marking-scheme compliant
-- Resistant to hallucination
-- Resistant to over-marking
-- Resistant to under-marking
-- Resistant to bias
-- Resistant to wording variation
-- Resistant to synonym confusion
-- Resistant to paraphrase differences
-- Resistant to answer-order differences
-
-You must NEVER invent marks.
-You must NEVER assume missing content.
-You must NEVER reward unsupported claims.
-You must NEVER punish correct alternative phrasing if conceptually valid.
-You must NEVER ignore hidden partial credit opportunities if supported by the marking scheme.
-
-You must think deeply before scoring.
-
----
-
-CORE MARKING RULES
-
-RULE 1 — MARKING SCHEME IS SUPREME
-The marking scheme is the highest authority.
-If student answer is not supported by the marking scheme, do not award marks unless it is a clearly valid equivalent concept.
-Do not freestyle marking.
-
-RULE 2 — CONCEPT > EXACT WORDING
-Award marks based on: correctness of concept, accuracy of explanation, relevance to the asked question.
-Do NOT require exact wording.
-Accept: synonyms, paraphrasing, reordered explanation, technically correct alternative expression.
-Reject: vague statements, guessed statements, unrelated correctness, incomplete unsupported phrases.
-
-RULE 3 — PARTIAL CREDIT INTELLIGENCE
-If answer is partially correct: award only the exact deserved fraction.
-Do not round emotionally. Do not give “benefit of doubt marks.” Every mark must be earned.
-
-RULE 4 — NO DOUBLE REWARD
-Do not award the same concept twice across the same sub-question unless the marking scheme explicitly allows it.
-Avoid duplicate scoring.
-
-RULE 5 — STRICT STRUCTURAL MAPPING
-Correctly map all questions. Even if student writes answers out of order, infer intelligently and map accurately. Do not misplace marks.
-
-RULE 6 — JUSTIFICATION MUST BE SHORT
-For every awarded mark, provide only a very short reason in the 'feedback' field (Maximum 1 short sentence).
-Do NOT write essays. Do NOT waste tokens.
-
-REQUIRED EXECUTION PROCESS:
-1. Read the full marking scheme fully to understand expected answers and mark distribution.
-2. Read the student text carefully, locating the student's attempt for each question.
-3. Evaluate each answer against the scheme and apply partial credit precisely.
-4. Output the results strictly adhering to the JSON schema provided. Do not hallucinate marks. `;
-
-        const userPrompt = `OFFICIAL MARKING SCHEME:
-"""
-${JSON.stringify(parsedRubricItems, null, 2)}
-"""
-
-STUDENT ANSWER SCRIPT:
-"""
-${submission.ocrText}
-"""
-`;
+You must evaluate the student's answer against the provided strict ATOMIC CRITERIA.
+Do NOT invent marks. Do NOT penalize correct alternative phrasing.
+Ensure absolute precision.`;
 
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
 
         try {
-            console.log(`[GRADING] Sending request to Gemini 2.5 Pro with Temperature 0.0...`);
-            const { object } = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: systemPrompt,
-                prompt: userPrompt,
-                schema: atomicGradingSchema,
-                temperature: 0.0,
+            const limit = pLimit(10); // L9 Parallel Batching Strategy
+
+            const gradingPromises = parsedRubricItems.map(rubricItem => {
+                return limit(async () => {
+                    const qId = rubricItem.qId || rubricItem.questionId;
+                    const maxScore = rubricItem.maxScore || 0;
+
+                    // Route to exact answer if available, else give the whole text
+                    const studentAnswerForQ = parsedStudentAnswers[qId] || parsedStudentAnswers["ALL"] || "";
+
+                    if (!studentAnswerForQ.trim()) {
+                        // Fast path: Empty answer instantly receives 0
+                        return {
+                            question: qId,
+                            thoughtProcess: "Student provided no answer.",
+                            score: 0,
+                            max: maxScore,
+                            feedback: "No answer provided.",
+                            evidenceSnippet: "None"
+                        };
+                    }
+
+                    const boxPrompt = `
+EVALUATE THIS SPECIFIC QUESTION ONLY: ${qId}
+MAXIMUM MARKS: ${maxScore}
+
+ATOMIC MARKING CRITERIA:
+"""
+${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment, null, 2)}
+"""
+
+STUDENT ANSWER:
+"""
+${studentAnswerForQ}
+"""
+`;
+                    console.log(`[GRADING] Grading Box ${qId}...`);
+                    const { object } = await generateObject({
+                        model: google('gemini-2.5-pro'),
+                        system: systemPrompt,
+                        prompt: boxPrompt,
+                        schema: atomicGradingSchema,
+                        temperature: 0.0,
+                    });
+
+                    // Deterministic Math clamping
+                    let safeScore = typeof object.score === 'number' ? object.score : 0;
+                    safeScore = Math.max(0, Math.min(safeScore, maxScore));
+
+                    return {
+                        question: qId,
+                        thoughtProcess: object.thoughtProcess,
+                        score: safeScore,
+                        max: maxScore,
+                        feedback: object.feedback,
+                        evidenceSnippet: object.evidenceSnippet
+                    };
+                });
             });
 
-            const rawGradedQuestions = (object as any)?.gradedQuestions || [];
+            const rawGradedQuestions = await Promise.all(gradingPromises);
 
-            // Post-processing to enforce deterministic math and max scores based on source rubric
-            finalBreakdown = rawGradedQuestions.map((gradedQ: any) => {
-                // Find the original rubric item to get the true maxScore
-                const originalRubricItem = parsedRubricItems.find((c: any) => c.questionId === gradedQ.question || c.questionId.includes(gradedQ.question));
-                const trueMax = originalRubricItem ? originalRubricItem.maxScore : gradedQ.max;
-
-                // Ensure score doesn't exceed true max, and default to 0 if negative or not a number
-                let safeScore = typeof gradedQ.score === 'number' ? gradedQ.score : 0;
-                safeScore = Math.max(0, Math.min(safeScore, trueMax));
-
-                calculatedTotalScore += safeScore;
-
-                return {
-                    ...gradedQ,
-                    score: safeScore,
-                    max: trueMax
-                };
-            });
+            finalBreakdown = rawGradedQuestions;
+            calculatedTotalScore = rawGradedQuestions.reduce((acc, curr) => acc + curr.score, 0);
 
         } catch (gradingError) {
-            console.error(`[GRADING] Hybrid Holistic Grading failed:`, gradingError);
+            console.error(`[GRADING] Atomic Map-Reduce Grading failed:`, gradingError);
             throw gradingError;
         }
 
-        // Fast parallel call to extract Reg No
+        // Fast parallel call to extract Reg No from whole text
         let detectedRegNo = "UNKNOWN";
         try {
-            const regNoResponse = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
-                prompt: submission.ocrText,
-                schema: regNoSchema,
-                temperature: 0.0
-            });
-            detectedRegNo = regNoResponse.object.detectedRegNo;
+            const regNoTextToAnalyze = parsedStudentAnswers["REGISTRATION_NUMBER"] || submission.ocrText || "";
+            if (parsedStudentAnswers["REGISTRATION_NUMBER"]) {
+                 detectedRegNo = parsedStudentAnswers["REGISTRATION_NUMBER"];
+            } else {
+                 const regNoResponse = await generateObject({
+                    model: google('gemini-2.5-pro'),
+                    system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
+                    prompt: regNoTextToAnalyze,
+                    schema: regNoSchema,
+                    temperature: 0.0
+                });
+                detectedRegNo = regNoResponse.object.detectedRegNo;
+            }
         } catch(e) { /* ignore */ }
 
         // Finalize
