@@ -146,19 +146,30 @@ Ensure absolute precision.`;
         try {
             const limit = pLimit(10); // L9 Parallel Batching Strategy
 
+            // Fuzzy ID Normalizer helper to match "1_a_i", "1 a i", "1ai", "1A(i)", etc.
+            const normalizeId = (id: string) => (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            // Pre-normalize student answer keys for faster fuzzy matching
+            const normalizedStudentAnswers: Record<string, string> = {};
+            for (const [key, val] of Object.entries(parsedStudentAnswers)) {
+                normalizedStudentAnswers[normalizeId(key)] = val;
+            }
+
             const gradingPromises = parsedRubricItems.map(rubricItem => {
                 return limit(async () => {
-                    const qId = rubricItem.qId || rubricItem.questionId;
+                    const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;
 
-                    // Route to exact answer if available, else give the whole text
-                    const studentAnswerForQ = parsedStudentAnswers[qId] || parsedStudentAnswers["ALL"] || "";
+                    const normalizedQId = normalizeId(originalQId);
+
+                    // Route to exact answer (fuzzy match) if available, else give the whole text
+                    const studentAnswerForQ = normalizedStudentAnswers[normalizedQId] || parsedStudentAnswers["ALL"] || "";
 
                     if (!studentAnswerForQ.trim()) {
                         // Fast path: Empty answer instantly receives 0
                         return {
-                            question: qId,
-                            thoughtProcess: "Student provided no answer.",
+                            question: originalQId,
+                            thoughtProcess: "Student provided no answer for this specific question identifier.",
                             score: 0,
                             max: maxScore,
                             feedback: "No answer provided.",
@@ -167,7 +178,7 @@ Ensure absolute precision.`;
                     }
 
                     const boxPrompt = `
-EVALUATE THIS SPECIFIC QUESTION ONLY: ${qId}
+EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
 MAXIMUM MARKS: ${maxScore}
 
 ATOMIC MARKING CRITERIA:
@@ -180,7 +191,7 @@ STUDENT ANSWER:
 ${studentAnswerForQ}
 """
 `;
-                    console.log(`[GRADING] Grading Box ${qId}...`);
+                    console.log(`[GRADING] Grading Box ${originalQId}...`);
                     const { object } = await generateObject({
                         model: google('gemini-2.5-pro'),
                         system: systemPrompt,
@@ -194,7 +205,7 @@ ${studentAnswerForQ}
                     safeScore = Math.max(0, Math.min(safeScore, maxScore));
 
                     return {
-                        question: qId,
+                        question: originalQId,
                         thoughtProcess: object.thoughtProcess,
                         score: safeScore,
                         max: maxScore,
