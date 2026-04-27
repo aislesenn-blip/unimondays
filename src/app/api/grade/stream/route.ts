@@ -6,7 +6,6 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { supabase } from '@/lib/supabase';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import pLimit from 'p-limit';
-import { normalizeQuestionId } from "@/lib/ai/client-engine";
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
@@ -14,8 +13,6 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || 'dummy',
   baseURL: "https://generativelanguage.googleapis.com/v1beta/",
 });
-
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 // Zod schema for Atomic grading
 const atomicGradingSchema = z.object({
@@ -159,10 +156,13 @@ export async function POST(req: NextRequest) {
         try {
             const limit = pLimit(10); // Parallel Batching Strategy
 
+            const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
             // Tengeneza Normalized Dictionary kutokea kwa Gemini
+            const normalizeId = (id: string) => (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
             const normalizedStudentAnswers: Record<string, string> = {};
             for (const [key, val] of Object.entries(parsedStudentAnswers)) {
-                normalizedStudentAnswers[normalizeQuestionId(key)] = val;
+                normalizedStudentAnswers[normalizeId(key)] = val;
             }
 
             const gradingPromises = parsedRubricItems.map(rubricItem => {
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
                     const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;
 
-                    const normalizedTargetId = normalizeQuestionId(originalQId);
+                    const normalizedTargetId = normalizeId(originalQId);
 
                     // Fetch the mapped text
                     let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
