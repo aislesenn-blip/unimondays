@@ -29,17 +29,34 @@ export const normalizeQuestionId = (id: string): string => {
 export function parseLLMJSON(content: string): any {
     if (!content || content.trim() === '') return {};
     content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    let startIndex = content.indexOf('{');
+
+    let firstBrace = content.indexOf('{');
+    let firstBracket = content.indexOf('[');
+    let startIndex = -1;
+    let isArray = false;
+
+    // Tafuta kipi kinaanza kwanza kati ya '[' na '{'
+    if (firstBrace !== -1 && firstBracket !== -1) {
+        startIndex = Math.min(firstBrace, firstBracket);
+        isArray = startIndex === firstBracket;
+    } else {
+        startIndex = Math.max(firstBrace, firstBracket);
+        isArray = startIndex === firstBracket;
+    }
+
     if (startIndex !== -1) {
         let depth = 0, inString = false, escapeNext = false, endIndex = -1;
+        let openChar = isArray ? '[' : '{';
+        let closeChar = isArray ? ']' : '}';
+
         for (let i = startIndex; i < content.length; i++) {
             const char = content[i];
             if (escapeNext) { escapeNext = false; continue; }
             if (char === '\\') { escapeNext = true; continue; }
             if (char === '"') { inString = !inString; continue; }
             if (!inString) {
-                if (char === '{') depth++;
-                else if (char === '}') {
+                if (char === openChar) depth++;
+                else if (char === closeChar) {
                     depth--;
                     if (depth === 0) { endIndex = i; break; }
                 }
@@ -47,6 +64,7 @@ export function parseLLMJSON(content: string): any {
         }
         content = endIndex !== -1 ? content.substring(startIndex, endIndex + 1) : content.substring(startIndex);
     }
+
     content = content.replace(/^```json\s*/gi, '').replace(/^```\s*/gi, '').replace(/```\s*$/gi, '');
     content = content.replace(/[\n\r\t]+/g, ' ');
     content = content.replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3');
@@ -57,8 +75,8 @@ export function parseLLMJSON(content: string): any {
     try {
         return JSON.parse(content);
     } catch (e) {
-        console.warn("JSON parse failed, returning empty object:", e);
-        return {};
+        console.warn("JSON parse failed, returning fallback:", e);
+        return isArray ? [] : {};
     }
 }
 
@@ -87,9 +105,14 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
             generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
         })
     });
+
     if (!response.ok) throw new Error(`Google API error: ${response.status}`);
     const data = await response.json();
-    return parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
+
+    const parsedData = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
+
+    // GUARANTEE ARRAY: Hii inazuia "atomicCriteriaJson.map is not a function"
+    return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
