@@ -8,13 +8,14 @@ import {
     extractStudentExamsClient, 
     normalizeQuestionId 
 } from "@/lib/ai/client-engine";
-import { uploadToSupabaseClient } from "@/lib/storage/client-upload";
+import { uploadToSupabaseClient } from "@/lib/storage/client-upload"; // HAKIKISHA HILI FAILI LIPO
 
 interface SubmissionDrawerProps {
     workSessionId: string;
 }
 
-export default function SubmissionDrawer({ workSessionId }: SubmissionDrawerProps) {
+// THE FIX: "export function" badala ya "export default function"
+export function SubmissionDrawer({ workSessionId }: SubmissionDrawerProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "uploading" | "success" | "error">("idle");
 
