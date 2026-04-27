@@ -18,10 +18,17 @@ const atomicGradingSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-    let globalSubmissionId: string | null = null;
+    // THE FIX: Tumebadilisha kutoka 'string | null' kuwa 'string' tu kuzuia TypeScript Error
+    let globalSubmissionId: string = ""; 
+    
     try {
         const body = await req.json();
         globalSubmissionId = body.submissionId;
+
+        // THE FIX: Guard clause kuhakikisha ID ipo kabla ya kwenda Prisma
+        if (!globalSubmissionId) {
+            return NextResponse.json({ error: "Submission ID is required" }, { status: 400 });
+        }
 
         const submission = await prisma.submission.findUnique({
             where: { id: globalSubmissionId },
