@@ -73,21 +73,14 @@ The JSON MUST exactly match this format:
         } else {
             promptContent.push({
                 type: "text",
-                text: `You are an L9 Intelligent Exam Collator with advanced cognitive collation abilities. Your task is to read the provided student exam document and output a highly structured, logical text transcription mapped by Question IDs.
+                text: `You are an elite Academic Transcriber. Your task is to read the provided student exam document pages and output a highly accurate, verbatim, raw text transcription.
 
 CRITICAL INSTRUCTIONS:
-1. Extract ALL handwritten and printed text precisely.
-2. INTELLIGENT SEMANTIC ROUTING (MANDATORY): Students often write question numbers inconsistently (e.g., they might write "A ii)" instead of "1Aii", or just "iv)" if they are continuing from question 6). You MUST use deep contextual reasoning to deduce which part of the text answers which specific intended Question ID based on the document's flow.
-3. COLLATION: Do NOT output page by page. You MUST collate, stitch, and group ALL parts of a single question's answer together under its deduced, normalized Question ID.
-4. REGISTRATION NUMBER: Extract the student's Registration Number/ID if present.
-5. Output STRICTLY as a JSON object where keys are the Question IDs (normalized, e.g., "1ai", "1b", "6aiv") and values are the full concatenated text of the student's answer for that Question ID.
-
-Example Output format (Strictly JSON, no markdown):
-{
-  "REGISTRATION_NUMBER": "2018-04-12551",
-  "1ai": "Student's full answer for 1ai...",
-  "1b": "Student's full answer for 1b..."
-}`
+1. Extract ALL handwritten and printed text precisely exactly as it appears.
+2. DO NOT ATTEMPT TO MAP OR ORGANIZE BY QUESTION ID. Just output the raw text in the order it appears on the page.
+3. DO NOT output JSON. Output clean, raw text using clear markdown headers if a new question number is explicitly written (e.g. \`\n\n=== QUESTION 1 ===\n\n\`).
+4. REGISTRATION NUMBER: Ensure the Registration Number is captured clearly at the top if present.
+5. Your ONLY goal is 100% accurate, verbatim transcription of the content so that a downstream AI engine can analyze it.`
             });
         }
 
@@ -149,37 +142,8 @@ Example Output format (Strictly JSON, no markdown):
                 finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
             }
         } else {
-            // Student exams expect an Object. Stitch multiple objects together (Semantic Router).
-            try {
-                let mergedStudentAnswers: Record<string, string> = {};
-                for (const text of textOutputs) {
-                    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                    try {
-                        const parsed = JSON.parse(cleanJson);
-                        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
-                            // Merge keys, appending text if the question spans multiple batches
-                            for (const [key, value] of Object.entries(parsed)) {
-                                if (mergedStudentAnswers[key]) {
-                                    mergedStudentAnswers[key] += "\n\n" + String(value);
-                                } else {
-                                    mergedStudentAnswers[key] = String(value);
-                                }
-                            }
-                        }
-                    } catch (parseIterErr) {
-                        console.warn(`[OCR] Failed to parse one student batch:`, parseIterErr);
-                        // Fallback: dump unparseable batch into a generic key
-                        mergedStudentAnswers["UNPARSED_BATCH_" + Date.now()] = text;
-                    }
-                }
-
-                if (Object.keys(mergedStudentAnswers).length === 0) throw new Error("No object found");
-                finalText = JSON.stringify(mergedStudentAnswers);
-                console.log(`[OCR] Successfully stitched student JSON into Semantic Map.`);
-            } catch (e) {
-                console.warn("[OCR] Student object stitching failed. Falling back to plain text.");
-                finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
-            }
+            // Student exams just output raw text now to prepare for PASS 1 and PASS 1B
+            finalText = textOutputs.join('\n\n\n=== NEXT BATCH ===\n\n\n');
         }
 
         return NextResponse.json({ success: true, text: finalText });
