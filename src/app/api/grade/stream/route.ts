@@ -18,7 +18,7 @@ const google = createGoogleGenerativeAI({
 const atomicGradingSchema = z.object({
   question: z.string().describe("The exact question identifier being graded."),
   thoughtProcess: z.string().describe("Chain of thought: Explain step-by-step how the student's answer maps to the specific rubric criteria. Did they hit the required atomic concepts? DO THIS BEFORE SCORING."),
-  score: z.number().describe("The total awarded score based on semantic matching of the criteria and your thought process. Must not exceed the provided maxScore."),
+  scoresArray: z.array(z.number()).describe("An array of scores awarded for each atomic criterion met by the student. For example, if they met two criteria worth 1 mark each and half of a 2-mark criteria, output [1, 1, 1]. Do NOT sum them here."),
   max: z.number().describe("The maximum possible score for this question as defined in the marking scheme."),
   feedback: z.string().describe("Specific feedback explaining the score. Keep it to 1-2 sentences."),
   evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or missing.")
@@ -122,23 +122,40 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        // Parse student text as JSON mapping (if possible) for routing
-        let parsedStudentAnswers: Record<string, string> = {};
+        const rawStudentText = submission.ocrText || "";
+
+        // --- L9 MULTI-AGENT WORKFLOW ---
+
+        // --- PASS 1: The Segmentation Map ---
+        console.log(`[GRADING] [PASS 1] Commencing The Mapper...`);
+        const allRubricQuestionIds = parsedRubricItems.map(item => item.qId || item.questionId).join(", ");
+
+        const pass1Schema = z.object({
+            attemptedQuestions: z.array(z.string()).describe("A list of exact Question IDs from the expected list that the student appears to have attempted.")
+        });
+
+        let attemptedQuestionIds: string[] = [];
         try {
-            parsedStudentAnswers = JSON.parse(submission.ocrText || "{}");
+            const pass1Response = await generateObject({
+                model: google('gemini-2.5-pro'),
+                system: `You are the Master Mapper. Scan the entire student exam text. Identify EVERY question from the Expected Question IDs that the student attempted.
+
+EXPECTED QUESTION IDs: [${allRubricQuestionIds}]
+
+DO NOT TRANSCRIBE THE ANSWERS YET. Just state if they attempted the question or skipped it. Use deep contextual reasoning if they numbered it differently (e.g. A ii) instead of 1Aii).`,
+                prompt: rawStudentText,
+                schema: pass1Schema,
+                temperature: 0.0
+            });
+            attemptedQuestionIds = pass1Response.object.attemptedQuestions;
+            console.log(`[GRADING] [PASS 1] Detected attempts for:`, attemptedQuestionIds);
         } catch (e) {
-            console.log(`[GRADING] Student text is not structured JSON. Falling back to whole text.`);
-            parsedStudentAnswers = { "ALL": submission.ocrText || "" };
+            console.error("[GRADING] [PASS 1] Mapper failed. Falling back to all questions.", e);
+            attemptedQuestionIds = parsedRubricItems.map(item => item.qId || item.questionId);
         }
 
-        // --- ATOMIC MAP-REDUCE GRADING ---
-        console.log(`[GRADING] Commencing Atomic Map-Reduce Grading...`);
-
-        const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
-
-You must evaluate the student's answer against the provided strict ATOMIC CRITERIA.
-Do NOT invent marks. Do NOT penalize correct alternative phrasing.
-Ensure absolute precision.`;
+        // --- PASS 1B & PASS 2: Parallel Extraction & Evaluation ---
+        console.log(`[GRADING] Commencing PASS 1B (Extraction) and PASS 2 (Evaluation)...`);
 
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
@@ -146,30 +163,16 @@ Ensure absolute precision.`;
         try {
             const limit = pLimit(10); // L9 Parallel Batching Strategy
 
-            // Fuzzy ID Normalizer helper to match "1_a_i", "1 a i", "1ai", "1A(i)", etc.
-            const normalizeId = (id: string) => (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-
-            // Pre-normalize student answer keys for faster fuzzy matching
-            const normalizedStudentAnswers: Record<string, string> = {};
-            for (const [key, val] of Object.entries(parsedStudentAnswers)) {
-                normalizedStudentAnswers[normalizeId(key)] = val;
-            }
-
             const gradingPromises = parsedRubricItems.map(rubricItem => {
                 return limit(async () => {
-                    const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
+                    const qId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;
 
-                    const normalizedQId = normalizeId(originalQId);
-
-                    // Route to exact answer (fuzzy match) if available, else give the whole text
-                    const studentAnswerForQ = normalizedStudentAnswers[normalizedQId] || parsedStudentAnswers["ALL"] || "";
-
-                    if (!studentAnswerForQ.trim()) {
-                        // Fast path: Empty answer instantly receives 0
+                    // Fast absence handling
+                    if (!attemptedQuestionIds.includes(qId)) {
                         return {
-                            question: originalQId,
-                            thoughtProcess: "Student provided no answer for this specific question identifier.",
+                            question: qId,
+                            thoughtProcess: "Student skipped this question (detected by PASS 1).",
                             score: 0,
                             max: maxScore,
                             feedback: "No answer provided.",
@@ -177,8 +180,50 @@ Ensure absolute precision.`;
                         };
                     }
 
+                    // --- PASS 1B: Single Question Extraction ---
+                    console.log(`[GRADING] [PASS 1B] Extracting specific answer for Box ${qId}...`);
+                    const pass1BSchema = z.object({
+                        verbatimAnswer: z.string().describe("The exact, verbatim transcription of the student's answer for this specific question. Return empty string if not found.")
+                    });
+
+                    let studentAnswerForQ = "";
+                    try {
+                        const pass1bResponse = await generateObject({
+                            model: google('gemini-2.5-pro'),
+                            system: `You MUST act as a literal transcriber. Find where the student answered the specific question. Quote their exact phrases, math, and steps exactly as written. DO NOT invent, assume, or inject terms from the marking scheme. Do NOT grade it. If you cannot find the answer, return an empty string.
+
+TARGET QUESTION ID TO EXTRACT: ${qId}`,
+                            prompt: rawStudentText,
+                            schema: pass1BSchema,
+                            temperature: 0.0
+                        });
+                        studentAnswerForQ = pass1bResponse.object.verbatimAnswer;
+                    } catch (e) {
+                        console.error(`[GRADING] [PASS 1B] Extraction failed for ${qId}`, e);
+                    }
+
+                    if (!studentAnswerForQ.trim()) {
+                        return {
+                            question: qId,
+                            thoughtProcess: "Student provided no answer (failed to extract in PASS 1B).",
+                            score: 0,
+                            max: maxScore,
+                            feedback: "No answer provided.",
+                            evidenceSnippet: "None"
+                        };
+                    }
+
+                    // --- PASS 2: The Evaluator (Atomic Grading) ---
+                    console.log(`[GRADING] [PASS 2] Grading Box ${qId}...`);
+
+                    const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
+
+You must evaluate the student's answer against the provided strict ATOMIC CRITERIA.
+Do NOT invent marks. Do NOT penalize correct alternative phrasing.
+Ensure absolute precision.`;
+
                     const boxPrompt = `
-EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
+EVALUATE THIS SPECIFIC QUESTION ONLY: ${qId}
 MAXIMUM MARKS: ${maxScore}
 
 ATOMIC MARKING CRITERIA:
@@ -191,27 +236,42 @@ STUDENT ANSWER:
 ${studentAnswerForQ}
 """
 `;
-                    console.log(`[GRADING] Grading Box ${originalQId}...`);
-                    const { object } = await generateObject({
-                        model: google('gemini-2.5-pro'),
-                        system: systemPrompt,
-                        prompt: boxPrompt,
-                        schema: atomicGradingSchema,
-                        temperature: 0.0,
-                    });
+                    try {
+                        const { object } = await generateObject({
+                            model: google('gemini-2.5-pro'),
+                            system: systemPrompt,
+                            prompt: boxPrompt,
+                            schema: atomicGradingSchema,
+                            temperature: 0.0,
+                        });
 
-                    // Deterministic Math clamping
-                    let safeScore = typeof object.score === 'number' ? object.score : 0;
-                    safeScore = Math.max(0, Math.min(safeScore, maxScore));
+                        // Deterministic Math Evaluation
+                        let rawSum = 0;
+                        if (Array.isArray(object.scoresArray)) {
+                            rawSum = object.scoresArray.reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+                        }
 
-                    return {
-                        question: originalQId,
-                        thoughtProcess: object.thoughtProcess,
-                        score: safeScore,
-                        max: maxScore,
-                        feedback: object.feedback,
-                        evidenceSnippet: object.evidenceSnippet
-                    };
+                        let safeScore = Math.max(0, Math.min(rawSum, maxScore));
+
+                        return {
+                            question: qId,
+                            thoughtProcess: object.thoughtProcess,
+                            score: safeScore,
+                            max: maxScore,
+                            feedback: object.feedback,
+                            evidenceSnippet: object.evidenceSnippet
+                        };
+                    } catch (boxError) {
+                        console.error(`[GRADING] Box ${qId} failed evaluation:`, boxError);
+                        return {
+                            question: qId,
+                            thoughtProcess: "Evaluation failed for this specific question due to an AI processing error.",
+                            score: 0,
+                            max: maxScore,
+                            feedback: "Error encountered during grading.",
+                            evidenceSnippet: "None"
+                        };
+                    }
                 });
             });
 
@@ -221,26 +281,21 @@ ${studentAnswerForQ}
             calculatedTotalScore = rawGradedQuestions.reduce((acc, curr) => acc + curr.score, 0);
 
         } catch (gradingError) {
-            console.error(`[GRADING] Atomic Map-Reduce Grading failed:`, gradingError);
+            console.error(`[GRADING] Multi-Agent Workflow failed:`, gradingError);
             throw gradingError;
         }
 
         // Fast parallel call to extract Reg No from whole text
         let detectedRegNo = "UNKNOWN";
         try {
-            const regNoTextToAnalyze = parsedStudentAnswers["REGISTRATION_NUMBER"] || submission.ocrText || "";
-            if (parsedStudentAnswers["REGISTRATION_NUMBER"]) {
-                 detectedRegNo = parsedStudentAnswers["REGISTRATION_NUMBER"];
-            } else {
-                 const regNoResponse = await generateObject({
-                    model: google('gemini-2.5-pro'),
-                    system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
-                    prompt: regNoTextToAnalyze,
-                    schema: regNoSchema,
-                    temperature: 0.0
-                });
-                detectedRegNo = regNoResponse.object.detectedRegNo;
-            }
+            const regNoResponse = await generateObject({
+                model: google('gemini-2.5-pro'),
+                system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
+                prompt: rawStudentText,
+                schema: regNoSchema,
+                temperature: 0.0
+            });
+            detectedRegNo = regNoResponse.object.detectedRegNo;
         } catch(e) { /* ignore */ }
 
         // Finalize
