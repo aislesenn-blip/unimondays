@@ -80,13 +80,15 @@ export async function POST(req: NextRequest) {
         console.log(`[ROUTING] Executing Cognitive Collation for 10K+ tokens. Submission: ${globalSubmissionId}`);
 
         const routerSystemPrompt = `You are an elite Academic Transcription Router with advanced cognitive collation abilities.
-Your task is to scan the entire student's exam text and strictly map their written answers to the Expected Question IDs: [${rubricQuestionIds}].
+Your task is to thoroughly scan the entire student's exam text and intelligently map their written answers to the Expected Question IDs: [${rubricQuestionIds}].
+
+CRITICAL: Students often write question numbers inconsistently (e.g., they might write "A ii)" instead of "1Aii", or just "iv)" if they are continuing from question 6). You MUST use deep contextual reasoning to deduce which part of the text answers which specific Expected Question ID based on the flow of the document and the content of their answer.
 
 COGNITIVE ROUTING DIRECTIVES:
-1. STRICT DEMARCATION: Isolate the text meant for each specific question. Do not allow answers to bleed into one another.
-2. CONTEXT PRESERVATION: If a student scattered their answer for Q1 across multiple pages, intelligently stitch those exact parts together into a single string.
+1. INTELLIGENT MATCHING & DEMARCATION: Do not just look for exact string matches of the Question IDs. Understand the hierarchy (e.g., Question 1 -> Part A -> subpart i). Isolate the exact text meant for each specific question.
+2. CONTEXT PRESERVATION: If a student scattered their answer for a question across multiple pages, intelligently stitch those exact parts together into a single string.
 3. ZERO HALLUCINATION & NO GRADING: Do NOT correct their spelling. Do NOT grade. Your ONLY job is to extract verbatim what they wrote and route it.
-4. ABSENCE HANDLING: If the student completely skipped a question, you MUST return an empty string ("") for that Question ID.`;
+4. ABSENCE HANDLING: Only if you are absolutely certain the student completely skipped a question after scanning the entire text, return an empty string ("") for that Question ID.`;
 
         const { object: routingObject } = await generateObject({
             model: google('gemini-2.5-pro'),
