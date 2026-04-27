@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
 
         const arrayBuffer = await fileData.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
+
         const type = await fileTypeFromBuffer(buffer);
         const mime = type?.mime || 'application/pdf';
 
@@ -62,6 +63,12 @@ The JSON MUST exactly match this format:
             } else if (mime.startsWith('image/')) {
                 promptContent.push({ type: "image", image: `data:${mime};base64,${buffer.toString('base64')}` });
             }
+            console.log(`[OCR] PDF converted to ${pageImages.length} images.`);
+        } else if (mime.startsWith('image/')) {
+            pageImages.push(`data:${mime};base64,${buffer.toString('base64')}`);
+        } else {
+            return NextResponse.json({ error: 'Invalid file type. Only PDF and images are supported.' }, { status: 400 });
+        }
 
             console.log("[OCR] Extracting Rubric (PRO Model)...");
             const { text } = await generateText({
@@ -104,6 +111,30 @@ STRICT BOUNDARIES (DO NOT INVENT):
             } else if (mime.startsWith('image/')) {
                 allImages.push({ type: "image", image: `data:${mime};base64,${buffer.toString('base64')}` });
             }
+        } else {
+            // Student exams expect an Object. Stitch multiple objects together (Semantic Router).
+            try {
+                let mergedStudentAnswers: Record<string, string> = {};
+                for (const text of textOutputs) {
+                    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    try {
+                        const parsed = JSON.parse(cleanJson);
+                        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                            // Merge keys, appending text if the question spans multiple batches
+                            for (const [key, value] of Object.entries(parsed)) {
+                                if (mergedStudentAnswers[key]) {
+                                    mergedStudentAnswers[key] += "\n\n" + String(value);
+                                } else {
+                                    mergedStudentAnswers[key] = String(value);
+                                }
+                            }
+                        }
+                    } catch (parseIterErr) {
+                        console.warn(`[OCR] Failed to parse one student batch:`, parseIterErr);
+                        // Fallback: dump unparseable batch into a generic key
+                        mergedStudentAnswers["UNPARSED_BATCH_" + Date.now()] = text;
+                    }
+                }
 
             // Tunakata picha 5 kwa 5 na kuita API
             const BATCH_SIZE = 5;

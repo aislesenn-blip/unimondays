@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
-export const maxDuration = 300;
+export const maxDuration = 300; // 5 minutes max duration for Vercel
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || 'dummy',
@@ -69,7 +69,23 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Rubric is not a verified JSON array.' }, { status: 400 });
         }
 
-        await prisma.submission.update({ where: { id: globalSubmissionId }, data: { status: 'GRADING' } });
+        // Fix Legacy Data: If markingScheme is a URL, extract it first.
+        if (finalRubricText.includes('/') || finalRubricText.toLowerCase().endsWith('.pdf') || finalRubricText.toLowerCase().endsWith('.png') || finalRubricText.toLowerCase().endsWith('.jpg')) {
+            try {
+                const cleanPath = finalRubricText.startsWith('/') ? finalRubricText.slice(1) : finalRubricText;
+                const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(cleanPath);
+
+                if (fileData && !downloadError) {
+                    const arrayBuffer = await fileData.arrayBuffer();
+                    const buffer = Buffer.from(arrayBuffer);
+
+                    if (finalRubricText.toLowerCase().endsWith('.pdf')) {
+                        const pages = await extractPagesMultimodal(buffer);
+                        finalRubricText = pages.map(p => p.text).join('\n\n');
+                    } else {
+                        const mimeType = finalRubricText.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+                        finalRubricText = await ocrDocument(buffer, mimeType);
+                    }
 
         const studentText = submissionRecord.ocrText;
         const rubricQuestionIds = parsedRubricItems.map(r => r.questionId).join(", ");
@@ -96,9 +112,10 @@ COGNITIVE ROUTING DIRECTIVES:
             temperature: 0.0
         });
 
-        const studentAnswersDict: Record<string, string> = {};
-        routingObject.answers.forEach(item => {
-            studentAnswersDict[item.questionId] = item.extractedAnswer.trim();
+        // Update status to GRADING
+        await prisma.submission.update({
+             where: { id: globalSubmissionId },
+             data: { status: 'GRADING' }
         });
 
         // ============================================================================
@@ -217,13 +234,21 @@ SCORING CONSTRAINTS:
             create: { submissionId: globalSubmissionId, totalMarks: calculatedTotalScore, remarks: "Graded via L9 Semantic Router Architecture (Pure PRO Engine).", breakdown: JSON.stringify(finalBreakdown), detectedIdentity: regNoToSave }
         });
 
-        await prisma.submission.update({ where: { id: globalSubmissionId }, data: { status: 'GRADED', studentRegNo: regNoToSave } });
+        await prisma.submission.update({
+            where: { id: globalSubmissionId },
+            data: {
+                status: 'GRADED',
+                studentRegNo: regNoToSave
+            }
+        });
 
         console.log(`[GRADING] Successfully graded submission ${globalSubmissionId} with score ${calculatedTotalScore}`);
         return NextResponse.json({ success: true, score: calculatedTotalScore });
 
     } catch (error: any) {
         console.error("[FATAL-GRADING] Streaming API Failed:", error);
+
+        // Use the globally scoped submission ID to update the database without calling req.json() again
         try {
             if (globalSubmissionId) {
                 await prisma.submission.update({ where: { id: globalSubmissionId }, data: { status: 'FAILED', feedback: 'System encountered an error.' } });
