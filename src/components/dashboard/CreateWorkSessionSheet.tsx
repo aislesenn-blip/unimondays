@@ -212,7 +212,7 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
                                           </div>
                                       </div>
                                       <Textarea
-                                          value={item.criteria ? JSON.stringify(item.criteria, null, 2) : (item.rubricSegment || "")}
+                                          value={item.criteria ? (typeof item.criteria === 'string' ? item.criteria : JSON.stringify(item.criteria, null, 2)) : (item.rubricSegment || "")}
                                           onChange={(e) => updateRubricItem(index, item.criteria ? 'criteria' : 'rubricSegment', e.target.value)}
                                           className="min-h-[60px] text-xs resize-y font-mono"
                                           placeholder="Expected answer or rubric details..."

@@ -73,18 +73,19 @@ The JSON MUST exactly match this format:
         } else {
             promptContent.push({
                 type: "text",
-                text: `You are an L9 Intelligent Exam Collator. Your task is to read the provided student exam document and output a highly structured, logical text transcription.
+                text: `You are an L9 Intelligent Exam Collator with advanced cognitive collation abilities. Your task is to read the provided student exam document and output a highly structured, logical text transcription mapped by Question IDs.
 
 CRITICAL INSTRUCTIONS:
 1. Extract ALL handwritten and printed text precisely.
-2. INTELLIGENT SEMANTIC ROUTING (MANDATORY): Do NOT output page by page. Students answer questions out of order. You MUST collate, stitch, and group ALL parts of a single question's answer together under its Question ID.
-3. REGISTRATION NUMBER: Extract the student's Registration Number/ID if present.
-4. Output STRICTLY as a JSON object where keys are the Question IDs (normalized, e.g., "1a", "2b") and values are the full concatenated text of the student's answer for that Question ID.
+2. INTELLIGENT SEMANTIC ROUTING (MANDATORY): Students often write question numbers inconsistently (e.g., they might write "A ii)" instead of "1Aii", or just "iv)" if they are continuing from question 6). You MUST use deep contextual reasoning to deduce which part of the text answers which specific intended Question ID based on the document's flow.
+3. COLLATION: Do NOT output page by page. You MUST collate, stitch, and group ALL parts of a single question's answer together under its deduced, normalized Question ID.
+4. REGISTRATION NUMBER: Extract the student's Registration Number/ID if present.
+5. Output STRICTLY as a JSON object where keys are the Question IDs (normalized, e.g., "1ai", "1b", "6aiv") and values are the full concatenated text of the student's answer for that Question ID.
 
 Example Output format (Strictly JSON, no markdown):
 {
   "REGISTRATION_NUMBER": "2018-04-12551",
-  "1a": "Student's full answer for 1a...",
+  "1ai": "Student's full answer for 1ai...",
   "1b": "Student's full answer for 1b..."
 }`
             });
