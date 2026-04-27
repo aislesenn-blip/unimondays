@@ -6,17 +6,25 @@ const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 // Note: In production, passing the API key to the client is risky without proxy or server limits.
 // For this architecture refactor, we simulate the secure key fetching.
 export async function getClientGeminiKey() {
-    // Attempt to grab from an endpoint if needed, or process.env for simplicity here if exposed
-    const key = process.env.NEXT_PUBLIC_GEMINI_API_KEY || localStorage.getItem('gemini_api_key');
+    // Attempt to grab from public env variable first
+    let key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+    // If not public, fetch it securely from our new internal endpoint
     if (!key) {
-        // Fallback to fetching from server if not exposed publicly
         try {
-            const res = await fetch('/api/user/me');
-            const data = await res.json();
-            // Assuming admin/user might have a key attached or an internal proxy is used
-        } catch(e) {}
+            const res = await fetch('/api/ai/get-key');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.key) {
+                    key = data.key;
+                }
+            }
+        } catch(e) {
+            console.error("Failed to fetch internal API key", e);
+        }
     }
-    return key || "dummy"; // Replace "dummy" with actual secure fetching mechanism if strict
+
+    return key || "dummy";
 }
 
 // Optimization Prompt for Pre-processing
