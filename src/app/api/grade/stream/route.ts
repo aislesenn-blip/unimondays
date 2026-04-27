@@ -18,7 +18,7 @@ const google = createGoogleGenerativeAI({
 const atomicGradingSchema = z.object({
   question: z.string().describe("The exact question identifier being graded."),
   thoughtProcess: z.string().describe("Chain of thought: Explain step-by-step how the student's answer maps to the specific rubric criteria. Did they hit the required atomic concepts? DO THIS BEFORE SCORING."),
-  score: z.number().describe("The total awarded score based on semantic matching of the criteria and your thought process. Must not exceed the provided maxScore."),
+  scoresArray: z.array(z.number()).describe("An array of scores awarded for each atomic criterion met by the student. For example, if they met two criteria worth 1 mark each and half of a 2-mark criteria, output [1, 1, 1]. Do NOT sum them here."),
   max: z.number().describe("The maximum possible score for this question as defined in the marking scheme."),
   feedback: z.string().describe("Specific feedback explaining the score. Keep it to 1-2 sentences."),
   evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or missing.")
@@ -122,85 +122,122 @@ export async function POST(req: NextRequest) {
              data: { status: 'GRADING' }
         });
 
-        // Parse student text as JSON mapping (if possible) for routing
+        // Parse the Semantic JSON Map coming from the Client-Side Engine
         let parsedStudentAnswers: Record<string, string> = {};
+        let extractedStudentIdentity = "UNKNOWN";
         try {
-            parsedStudentAnswers = JSON.parse(submission.ocrText || "{}");
+            let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
+            // The client engine returns an array containing the map object
+            if (Array.isArray(extractedMap) && extractedMap.length > 0) {
+                const mapObj = extractedMap[0];
+                extractedStudentIdentity = mapObj.student_id || mapObj.student_name || "UNKNOWN";
+
+                if (Array.isArray(mapObj.questions)) {
+                    mapObj.questions.forEach((q: any) => {
+                        if (q.questionId) {
+                            parsedStudentAnswers[q.questionId] = q.text || "No text extracted.";
+                        }
+                    });
+                }
+            } else if (typeof extractedMap === 'object') {
+                 // Fallback if it returned just the object
+                 parsedStudentAnswers = extractedMap as unknown as Record<string, string>;
+            }
         } catch (e) {
-            console.log(`[GRADING] Student text is not structured JSON. Falling back to whole text.`);
-            parsedStudentAnswers = { "ALL": submission.ocrText || "" };
+            console.warn(`[GRADING] Failed to parse student semantic map. Expected JSON.`, e);
         }
 
-        // --- ATOMIC MAP-REDUCE GRADING ---
-        console.log(`[GRADING] Commencing Atomic Map-Reduce Grading...`);
-
-        const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
-
-You must evaluate the student's answer against the provided strict ATOMIC CRITERIA.
-Do NOT invent marks. Do NOT penalize correct alternative phrasing.
-Ensure absolute precision.`;
+        // --- L9 EVALUATOR (PASS 2) ---
+        console.log(`[GRADING] Commencing The Evaluator...`);
 
         let finalBreakdown: any[] = [];
         let calculatedTotalScore = 0;
 
         try {
-            const limit = pLimit(10); // L9 Parallel Batching Strategy
+            const limit = pLimit(10); // Parallel Batching Strategy
+
+            const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+            // Tengeneza Normalized Dictionary kutokea kwa Gemini
+            const normalizeId = (id: string) => (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+            const normalizedStudentAnswers: Record<string, string> = {};
+            for (const [key, val] of Object.entries(parsedStudentAnswers)) {
+                normalizedStudentAnswers[normalizeId(key)] = val;
+            }
 
             const gradingPromises = parsedRubricItems.map(rubricItem => {
                 return limit(async () => {
-                    const qId = rubricItem.qId || rubricItem.questionId;
+                    const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;
 
-                    // Route to exact answer if available, else give the whole text
-                    const studentAnswerForQ = parsedStudentAnswers[qId] || parsedStudentAnswers["ALL"] || "";
+                    const normalizedTargetId = normalizeId(originalQId);
 
-                    if (!studentAnswerForQ.trim()) {
-                        // Fast path: Empty answer instantly receives 0
-                        return {
-                            question: qId,
-                            thoughtProcess: "Student provided no answer.",
-                            score: 0,
-                            max: maxScore,
-                            feedback: "No answer provided.",
-                            evidenceSnippet: "None"
-                        };
+                    // Fetch the mapped text
+                    let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
+
+                    // FALLBACK: Kama AI ilishindwa kufuata rules kwa asilimia 100 na kuweka herufi za ziada
+                    if (studentAnswerForQ === undefined) {
+                        const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
+                        if (fallbackKey) {
+                            studentAnswerForQ = normalizedStudentAnswers[fallbackKey];
+                        } else {
+                            studentAnswerForQ = "";
+                        }
                     }
 
+                    // Fast Fail - Strict Check
+                    if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
+                        return { question: originalQId, score: 0, thoughtProcess: "Blank logic", feedback: "No answer provided by the student.", max: maxScore, evidenceSnippet: "None" };
+                    }
+
+                    console.log(`[GRADING] Evaluating Box ${originalQId}...`);
+
+                    const systemPrompt = `You are an elite Examination Engine. Evaluate the student's answer against the ATOMIC CRITERIA. If the answer explicitly meets the criteria, award the marks.`;
+
+                    // THE BOX PROMPT
                     const boxPrompt = `
-EVALUATE THIS SPECIFIC QUESTION ONLY: ${qId}
+EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
 MAXIMUM MARKS: ${maxScore}
-
-ATOMIC MARKING CRITERIA:
-"""
-${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment, null, 2)}
-"""
-
-STUDENT ANSWER:
-"""
-${studentAnswerForQ}
-"""
+ATOMIC MARKING CRITERIA: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment, null, 2)}
+STUDENT ANSWER: ${studentAnswerForQ}
 `;
-                    console.log(`[GRADING] Grading Box ${qId}...`);
-                    const { object } = await generateObject({
-                        model: google('gemini-2.5-pro'),
-                        system: systemPrompt,
-                        prompt: boxPrompt,
-                        schema: atomicGradingSchema,
-                        temperature: 0.0,
-                    });
+                    // BULLETPROOF RETRY LOGIC (Self-Healing)
+                    let attempt = 0;
+                    let object: any = null;
 
-                    // Deterministic Math clamping
-                    let safeScore = typeof object.score === 'number' ? object.score : 0;
-                    safeScore = Math.max(0, Math.min(safeScore, maxScore));
+                    while (attempt < 3) {
+                        try {
+                            const result = await generateObject({
+                                model: google('gemini-2.5-pro'),
+                                system: systemPrompt,
+                                prompt: boxPrompt,
+                                schema: atomicGradingSchema,
+                                temperature: 0.0,
+                            });
+                            object = result.object;
+                            break; // Imefanikiwa, toka kwenye loop
+                        } catch (err: any) {
+                            attempt++;
+                            console.warn(`[Self-Healing] Box ${originalQId} failed on attempt ${attempt}. Error: ${err.message}`);
+                            if (attempt >= 3) {
+                                // FAST FAIL YA USALAMA: Swali moja likigoma kabisa, mpe 0 lakini usicrash mtihani mzima
+                                console.error(`Box ${originalQId} completely failed after 3 attempts.`);
+                                object = { scoresArray: [0], thoughtProcess: "API Error after 3 retries", feedback: "Failed to evaluate due to system error.", evidenceSnippet: "None" };
+                                break;
+                            }
+                            // Exponential backoff (Subiri sekunde 2, kisha 4, kisha rudi tena)
+                            await delay(attempt * 2000);
+                        }
+                    }
 
-                    return {
-                        question: qId,
-                        thoughtProcess: object.thoughtProcess,
-                        score: safeScore,
-                        max: maxScore,
-                        feedback: object.feedback,
-                        evidenceSnippet: object.evidenceSnippet
-                    };
+                    // Deterministic Javascript Math (Hakuna kubahatisha)
+                    let rawSum = 0;
+                    if (Array.isArray(object.scoresArray)) {
+                        rawSum = object.scoresArray.reduce((sum: number, val: number) => sum + (typeof val === 'number' ? val : 0), 0);
+                    }
+                    let safeScore = Math.max(0, Math.min(rawSum, maxScore)); // Hard Clamp Logic
+
+                    return { question: originalQId, score: safeScore, thoughtProcess: object.thoughtProcess, feedback: object.feedback, max: maxScore, evidenceSnippet: object.evidenceSnippet };
                 });
             });
 
@@ -210,30 +247,12 @@ ${studentAnswerForQ}
             calculatedTotalScore = rawGradedQuestions.reduce((acc, curr) => acc + curr.score, 0);
 
         } catch (gradingError) {
-            console.error(`[GRADING] Atomic Map-Reduce Grading failed:`, gradingError);
+            console.error(`[GRADING] Evaluation Workflow failed:`, gradingError);
             throw gradingError;
         }
 
-        // Fast parallel call to extract Reg No from whole text
-        let detectedRegNo = "UNKNOWN";
-        try {
-            const regNoTextToAnalyze = parsedStudentAnswers["REGISTRATION_NUMBER"] || submission.ocrText || "";
-            if (parsedStudentAnswers["REGISTRATION_NUMBER"]) {
-                 detectedRegNo = parsedStudentAnswers["REGISTRATION_NUMBER"];
-            } else {
-                 const regNoResponse = await generateObject({
-                    model: google('gemini-2.5-pro'),
-                    system: "Extract the registration number from the text. Return UNKNOWN if none is found.",
-                    prompt: regNoTextToAnalyze,
-                    schema: regNoSchema,
-                    temperature: 0.0
-                });
-                detectedRegNo = regNoResponse.object.detectedRegNo;
-            }
-        } catch(e) { /* ignore */ }
-
         // Finalize
-        const regNoToSave = detectedRegNo && detectedRegNo !== "UNKNOWN" ? detectedRegNo : submission.studentRegNo;
+        const regNoToSave = extractedStudentIdentity && extractedStudentIdentity !== "UNKNOWN" ? extractedStudentIdentity : submission.studentRegNo;
 
         await prisma.score.upsert({
             where: { submissionId: globalSubmissionId },
