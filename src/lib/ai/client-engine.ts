@@ -1,5 +1,4 @@
 // L9 Client-Side AI Engine (Multimodal Vision Processor)
-import * as pdfjsLib from 'pdfjs-dist';
 
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -25,41 +24,6 @@ export function parseLLMJSON(content: string): any {
                 else if (char === '}') {
                     depth--;
                     if (depth === 0) { endIndex = i; break; }
-                }
-            }
-        }
-        content = endIndex !== -1 ? content.substring(startIndex, endIndex + 1) : content.substring(startIndex);
-    }
-    content = content.replace(/^```json\s*/gi, '').replace(/^```\s*/gi, '').replace(/```\s*$/gi, '');
-    content = content.replace(/[\n\r\t]+/g, ' ');
-    content = content.replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3');
-    content = content.replace(/(:\s*)'([^']+)'(\s*[,}])/g, '$1"$2"$3');
-    content = content.replace(/,\s*([}\]])/g, '$1');
-    content = content.replace(/\\(?!["\\/bfnrt])/g, '\\\\');
-
-    try {
-        return JSON.parse(content);
-    } catch (e) {
-        console.warn("JSON parse failed, returning empty map:", e);
-        return {}; // Safe fallback
-    }
-}
-
-// Use an environment variable or safe fallback for the browser.
-// Note: In production, passing the API key to the client is risky without proxy or server limits.
-// For this architecture refactor, we simulate the secure key fetching.
-export async function getClientGeminiKey() {
-    // Attempt to grab from public env variable first
-    let key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-
-    // If not public, fetch it securely from our new internal endpoint
-    if (!key) {
-        try {
-            const res = await fetch('/api/ai/get-key');
-            if (res.ok) {
-                const data = await res.json();
-                if (data.key) {
-                    key = data.key;
                 }
             }
         }
@@ -160,52 +124,8 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 }
 
 
-// 1. SINGLE SOURCE OF TRUTH KWA IDs (Client & Server lazima zitumie hii)
-export const normalizeQuestionId = (id: string): string => {
-    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-};
-
-// 2. THE IRONCLAD JSON PARSER (Inaokoa mfumo usicrash AI ikileta Markdown)
-export function parseLLMJSON(content: string): any {
-    if (!content || content.trim() === '') return {};
-    content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    let startIndex = content.indexOf('{');
-    if (startIndex !== -1) {
-        let depth = 0, inString = false, escapeNext = false, endIndex = -1;
-        for (let i = startIndex; i < content.length; i++) {
-            const char = content[i];
-            if (escapeNext) { escapeNext = false; continue; }
-            if (char === '\\') { escapeNext = true; continue; }
-            if (char === '"') { inString = !inString; continue; }
-            if (!inString) {
-                if (char === '{') depth++;
-                else if (char === '}') {
-                    depth--;
-                    if (depth === 0) { endIndex = i; break; }
-                }
-            }
-        }
-        content = endIndex !== -1 ? content.substring(startIndex, endIndex + 1) : content.substring(startIndex);
-    }
-    content = content.replace(/^```json\s*/gi, '').replace(/^```\s*/gi, '').replace(/```\s*$/gi, '');
-    content = content.replace(/[\n\r\t]+/g, ' ');
-    content = content.replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3');
-    content = content.replace(/(:\s*)'([^']+)'(\s*[,}])/g, '$1"$2"$3');
-    content = content.replace(/,\s*([}\]])/g, '$1');
-    content = content.replace(/\\(?!["\\/bfnrt])/g, '\\\\');
-
-    try {
-        return JSON.parse(content);
-    } catch (e) {
-        console.warn("JSON parse failed, returning empty map:", e);
-        return {}; // Safe fallback
-    }
-}
-
 // 3. THE EXTRACTION ENGINE YENYE FEW-SHOT PROMPT
 export async function extractStudentExamsClient(base64Images: string[], targetQuestions: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Single-Pass Multimodal Extraction for Student Exam...");
-
     // Tunahakikisha AI inapewa Normalized IDs pekee, isije ikajitungia format zake
     const normalizedTargets = targetQuestions.map(id => normalizeQuestionId(id));
 
@@ -246,10 +166,7 @@ TARGET QUESTION IDs:
         })
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Google API error: ${response.status} ${errorText}`);
-    }
+    if (!response.ok) throw new Error(`Google API error: ${response.status}`);
     const data = await response.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
 
@@ -266,6 +183,8 @@ export async function fileToBase64(file: File): Promise<string> {
         reader.onerror = error => reject(error);
     });
 }
+
+import * as pdfjsLib from 'pdfjs-dist';
 
 // Inform PDF.js where the worker is (needed for client-side execution)
 if (typeof window !== 'undefined' && 'Worker' in window) {
