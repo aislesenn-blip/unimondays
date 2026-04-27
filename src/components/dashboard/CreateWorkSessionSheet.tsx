@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Plus, UploadCloud, Loader2, Edit3, CheckCircle2, Trash2 } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase-client";
 import { v4 as uuidv4 } from "uuid";
-import { convertPdfToImagesClient, fileToBase64, optimizeMarkingSchemeClient } from "@/lib/ai/client-engine";
+import { getClientGeminiKey, convertPdfToImagesClient, fileToBase64, optimizeMarkingSchemeClient } from "@/lib/ai/client-engine";
 
 interface CreateWorkSessionSheetProps {
   classId: string;
@@ -57,7 +57,8 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
       }
 
       // 2. Client-Side AI Optimization Call
-      const parsedItems = await optimizeMarkingSchemeClient(base64Images);
+      const apiKey = await getClientGeminiKey();
+      const parsedItems = await optimizeMarkingSchemeClient(base64Images, apiKey);
 
       // 3. Upload raw file to Supabase for storage
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
