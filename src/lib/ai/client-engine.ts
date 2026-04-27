@@ -2,29 +2,54 @@
 
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
+// 1. SINGLE SOURCE OF TRUTH KWA IDs (Client & Server lazima zitumie hii)
+export const normalizeQuestionId = (id: string): string => {
+    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+// 2. THE IRONCLAD JSON PARSER (Inaokoa mfumo usicrash AI ikileta Markdown)
+export function parseLLMJSON(content: string): any {
+    if (!content || content.trim() === '') return {};
+    content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    let startIndex = content.indexOf('{');
+    if (startIndex !== -1) {
+        let depth = 0, inString = false, escapeNext = false, endIndex = -1;
+        for (let i = startIndex; i < content.length; i++) {
+            const char = content[i];
+            if (escapeNext) { escapeNext = false; continue; }
+            if (char === '\\') { escapeNext = true; continue; }
+            if (char === '"') { inString = !inString; continue; }
+            if (!inString) {
+                if (char === '{') depth++;
+                else if (char === '}') {
+                    depth--;
+                    if (depth === 0) { endIndex = i; break; }
+                }
+            }
+        }
+        content = endIndex !== -1 ? content.substring(startIndex, endIndex + 1) : content.substring(startIndex);
+    }
+    content = content.replace(/^```json\s*/gi, '').replace(/^```\s*/gi, '').replace(/```\s*$/gi, '');
+    content = content.replace(/[\n\r\t]+/g, ' ');
+    content = content.replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3');
+    content = content.replace(/(:\s*)'([^']+)'(\s*[,}])/g, '$1"$2"$3');
+    content = content.replace(/,\s*([}\]])/g, '$1');
+    content = content.replace(/\\(?!["\\/bfnrt])/g, '\\\\');
+
+    try {
+        return JSON.parse(content);
+    } catch (e) {
+        console.warn("JSON parse failed, returning empty map:", e);
+        return {}; // Safe fallback
+    }
+}
+
 // Use an environment variable or safe fallback for the browser.
 // Note: In production, passing the API key to the client is risky without proxy or server limits.
 // For this architecture refactor, we simulate the secure key fetching.
+// Helper is deprecated: We now use the secure proxy endpoint instead of exposing the key
 export async function getClientGeminiKey() {
-    // Attempt to grab from public env variable first
-    let key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-
-    // If not public, fetch it securely from our new internal endpoint
-    if (!key) {
-        try {
-            const res = await fetch('/api/ai/get-key');
-            if (res.ok) {
-                const data = await res.json();
-                if (data.key) {
-                    key = data.key;
-                }
-            }
-        } catch(e) {
-            console.error("Failed to fetch internal API key", e);
-        }
-    }
-
-    return key || "dummy";
+    return process.env.NEXT_PUBLIC_GEMINI_API_KEY || "dummy";
 }
 
 // Optimization Prompt for Pre-processing
@@ -71,7 +96,8 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
         }
     });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    // Route traffic through our secure backend proxy to protect the API key
+    const response = await fetch('/api/ai/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,77 +124,54 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 }
 
 
-export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Single-Pass Multimodal Extraction for Student Exam...");
+// 3. THE EXTRACTION ENGINE YENYE FEW-SHOT PROMPT
+export async function extractStudentExamsClient(base64Images: string[], targetQuestions: string[], apiKey: string): Promise<Record<string, string>> {
+    // Tunahakikisha AI inapewa Normalized IDs pekee, isije ikajitungia format zake
+    const normalizedTargets = targetQuestions.map(id => normalizeQuestionId(id));
 
     const extractionPrompt = `
-You are the UE Mass-Extractor for an Examination Board.
-Locate and transcribe the exact answer for the following list of Question IDs from the provided student document images:
-[ ${questionsToExtract.join(", ")} ]
+You are the Master Data Extractor for an Examination Board.
+Your ONLY task is to locate and transcribe the exact answer for the specific Question IDs provided below from the student's document images.
 
-*** STRICT INSTRUCTIONS ***
-1. For each Question ID listed, find where the student answered it and transcribe their EXACT text, math, or steps. Do not summarize or correct spelling.
-2. If the student did not explicitly write anything for a question, output EXACTLY "No text extracted."
-3. For diagram questions, describe the drawn nodes and connection logic literally.
-4. DO NOT reference the Marking Scheme or try to evaluate if the student is correct. Your job is ONLY transcription.
-5. Output ONLY valid JSON mapping the Question ID to the transcribed answer string.
+TARGET QUESTION IDs:
+[ ${normalizedTargets.map(id => `"${id}"`).join(", ")} ]
 
-*** FEW-SHOT EXAMPLES ***
+*** ABSOLUTE RULES ***
+1. Use EXACTLY the TARGET QUESTION IDs provided above as your JSON keys. Do not invent, capitalize, or alter them.
+2. Transcribe the student's exact text, math, or formulas for that specific question.
+3. If the student left the question completely blank, output EXACTLY "No text extracted."
+4. Output ONLY valid, raw JSON. No conversational text. No markdown formatting.
 
-[INPUT IMAGE]: A student wrote "1(a) The powerhouse is the mitochonria. (b) [Blank space]"
-[TARGET IDs]: ["Q1_A", "Q1_B"]
-
-[OUTPUT JSON]
+*** REQUIRED JSON SCHEMA EXAMPLE ***
 {
-  "Q1_A": "The powerhouse is the mitochonria.",
-  "Q1_B": "No text extracted."
-}
-
-[INPUT IMAGE]: Student crossed out their first answer for Q3 and wrote "Q3: 45 kg" next to it.
-[TARGET IDs]: ["Q3"]
-
-[OUTPUT JSON]
-{
-  "Q3": "45 kg"
+  "${normalizedTargets[0] || "q1a"}": "The mitochondria is the powerhouse...",
+  "${normalizedTargets[1] || "q1b"}": "No text extracted.",
+  "${normalizedTargets[2] || "q2"}": "x = 45"
 }
 `;
 
     const userParts: any[] = [{ text: extractionPrompt }];
-
     base64Images.forEach(img => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches) {
-            userParts.push({
-                inlineData: {
-                    mimeType: matches[1],
-                    data: matches[2]
-                }
-            });
-        }
+        if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
     });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    // Route traffic through our secure backend proxy to protect the API key
+    const response = await fetch('/api/ai/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             contents: [{ role: "user", parts: userParts }],
-            generationConfig: {
-                temperature: 0.0,
-                responseMimeType: "application/json"
-            }
+            generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
         })
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Google AI Studio API error: ${response.status} ${errorText}`);
-    }
-
+    if (!response.ok) throw new Error(`Google API error: ${response.status}`);
     const data = await response.json();
-    let textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
 
-    textContent = textContent.replace(/```json/gi, '').replace(/```/g, '').trim();
-    return JSON.parse(textContent);
+    // Tunatumia parser yetu ya chuma badala ya JSON.parse()
+    return parseLLMJSON(rawText);
 }
 
 // Convert File to Base64 for the Client Engine

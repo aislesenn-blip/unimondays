@@ -6,8 +6,11 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { supabase } from '@/lib/supabase';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import pLimit from 'p-limit';
+import { normalizeQuestionId } from "@/lib/ai/client-engine";
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
+
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || 'dummy',
@@ -156,32 +159,40 @@ export async function POST(req: NextRequest) {
         try {
             const limit = pLimit(10); // Parallel Batching Strategy
 
-            // Fuzzy ID Normalizer helper to match keys robustly
-            const normalizeId = (id: string) => (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-
+            // Tengeneza Normalized Dictionary kutokea kwa Gemini
             const normalizedStudentAnswers: Record<string, string> = {};
             for (const [key, val] of Object.entries(parsedStudentAnswers)) {
-                normalizedStudentAnswers[normalizeId(key)] = val;
+                normalizedStudentAnswers[normalizeQuestionId(key)] = val;
             }
 
-            const gradingPromises = parsedRubricItems.map(rubricItem => {
+            const gradingPromises = parsedRubricItems.map((rubricItem: any) => {
                 return limit(async () => {
                     const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;
 
-                    const normalizedQId = normalizeId(originalQId);
+                    const normalizedTargetId = normalizeQuestionId(originalQId);
 
                     // Route to the extracted verbatim answer mapped from the Client-Side PASS 1B
-                    const studentAnswerForQ = normalizedStudentAnswers[normalizedQId] || "";
+                    let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
+
+                    // FALLBACK: Kama AI ilishindwa kufuata rules kwa asilimia 100 na kuweka herufi za ziada
+                    if (studentAnswerForQ === undefined) {
+                        const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
+                        if (fallbackKey) {
+                            studentAnswerForQ = normalizedStudentAnswers[fallbackKey];
+                        } else {
+                            studentAnswerForQ = "";
+                        }
+                    }
 
                     if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
                         // Fast path: Empty or un-extracted answer instantly receives 0
                         return {
                             question: originalQId,
-                            thoughtProcess: "Student provided no answer (Client Engine found 'No text extracted').",
+                            thoughtProcess: "Blank logic",
                             score: 0,
                             max: maxScore,
-                            feedback: "No answer provided.",
+                            feedback: "No answer provided by the student.",
                             evidenceSnippet: "None"
                         };
                     }
@@ -190,7 +201,7 @@ export async function POST(req: NextRequest) {
 
                     const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
 
-You must evaluate the student's answer against the provided strict ATOMIC CRITERIA.
+You must evaluate the student's answer against the provided strict ATOMIC CRITERIA. If the answer explicitly meets the criteria, award the marks.
 Do NOT invent marks. Do NOT penalize correct alternative phrasing.
 Ensure absolute precision.`;
 
@@ -208,42 +219,51 @@ STUDENT ANSWER:
 ${studentAnswerForQ}
 """
 `;
-                    try {
-                        const { object } = await generateObject({
-                            model: google('gemini-2.5-pro'),
-                            system: systemPrompt,
-                            prompt: boxPrompt,
-                            schema: atomicGradingSchema,
-                            temperature: 0.0,
-                        });
+                    // BULLETPROOF RETRY LOGIC (Self-Healing)
+                    let attempt = 0;
+                    let object: any = null;
 
-                        // Deterministic Math Evaluation
-                        let rawSum = 0;
-                        if (Array.isArray(object.scoresArray)) {
-                            rawSum = object.scoresArray.reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+                    while (attempt < 3) {
+                        try {
+                            const result = await generateObject({
+                                model: google('gemini-2.5-pro'),
+                                system: systemPrompt,
+                                prompt: boxPrompt,
+                                schema: atomicGradingSchema,
+                                temperature: 0.0,
+                            });
+                            object = result.object;
+                            break; // Imefanikiwa, toka kwenye loop
+                        } catch (err: any) {
+                            attempt++;
+                            console.warn(`[Self-Healing] Box ${originalQId} failed on attempt ${attempt}. Error: ${err.message}`);
+                            if (attempt >= 3) {
+                                // FAST FAIL YA USALAMA: Swali moja likigoma kabisa, mpe 0 lakini usicrash mtihani mzima
+                                console.error(`Box ${originalQId} completely failed after 3 attempts.`);
+                                object = { scoresArray: [0], thoughtProcess: "API Error after 3 retries", feedback: "Failed to evaluate due to system error.", evidenceSnippet: "None" };
+                                break;
+                            }
+                            // Exponential backoff (Subiri sekunde 2, kisha 4, kisha rudi tena)
+                            await delay(attempt * 2000);
                         }
-
-                        let safeScore = Math.max(0, Math.min(rawSum, maxScore));
-
-                        return {
-                            question: originalQId,
-                            thoughtProcess: object.thoughtProcess,
-                            score: safeScore,
-                            max: maxScore,
-                            feedback: object.feedback,
-                            evidenceSnippet: object.evidenceSnippet
-                        };
-                    } catch (boxError) {
-                        console.error(`[GRADING] Box ${originalQId} failed evaluation:`, boxError);
-                        return {
-                            question: originalQId,
-                            thoughtProcess: "Evaluation failed for this specific question due to an AI processing error.",
-                            score: 0,
-                            max: maxScore,
-                            feedback: "Error encountered during grading.",
-                            evidenceSnippet: "None"
-                        };
                     }
+
+                    // Deterministic Math Evaluation
+                    let rawSum = 0;
+                    if (Array.isArray(object.scoresArray)) {
+                        rawSum = object.scoresArray.reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
+                    }
+
+                    let safeScore = Math.max(0, Math.min(rawSum, maxScore));
+
+                    return {
+                        question: originalQId,
+                        thoughtProcess: object.thoughtProcess,
+                        score: safeScore,
+                        max: maxScore,
+                        feedback: object.feedback,
+                        evidenceSnippet: object.evidenceSnippet
+                    };
                 });
             });
 
