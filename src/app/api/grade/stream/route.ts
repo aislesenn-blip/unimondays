@@ -9,6 +9,13 @@ import pLimit from 'p-limit';
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
+// Replicate normalizeQuestionId here because client-engine.ts imports pdfjsLib which might not run properly in Edge or Node without extra setup.
+const normalizeQuestionId = (id: string): string => {
+    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || 'dummy',
   baseURL: "https://generativelanguage.googleapis.com/v1beta/",
@@ -156,12 +163,9 @@ export async function POST(req: NextRequest) {
         try {
             const limit = pLimit(10); // Parallel Batching Strategy
 
-            // Fuzzy ID Normalizer helper to match keys robustly
-            const normalizeId = (id: string) => (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-
             const normalizedStudentAnswers: Record<string, string> = {};
             for (const [key, val] of Object.entries(parsedStudentAnswers)) {
-                normalizedStudentAnswers[normalizeId(key)] = val;
+                normalizedStudentAnswers[normalizeQuestionId(key)] = val;
             }
 
             const gradingPromises = parsedRubricItems.map(rubricItem => {
@@ -169,10 +173,20 @@ export async function POST(req: NextRequest) {
                     const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
                     const maxScore = rubricItem.maxScore || 0;
 
-                    const normalizedQId = normalizeId(originalQId);
+                    const normalizedTargetId = normalizeQuestionId(originalQId);
 
                     // Route to the extracted verbatim answer mapped from the Client-Side PASS 1B
-                    const studentAnswerForQ = normalizedStudentAnswers[normalizedQId] || "";
+                    let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
+
+                    // FALLBACK: Kama AI ilishindwa kufuata rules kwa asilimia 100 na kuweka herufi za ziada
+                    if (studentAnswerForQ === undefined) {
+                        const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
+                        if (fallbackKey) {
+                            studentAnswerForQ = normalizedStudentAnswers[fallbackKey];
+                        } else {
+                            studentAnswerForQ = "";
+                        }
+                    }
 
                     if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
                         // Fast path: Empty or un-extracted answer instantly receives 0
@@ -208,42 +222,51 @@ STUDENT ANSWER:
 ${studentAnswerForQ}
 """
 `;
-                    try {
-                        const { object } = await generateObject({
-                            model: google('gemini-2.5-pro'),
-                            system: systemPrompt,
-                            prompt: boxPrompt,
-                            schema: atomicGradingSchema,
-                            temperature: 0.0,
-                        });
+                    // BULLETPROOF RETRY LOGIC (Self-Healing)
+                    let attempt = 0;
+                    let object: any = null;
 
-                        // Deterministic Math Evaluation
-                        let rawSum = 0;
-                        if (Array.isArray(object.scoresArray)) {
-                            rawSum = object.scoresArray.reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+                    while (attempt < 3) {
+                        try {
+                            const result = await generateObject({
+                                model: google('gemini-2.5-pro'),
+                                system: systemPrompt,
+                                prompt: boxPrompt,
+                                schema: atomicGradingSchema,
+                                temperature: 0.0,
+                            });
+                            object = result.object;
+                            break; // Imefanikiwa, toka kwenye loop
+                        } catch (err: any) {
+                            attempt++;
+                            console.warn(`[Self-Healing] Box ${originalQId} failed on attempt ${attempt}. Error: ${err.message}`);
+                            if (attempt >= 3) {
+                                // FAST FAIL YA USALAMA: Swali moja likigoma kabisa, mpe 0 lakini usicrash mtihani mzima
+                                console.error(`Box ${originalQId} completely failed after 3 attempts.`);
+                                object = { scoresArray: [0], thoughtProcess: "API Error after 3 retries", feedback: "Failed to evaluate due to system error.", evidenceSnippet: "None" };
+                                break;
+                            }
+                            // Exponential backoff (Subiri sekunde 2, kisha 4, kisha rudi tena)
+                            await delay(attempt * 2000);
                         }
-
-                        let safeScore = Math.max(0, Math.min(rawSum, maxScore));
-
-                        return {
-                            question: originalQId,
-                            thoughtProcess: object.thoughtProcess,
-                            score: safeScore,
-                            max: maxScore,
-                            feedback: object.feedback,
-                            evidenceSnippet: object.evidenceSnippet
-                        };
-                    } catch (boxError) {
-                        console.error(`[GRADING] Box ${originalQId} failed evaluation:`, boxError);
-                        return {
-                            question: originalQId,
-                            thoughtProcess: "Evaluation failed for this specific question due to an AI processing error.",
-                            score: 0,
-                            max: maxScore,
-                            feedback: "Error encountered during grading.",
-                            evidenceSnippet: "None"
-                        };
                     }
+
+                    // Deterministic Javascript Math (Hakuna kubahatisha)
+                    let rawSum = 0;
+                    if (Array.isArray(object.scoresArray)) {
+                        rawSum = object.scoresArray.reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
+                    }
+
+                    let safeScore = Math.max(0, Math.min(rawSum, maxScore));
+
+                    return {
+                        question: originalQId,
+                        thoughtProcess: object.thoughtProcess,
+                        score: safeScore,
+                        max: maxScore,
+                        feedback: object.feedback,
+                        evidenceSnippet: object.evidenceSnippet
+                    };
                 });
             });
 

@@ -15,7 +15,7 @@ import { Upload, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { supabaseClient } from "@/lib/supabase-client";
 import { v4 as uuidv4 } from "uuid";
-import { getClientGeminiKey, convertPdfToImagesClient, fileToBase64, extractStudentExamsClient } from "@/lib/ai/client-engine";
+import { getClientGeminiKey, convertPdfToImagesClient, fileToBase64, extractStudentExamsClient, normalizeQuestionId } from "@/lib/ai/client-engine";
 
 interface SubmissionDrawerProps {
   session: any;
@@ -61,9 +61,12 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
       // Fallback if rubric was missing
       if (questionsToExtract.length === 0) questionsToExtract = ["All numbered questions from the document"];
 
+      // Tunavuta IDs na kuzinormalize palepale kabla hazijaenda kwa AI
+      const targetQuestions = questionsToExtract.map((id: string) => normalizeQuestionId(id));
+
       // 3. Client-Side AI Extraction Call (Single-Pass Semantic Router)
       const apiKey = await getClientGeminiKey();
-      const extractedTextMap = await extractStudentExamsClient(base64Images, questionsToExtract, apiKey);
+      const extractedTextMap = await extractStudentExamsClient(base64Images, targetQuestions, apiKey);
 
       // 4. Upload raw file to Supabase for storage
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -79,13 +82,14 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
       }
 
       // 5. Submit Semantic JSON Map and file path to API directly
+      // In the backend extractedText expects an array with the map or just the map. We use [extractedTextMap]
       const res = await fetch("/api/student/submit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          extractedText: JSON.stringify(extractedTextMap), // Send the map to backend Evaluator
+          extractedText: JSON.stringify([extractedTextMap]), // Send the map to backend Evaluator
           filePath,
           workSessionId: session.id,
           filename: file.name
