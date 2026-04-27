@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import {
-    getClientGeminiKey,
     convertPdfToImagesClient,
     fileToBase64,
     extractStudentExamsClient,
@@ -48,8 +47,7 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
             const rawTargetQuestions = (JSON.parse(rubricData.rubric || "[]")).map((i: any) => i.qId || i.questionId);
             const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
 
-            const apiKey = await getClientGeminiKey();
-            const extractedMap = await extractStudentExamsClient(base64Images, targetQuestions, apiKey);
+            const extractedMap = await extractStudentExamsClient(base64Images, targetQuestions);
 
             setLoadingState("uploading");
 

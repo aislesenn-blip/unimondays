@@ -1,6 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+// Removed the direct Google API endpoint and key fetching logic
+// since exposing the API key to the browser is a major security risk.
+// All traffic is now securely routed through our backend proxy.
 
 export async function getClientGeminiKey() {
     let key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
@@ -68,14 +70,14 @@ The JSON MUST exactly match this format:
 [ { "qId": "string", "maxScore": number, "criteria": [ { "id": "string", "text": "string", "marks": number } ] } ]
 `;
 
-export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey: string): Promise<any[]> {
+export async function optimizeMarkingSchemeClient(base64Images: string[]): Promise<any[]> {
     const userParts: any[] = [{ text: OPTIMIZE_PROMPT }];
     base64Images.forEach(img => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
     });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    const response = await fetch('/api/ai/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,7 +90,7 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
     return parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
 }
 
-export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
+export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[]): Promise<Record<string, string>> {
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
 
     const extractionPrompt = `
@@ -113,7 +115,7 @@ You are a High-Precision Data Extractor. Locate and transcribe the exact answer 
         if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
     });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    const response = await fetch('/api/ai/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -4,7 +4,10 @@ import { generateObject } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import pLimit from 'p-limit';
-import { normalizeQuestionId } from "@/lib/ai/client-engine";
+
+const normalizeQuestionId = (id: string): string => {
+    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+};
 
 export const maxDuration = 300;
 
