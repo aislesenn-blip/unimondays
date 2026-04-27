@@ -4,7 +4,6 @@ import { generateObject } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import pLimit from 'p-limit';
-import { normalizeQuestionId } from "@/lib/ai/client-engine";
 
 export const maxDuration = 300;
 

@@ -1,6 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+// Removed the direct Google API endpoint and key fetching logic
+// since exposing the API key to the browser is a major security risk.
+// All traffic is now securely routed through our backend proxy.
 
 export async function getClientGeminiKey() {
     let key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
