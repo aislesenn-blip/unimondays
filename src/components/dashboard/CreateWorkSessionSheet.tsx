@@ -18,9 +18,11 @@ interface CreateWorkSessionSheetProps {
 }
 
 interface RubricItem {
-  questionId: string;
+  qId?: string;
+  questionId?: string; // fallback
   maxScore: number;
-  rubricSegment: string;
+  rubricSegment?: string; // fallback
+  criteria?: any[]; // new atomic format
 }
 
 export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps) {
@@ -92,9 +94,9 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
   };
 
   const updateRubricItem = (index: number, field: keyof RubricItem, value: any) => {
-      const newItems = [...rubricItems];
+      const newItems = [...rubricItems] as any[];
       if (field === 'maxScore') newItems[index][field] = Number(value) || 0;
-      else newItems[index][field] = value as string;
+      else newItems[index][field] = value;
       setRubricItems(newItems);
       setValue("totalMarks", newItems.reduce((sum, item) => sum + Number(item.maxScore), 0));
   };
@@ -203,20 +205,25 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
                               <div key={index} className="flex gap-3 items-start p-3 bg-background border rounded shadow-sm">
                                   <div className="flex-1 space-y-2">
                                       <div className="flex gap-2">
-                                          <Input value={item.questionId} onChange={(e) => updateRubricItem(index, 'questionId', e.target.value)} className="w-24 h-8 text-sm font-semibold" placeholder="Q ID" />
+                                          <Input value={item.qId || item.questionId || ""} onChange={(e) => updateRubricItem(index, 'qId', e.target.value)} className="w-24 h-8 text-sm font-semibold" placeholder="Q ID" />
                                           <div className="relative w-24">
                                               <Input type="number" step="0.5" value={item.maxScore} onChange={(e) => updateRubricItem(index, 'maxScore', e.target.value)} className="pl-2 pr-8 h-8 text-sm" placeholder="Score" />
                                               <span className="absolute right-2 top-1.5 text-xs text-muted-foreground">pts</span>
                                           </div>
                                       </div>
-                                      <Textarea value={item.rubricSegment} onChange={(e) => updateRubricItem(index, 'rubricSegment', e.target.value)} className="min-h-[60px] text-xs resize-y" placeholder="Expected answer or rubric details..." />
+                                      <Textarea
+                                          value={item.criteria ? JSON.stringify(item.criteria, null, 2) : (item.rubricSegment || "")}
+                                          onChange={(e) => updateRubricItem(index, item.criteria ? 'criteria' : 'rubricSegment', e.target.value)}
+                                          className="min-h-[60px] text-xs resize-y font-mono"
+                                          placeholder="Expected answer or rubric details..."
+                                      />
                                   </div>
                                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => removeRubricItem(index)}><Trash2 className="h-4 w-4" /></Button>
                               </div>
                           ))}
                       </div>
                       <div className="flex justify-between mt-2 pt-2 border-t">
-                          <Button type="button" variant="outline" size="sm" onClick={() => { setRubricItems([...rubricItems, { questionId: `Q${rubricItems.length + 1}`, maxScore: 1, rubricSegment: "" }]); }}><Plus className="w-3 h-3 mr-1" /> Add Question</Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => { setRubricItems([...rubricItems, { qId: `Q${rubricItems.length + 1}`, maxScore: 1, criteria: [] }]); }}><Plus className="w-3 h-3 mr-1" /> Add Question</Button>
                           <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setRubricItems([]); setIsRubricParsed(false); }}><Edit3 className="w-3 h-3 mr-1" /> Re-upload</Button>
                       </div>
                   </div>
