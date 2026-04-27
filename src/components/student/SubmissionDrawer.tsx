@@ -45,23 +45,24 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
       }
 
       // 2. Gather target questions from session rubric
-      let rawTargetQuestions: string[] = [];
+      let questionsToExtract: string[] = [];
       try {
           if (session.rubric) {
               const parsedRubric = typeof session.rubric === 'string' ? JSON.parse(session.rubric) : session.rubric;
               if (Array.isArray(parsedRubric)) {
-                  rawTargetQuestions = parsedRubric.map((item: any) => item.qId || item.questionId).filter(Boolean);
+                  questionsToExtract = parsedRubric.map((item: any) => item.qId || item.questionId).filter(Boolean);
               }
           }
       } catch (e) {
           console.warn("Could not parse rubric for target questions. AI will attempt to find all standard numbers.");
-          rawTargetQuestions = ["All numbered questions from the document"];
+          questionsToExtract = ["All numbered questions from the document"];
       }
 
       // Fallback if rubric was missing
-      if (rawTargetQuestions.length === 0) rawTargetQuestions = ["All numbered questions from the document"];
+      if (questionsToExtract.length === 0) questionsToExtract = ["All numbered questions from the document"];
 
-      const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
+      // Tunavuta IDs na kuzinormalize palepale kabla hazijaenda kwa AI
+      const targetQuestions = questionsToExtract.map((id: string) => normalizeQuestionId(id));
 
       // 3. Client-Side AI Extraction Call (Single-Pass Semantic Router)
       const apiKey = await getClientGeminiKey();
@@ -81,13 +82,14 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
       }
 
       // 5. Submit Semantic JSON Map and file path to API directly
+      // In the backend extractedText expects an array with the map or just the map. We use [extractedTextMap]
       const res = await fetch("/api/student/submit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          extractedText: JSON.stringify(extractedTextMap), // Send the map to backend Evaluator
+          extractedText: JSON.stringify([extractedTextMap]), // Send the map to backend Evaluator
           filePath,
           workSessionId: session.id,
           filename: file.name
