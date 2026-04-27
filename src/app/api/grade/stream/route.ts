@@ -27,17 +27,18 @@ export async function POST(req: NextRequest) {
             where: { id: globalSubmissionId },
             include: { workSession: true }
         });
-        if (!submission || !submission.workSession) throw new Error("Submission or WorkSession not found");
+        
+        if (!submission || !submission.workSession) {
+            throw new Error("Submission or WorkSession not found");
+        }
 
         const parsedRubricItems = JSON.parse(submission.workSession.rubricData as string || "[]");
         
         let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
         let parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
 
-        // --- L9 EVALUATOR (PASS 2) ---
         const limit = pLimit(10); 
 
-        // Normalize student answer keys ensuring alignment
         const normalizedStudentAnswers: Record<string, string> = {};
         for (const [key, val] of Object.entries(parsedStudentAnswers)) {
             normalizedStudentAnswers[normalizeQuestionId(key)] = val;
@@ -49,16 +50,13 @@ export async function POST(req: NextRequest) {
                 const maxScore = rubricItem.maxScore;
                 const normalizedTargetId = normalizeQuestionId(originalQId);
                 
-                // Fetch the mapped text directly
                 let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
 
-                // THE FIX: Sub-string fallback matcher incase of slight deviations
                 if (studentAnswerForQ === undefined) {
                     const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
                     studentAnswerForQ = fallbackKey ? normalizedStudentAnswers[fallbackKey] : "";
                 }
                 
-                // Fast Fail - Student didn't answer
                 if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
                     return { question: originalQId, score: 0, thoughtProcess: "Answer completely missing or skipped.", feedback: "No answer provided.", max: maxScore, evidenceSnippet: "None" };
                 }
@@ -69,7 +67,6 @@ MAXIMUM MARKS: ${maxScore}
 ATOMIC MARKING CRITERIA: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment)}
 STUDENT ANSWER: ${studentAnswerForQ}
 `;
-                // THE FIX: Bulletproof Retry Logic (Self-Healing)
                 let attempt = 0;
                 let finalScore = 0;
                 let gradingObject = { thoughtProcess: "Failed to grade.", feedback: "System error.", evidenceSnippet: "None" };
@@ -88,10 +85,10 @@ STUDENT ANSWER: ${studentAnswerForQ}
                         finalScore = Math.max(0, Math.min(rawSum, maxScore));
                         gradingObject = { thoughtProcess: object.thoughtProcess, feedback: object.feedback, evidenceSnippet: object.evidenceSnippet };
                         break; 
-                    } catch (err) {
+                    } catch (err: any) {
                         attempt++;
                         if (attempt >= 3) {
-                            console.error(`Box ${originalQId} completely failed grading after 3 attempts.`);
+                            console.error(`Box ${originalQId} completely failed grading after 3 attempts. Error: ${err.message}`);
                         } else {
                             await delay(attempt * 2000);
                         }
@@ -102,11 +99,9 @@ STUDENT ANSWER: ${studentAnswerForQ}
             });
         });
 
-        // Execute all Boxes safely
         const rawGradedQuestions = await Promise.all(gradingPromises);
         const calculatedTotalScore = rawGradedQuestions.reduce((acc, curr) => acc + curr.score, 0);
 
-        // Update Database
         await prisma.score.upsert({
             where: { submissionId: globalSubmissionId },
             update: { totalMarks: calculatedTotalScore, breakdown: JSON.stringify(rawGradedQuestions) },
