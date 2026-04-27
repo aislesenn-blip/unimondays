@@ -45,21 +45,23 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
       }
 
       // 2. Gather target questions from session rubric
-      let questionsToExtract: string[] = [];
+      let rawTargetQuestions: string[] = [];
       try {
           if (session.rubric) {
               const parsedRubric = typeof session.rubric === 'string' ? JSON.parse(session.rubric) : session.rubric;
               if (Array.isArray(parsedRubric)) {
-                  questionsToExtract = parsedRubric.map((item: any) => item.qId || item.questionId).filter(Boolean);
+                  rawTargetQuestions = parsedRubric.map((item: any) => item.qId || item.questionId).filter(Boolean);
               }
           }
       } catch (e) {
           console.warn("Could not parse rubric for target questions. AI will attempt to find all standard numbers.");
-          questionsToExtract = ["All numbered questions from the document"];
+          rawTargetQuestions = ["All numbered questions from the document"];
       }
 
       // Fallback if rubric was missing
-      if (questionsToExtract.length === 0) questionsToExtract = ["All numbered questions from the document"];
+      if (rawTargetQuestions.length === 0) rawTargetQuestions = ["All numbered questions from the document"];
+
+      const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
 
       // Tunavuta IDs na kuzinormalize palepale kabla hazijaenda kwa AI
       const targetQuestions = questionsToExtract.map((id: string) => normalizeQuestionId(id));

@@ -6,6 +6,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { supabase } from '@/lib/supabase';
 import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import pLimit from 'p-limit';
+import { normalizeQuestionId } from "@/lib/ai/client-engine";
 
 export const maxDuration = 300; // 5 minutes max duration for Vercel
 
@@ -20,6 +21,8 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || 'dummy',
   baseURL: "https://generativelanguage.googleapis.com/v1beta/",
 });
+
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 // Zod schema for Atomic grading
 const atomicGradingSchema = z.object({
@@ -163,6 +166,7 @@ export async function POST(req: NextRequest) {
         try {
             const limit = pLimit(10); // Parallel Batching Strategy
 
+            // Tengeneza Normalized Dictionary kutokea kwa Gemini
             const normalizedStudentAnswers: Record<string, string> = {};
             for (const [key, val] of Object.entries(parsedStudentAnswers)) {
                 normalizedStudentAnswers[normalizeQuestionId(key)] = val;
@@ -175,7 +179,7 @@ export async function POST(req: NextRequest) {
 
                     const normalizedTargetId = normalizeQuestionId(originalQId);
 
-                    // Route to the extracted verbatim answer mapped from the Client-Side PASS 1B
+                    // Fetch the mapped text
                     let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
 
                     // FALLBACK: Kama AI ilishindwa kufuata rules kwa asilimia 100 na kuweka herufi za ziada
@@ -188,39 +192,21 @@ export async function POST(req: NextRequest) {
                         }
                     }
 
+                    // Fast Fail - Strict Check
                     if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
-                        // Fast path: Empty or un-extracted answer instantly receives 0
-                        return {
-                            question: originalQId,
-                            thoughtProcess: "Student provided no answer (Client Engine found 'No text extracted').",
-                            score: 0,
-                            max: maxScore,
-                            feedback: "No answer provided.",
-                            evidenceSnippet: "None"
-                        };
+                        return { question: originalQId, score: 0, thoughtProcess: "Blank logic", feedback: "No answer provided by the student.", max: maxScore, evidenceSnippet: "None" };
                     }
 
                     console.log(`[GRADING] Evaluating Box ${originalQId}...`);
 
-                    const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
+                    const systemPrompt = `You are an elite Examination Engine. Evaluate the student's answer against the ATOMIC CRITERIA. If the answer explicitly meets the criteria, award the marks.`;
 
-You must evaluate the student's answer against the provided strict ATOMIC CRITERIA.
-Do NOT invent marks. Do NOT penalize correct alternative phrasing.
-Ensure absolute precision.`;
-
+                    // THE BOX PROMPT
                     const boxPrompt = `
 EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
 MAXIMUM MARKS: ${maxScore}
-
-ATOMIC MARKING CRITERIA:
-"""
-${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment, null, 2)}
-"""
-
-STUDENT ANSWER:
-"""
-${studentAnswerForQ}
-"""
+ATOMIC MARKING CRITERIA: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment, null, 2)}
+STUDENT ANSWER: ${studentAnswerForQ}
 `;
                     // BULLETPROOF RETRY LOGIC (Self-Healing)
                     let attempt = 0;
@@ -254,19 +240,11 @@ ${studentAnswerForQ}
                     // Deterministic Javascript Math (Hakuna kubahatisha)
                     let rawSum = 0;
                     if (Array.isArray(object.scoresArray)) {
-                        rawSum = object.scoresArray.reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
+                        rawSum = object.scoresArray.reduce((sum: number, val: number) => sum + (typeof val === 'number' ? val : 0), 0);
                     }
+                    let safeScore = Math.max(0, Math.min(rawSum, maxScore)); // Hard Clamp Logic
 
-                    let safeScore = Math.max(0, Math.min(rawSum, maxScore));
-
-                    return {
-                        question: originalQId,
-                        thoughtProcess: object.thoughtProcess,
-                        score: safeScore,
-                        max: maxScore,
-                        feedback: object.feedback,
-                        evidenceSnippet: object.evidenceSnippet
-                    };
+                    return { question: originalQId, score: safeScore, thoughtProcess: object.thoughtProcess, feedback: object.feedback, max: maxScore, evidenceSnippet: object.evidenceSnippet };
                 });
             });
 

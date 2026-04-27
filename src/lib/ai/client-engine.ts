@@ -141,6 +141,48 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 }
 
 
+// 1. SINGLE SOURCE OF TRUTH KWA IDs (Client & Server lazima zitumie hii)
+export const normalizeQuestionId = (id: string): string => {
+    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+// 2. THE IRONCLAD JSON PARSER (Inaokoa mfumo usicrash AI ikileta Markdown)
+export function parseLLMJSON(content: string): any {
+    if (!content || content.trim() === '') return {};
+    content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    let startIndex = content.indexOf('{');
+    if (startIndex !== -1) {
+        let depth = 0, inString = false, escapeNext = false, endIndex = -1;
+        for (let i = startIndex; i < content.length; i++) {
+            const char = content[i];
+            if (escapeNext) { escapeNext = false; continue; }
+            if (char === '\\') { escapeNext = true; continue; }
+            if (char === '"') { inString = !inString; continue; }
+            if (!inString) {
+                if (char === '{') depth++;
+                else if (char === '}') {
+                    depth--;
+                    if (depth === 0) { endIndex = i; break; }
+                }
+            }
+        }
+        content = endIndex !== -1 ? content.substring(startIndex, endIndex + 1) : content.substring(startIndex);
+    }
+    content = content.replace(/^```json\s*/gi, '').replace(/^```\s*/gi, '').replace(/```\s*$/gi, '');
+    content = content.replace(/[\n\r\t]+/g, ' ');
+    content = content.replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3');
+    content = content.replace(/(:\s*)'([^']+)'(\s*[,}])/g, '$1"$2"$3');
+    content = content.replace(/,\s*([}\]])/g, '$1');
+    content = content.replace(/\\(?!["\\/bfnrt])/g, '\\\\');
+
+    try {
+        return JSON.parse(content);
+    } catch (e) {
+        console.warn("JSON parse failed, returning empty map:", e);
+        return {}; // Safe fallback
+    }
+}
+
 // 3. THE EXTRACTION ENGINE YENYE FEW-SHOT PROMPT
 export async function extractStudentExamsClient(base64Images: string[], targetQuestions: string[], apiKey: string): Promise<Record<string, string>> {
     console.log("[CLIENT ENGINE] Single-Pass Multimodal Extraction for Student Exam...");
