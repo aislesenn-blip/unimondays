@@ -1,13 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-    convertPdfToImagesClient,
-    fileToBase64,
-    extractStudentExamsClient,
-    normalizeQuestionId
-} from "@/lib/ai/client-engine";
-import { supabaseClient } from "@/lib/supabase-client";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -20,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { Upload, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { supabaseClient } from "@/lib/supabase-client";
 import { v4 as uuidv4 } from "uuid";
 
 interface SubmissionDrawerProps {
@@ -38,32 +32,7 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
     setLoading(true);
     try {
-      let base64Images: string[] = [];
-      if (file.type === 'application/pdf') {
-          base64Images = await convertPdfToImagesClient(file);
-      } else {
-          base64Images.push(await fileToBase64(file));
-      }
-
-      const rubricItemsRes = await fetch(`/api/work-sessions/${session.id}`);
-      if (!rubricItemsRes.ok) throw new Error("Failed to load work session context.");
-
-      const rubricData = await rubricItemsRes.json();
-
-      let rawTargetQuestions: string[] = [];
-      try {
-          const parsedRubric = JSON.parse(rubricData.rubricText || "[]");
-          rawTargetQuestions = parsedRubric.map((item: any) => item.questionId);
-      } catch (e) {
-          if (Array.isArray(rubricData.rubricData)) {
-               rawTargetQuestions = rubricData.rubricData.map((item: any) => item.qId);
-          }
-      }
-
-      const targetQuestions = rawTargetQuestions.map((id: string) => normalizeQuestionId(id));
-
-      const extractedTextMap = await extractStudentExamsClient(base64Images, targetQuestions);
-
+      // 1. Upload to Supabase Storage (Client-side) to bypass Vercel 4.5MB payload limit
       const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `submissions/${filename}`;
 
@@ -76,13 +45,28 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
+      // 2. Trigger server-side OCR which downloads from Supabase
+      const ocrRes = await fetch("/api/ocr/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath }),
+      });
+
+      const ocrData = await ocrRes.json();
+      if (!ocrRes.ok) {
+        throw new Error(ocrData.error || "Failed to read document.");
+      }
+
+      const extractedText = ocrData.text;
+
+      // 3. Submit Text and file path to API directly
       const res = await fetch("/api/student/submit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          extractedText: JSON.stringify([extractedTextMap]), // Send the map to backend Evaluator
+          extractedText,
           filePath,
           workSessionId: session.id,
           filename: file.name
@@ -98,6 +82,7 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
       toast.success("Submitted! Grading is happening in the background.");
 
+      // Grading is now reliably triggered on the server using waitUntil
       onSuccess();
       onOpenChange(false);
       setFile(null); // Reset file
@@ -147,12 +132,14 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                     onChange={(e) => {
                         const selected = e.target.files?.[0];
                         if (selected) {
+                            // MANDATE 1: 20MB Limit
                             if (selected.size > 20 * 1024 * 1024) {
                                 toast.error("File is too large. Please upload a file smaller than 20MB.");
-                                e.target.value = "";
+                                e.target.value = ""; // Clear input
                                 setFile(null);
                                 return;
                             }
+                            // Strict Type Check
                             const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
                             if (!allowedTypes.includes(selected.type)) {
                                 toast.error("Invalid file type. Only PDF, PNG, and JPG are allowed.");
