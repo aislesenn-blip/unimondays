@@ -1,56 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { generateObject } from 'ai';
+import { google } from '@ai-sdk/google';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { supabase } from '@/lib/supabase';
-import { extractPagesMultimodal, ocrDocument } from '@/lib/ai/gemini';
 import pLimit from 'p-limit';
+import { normalizeQuestionId } from "@/lib/ai/client-engine";
 
-export const maxDuration = 300; // 5 minutes max duration for Vercel
-
-// Replicate normalizeQuestionId here because client-engine.ts imports pdfjsLib which might not run properly in Edge or Node without extra setup.
-const normalizeQuestionId = (id: string): string => {
-    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-};
+export const maxDuration = 300;
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY || 'dummy',
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/",
-});
-
-// Zod schema for Atomic grading
 const atomicGradingSchema = z.object({
-  question: z.string().describe("The exact question identifier being graded."),
-  thoughtProcess: z.string().describe("Chain of thought: Explain step-by-step how the student's answer maps to the specific rubric criteria. Did they hit the required atomic concepts? DO THIS BEFORE SCORING."),
-  scoresArray: z.array(z.number()).describe("An array of scores awarded for each atomic criterion met by the student. For example, if they met two criteria worth 1 mark each and half of a 2-mark criteria, output [1, 1, 1]. Do NOT sum them here."),
-  max: z.number().describe("The maximum possible score for this question as defined in the marking scheme."),
-  feedback: z.string().describe("Specific feedback explaining the score. Keep it to 1-2 sentences."),
-  evidenceSnippet: z.string().describe("The exact quote from the student's text that justifies this score. 'None' if blank or missing.")
-});
-
-const regNoSchema = z.object({
-  detectedRegNo: z.string().describe("The registration number/ID found in the student text, if any. Return 'UNKNOWN' if not found.")
+    thoughtProcess: z.string(),
+    scoresArray: z.array(z.number()),
+    feedback: z.string(),
+    evidenceSnippet: z.string()
 });
 
 export async function POST(req: NextRequest) {
-    let globalSubmissionId: string | null = null;
+    // THE FIX: Tumebadilisha kutoka 'string | null' kuwa 'string' tu kuzuia TypeScript Error
+    let globalSubmissionId: string = "";
+
     try {
-        const authHeader = req.headers.get('authorization');
-        const internalKey = process.env.INTERNAL_API_KEY;
-
-        // Secure endpoint to prevent external abuse
-        if (!internalKey || authHeader !== `Bearer ${internalKey}`) {
-            return NextResponse.json({ error: 'Unauthorized: Invalid internal token.' }, { status: 401 });
-        }
-
         const body = await req.json();
         globalSubmissionId = body.submissionId;
 
+        // THE FIX: Guard clause kuhakikisha ID ipo kabla ya kwenda Prisma
         if (!globalSubmissionId) {
-            return NextResponse.json({ error: 'Missing submissionId.' }, { status: 400 });
+            return NextResponse.json({ error: "Submission ID is required" }, { status: 400 });
         }
 
         const submission = await prisma.submission.findUnique({
@@ -58,274 +35,97 @@ export async function POST(req: NextRequest) {
             include: { workSession: true }
         });
 
-        if (!submission) {
-            return NextResponse.json({ error: 'Submission not found.' }, { status: 404 });
+        if (!submission || !submission.workSession) {
+            throw new Error("Submission or WorkSession not found");
         }
 
-        if (!submission.ocrText) {
-             return NextResponse.json({ error: 'No extracted text found for grading. OCR failed.' }, { status: 400 });
+        const parsedRubricItems = JSON.parse(submission.workSession.rubric as string || "[]");
+
+        let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
+        let parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
+
+        const limit = pLimit(10);
+
+        const normalizedStudentAnswers: Record<string, string> = {};
+        for (const [key, val] of Object.entries(parsedStudentAnswers)) {
+            normalizedStudentAnswers[normalizeQuestionId(key)] = val;
         }
 
-        let finalRubricText = submission.workSession.rubric || submission.workSession.markingScheme;
+        const gradingPromises = parsedRubricItems.map((rubricItem: any) => {
+            return limit(async () => {
+                const originalQId = rubricItem.qId || rubricItem.questionId;
+                const maxScore = rubricItem.maxScore;
+                const normalizedTargetId = normalizeQuestionId(originalQId);
 
-        if (!finalRubricText) {
-             return NextResponse.json({ error: 'No rubric or marking scheme provided for this session.' }, { status: 400 });
-        }
+                let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
 
-        // Fix Legacy Data: If markingScheme is a URL, extract it first.
-        if (finalRubricText.includes('/') || finalRubricText.toLowerCase().endsWith('.pdf') || finalRubricText.toLowerCase().endsWith('.png') || finalRubricText.toLowerCase().endsWith('.jpg')) {
-            try {
-                const cleanPath = finalRubricText.startsWith('/') ? finalRubricText.slice(1) : finalRubricText;
-                const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(cleanPath);
-
-                if (fileData && !downloadError) {
-                    const arrayBuffer = await fileData.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-
-                    if (finalRubricText.toLowerCase().endsWith('.pdf')) {
-                        const pages = await extractPagesMultimodal(buffer);
-                        finalRubricText = pages.map(p => p.text).join('\n\n');
-                    } else {
-                        const mimeType = finalRubricText.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-                        finalRubricText = await ocrDocument(buffer, mimeType);
-                    }
-
-                    // Cache the extracted rubric to save future API calls
-                    await prisma.workSession.update({
-                        where: { id: submission.workSessionId },
-                        data: { rubric: finalRubricText }
-                    });
+                if (studentAnswerForQ === undefined) {
+                    const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
+                    studentAnswerForQ = fallbackKey ? normalizedStudentAnswers[fallbackKey] : "";
                 }
-            } catch (e) {
-                console.error("Failed to extract legacy rubric URL", e);
-            }
-        }
 
-        let parsedRubricItems: any[] = [];
-
-        try {
-            // Check if finalRubricText is a valid JSON array string (from our new parser)
-            parsedRubricItems = JSON.parse(finalRubricText);
-            if (!Array.isArray(parsedRubricItems)) throw new Error("Parsed rubric is not an array");
-        } catch (e) {
-            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
-            console.log(`[GRADING] Parsing legacy rubric text into JSON array...`);
-            // Enforce standard string settings object via config parameter for Vercel SDK to ensure max output tokens are applied.
-            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
-            // Fallback for legacy plain text rubrics: we force Gemini to parse it into chunks first
-            const rubricStructureResponse = await generateObject({
-                model: google('gemini-2.5-pro'),
-                system: "You are an expert data structured parser. Extract all gradable questions from the provided Marking Scheme into a JSON array.",
-                prompt: finalRubricText,
-                schema: z.object({ items: z.array(z.object({ questionId: z.string(), maxScore: z.number(), rubricSegment: z.string() })) }),
-                temperature: 0.0,
-            });
-            parsedRubricItems = (rubricStructureResponse.object as any)?.items || [];
-        }
-
-        // Update status to GRADING
-        await prisma.submission.update({
-             where: { id: globalSubmissionId },
-             data: { status: 'GRADING' }
-        });
-
-        // Parse the Semantic JSON Map coming from the Client-Side Engine
-        let parsedStudentAnswers: Record<string, string> = {};
-        let extractedStudentIdentity = "UNKNOWN";
-        try {
-            let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
-            // The client engine returns an array containing the map object
-            if (Array.isArray(extractedMap) && extractedMap.length > 0) {
-                const mapObj = extractedMap[0];
-                extractedStudentIdentity = mapObj.student_id || mapObj.student_name || "UNKNOWN";
-
-                if (Array.isArray(mapObj.questions)) {
-                    mapObj.questions.forEach((q: any) => {
-                        if (q.questionId) {
-                            parsedStudentAnswers[q.questionId] = q.text || "No text extracted.";
-                        }
-                    });
+                if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
+                    return { question: originalQId, score: 0, thoughtProcess: "Answer completely missing or skipped.", feedback: "No answer provided.", max: maxScore, evidenceSnippet: "None" };
                 }
-            } else if (typeof extractedMap === 'object') {
-                 // Fallback if it returned just the object
-                 parsedStudentAnswers = extractedMap as unknown as Record<string, string>;
-            }
-        } catch (e) {
-            console.warn(`[GRADING] Failed to parse student semantic map. Expected JSON.`, e);
-        }
 
-        // --- L9 EVALUATOR (PASS 2) ---
-        console.log(`[GRADING] Commencing The Evaluator...`);
-
-        let finalBreakdown: any[] = [];
-        let calculatedTotalScore = 0;
-
-        try {
-            const limit = pLimit(10); // Parallel Batching Strategy
-
-            const normalizedStudentAnswers: Record<string, string> = {};
-            for (const [key, val] of Object.entries(parsedStudentAnswers)) {
-                normalizedStudentAnswers[normalizeQuestionId(key)] = val;
-            }
-
-            const gradingPromises = parsedRubricItems.map(rubricItem => {
-                return limit(async () => {
-                    const originalQId = rubricItem.qId || rubricItem.questionId || "UNKNOWN_Q";
-                    const maxScore = rubricItem.maxScore || 0;
-
-                    const normalizedTargetId = normalizeQuestionId(originalQId);
-
-                    // Route to the extracted verbatim answer mapped from the Client-Side PASS 1B
-                    let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
-
-                    // FALLBACK: Kama AI ilishindwa kufuata rules kwa asilimia 100 na kuweka herufi za ziada
-                    if (studentAnswerForQ === undefined) {
-                        const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
-                        if (fallbackKey) {
-                            studentAnswerForQ = normalizedStudentAnswers[fallbackKey];
-                        } else {
-                            studentAnswerForQ = "";
-                        }
-                    }
-
-                    if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
-                        // Fast path: Empty or un-extracted answer instantly receives 0
-                        return {
-                            question: originalQId,
-                            thoughtProcess: "Student provided no answer (Client Engine found 'No text extracted').",
-                            score: 0,
-                            max: maxScore,
-                            feedback: "No answer provided.",
-                            evidenceSnippet: "None"
-                        };
-                    }
-
-                    console.log(`[GRADING] Evaluating Box ${originalQId}...`);
-
-                    const systemPrompt = `You are an elite world-class Examination Evaluation Engine. Your task is to mark ONE specific question from a student's exam.
-
-You must evaluate the student's answer against the provided strict ATOMIC CRITERIA.
-Do NOT invent marks. Do NOT penalize correct alternative phrasing.
-Ensure absolute precision.`;
-
-                    const boxPrompt = `
+                const boxPrompt = `
 EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
 MAXIMUM MARKS: ${maxScore}
-
-ATOMIC MARKING CRITERIA:
-"""
-${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment, null, 2)}
-"""
-
-STUDENT ANSWER:
-"""
-${studentAnswerForQ}
-"""
+ATOMIC MARKING CRITERIA: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment)}
+STUDENT ANSWER: ${studentAnswerForQ}
 `;
-                    // BULLETPROOF RETRY LOGIC (Self-Healing)
-                    let attempt = 0;
-                    let object: any = null;
+                let attempt = 0;
+                let finalScore = 0;
+                let gradingObject = { thoughtProcess: "Failed to grade.", feedback: "System error.", evidenceSnippet: "None" };
 
-                    while (attempt < 3) {
-                        try {
-                            const result = await generateObject({
-                                model: google('gemini-2.5-pro'),
-                                system: systemPrompt,
-                                prompt: boxPrompt,
-                                schema: atomicGradingSchema,
-                                temperature: 0.0,
-                            });
-                            object = result.object;
-                            break; // Imefanikiwa, toka kwenye loop
-                        } catch (err: any) {
-                            attempt++;
-                            console.warn(`[Self-Healing] Box ${originalQId} failed on attempt ${attempt}. Error: ${err.message}`);
-                            if (attempt >= 3) {
-                                // FAST FAIL YA USALAMA: Swali moja likigoma kabisa, mpe 0 lakini usicrash mtihani mzima
-                                console.error(`Box ${originalQId} completely failed after 3 attempts.`);
-                                object = { scoresArray: [0], thoughtProcess: "API Error after 3 retries", feedback: "Failed to evaluate due to system error.", evidenceSnippet: "None" };
-                                break;
-                            }
-                            // Exponential backoff (Subiri sekunde 2, kisha 4, kisha rudi tena)
+                while (attempt < 3) {
+                    try {
+                        const { object } = await generateObject({
+                            model: google('gemini-2.5-pro'),
+                            system: "You are an elite Examination Engine. Evaluate the student's answer against the ATOMIC CRITERIA.",
+                            prompt: boxPrompt,
+                            schema: atomicGradingSchema,
+                            temperature: 0.0,
+                        });
+
+                        let rawSum = object.scoresArray.reduce((sum, val) => sum + val, 0);
+                        finalScore = Math.max(0, Math.min(rawSum, maxScore));
+                        gradingObject = { thoughtProcess: object.thoughtProcess, feedback: object.feedback, evidenceSnippet: object.evidenceSnippet };
+                        break;
+                    } catch (err: any) {
+                        attempt++;
+                        if (attempt >= 3) {
+                            console.error(`Box ${originalQId} completely failed grading after 3 attempts. Error: ${err.message}`);
+                        } else {
                             await delay(attempt * 2000);
                         }
                     }
+                }
 
-                    // Deterministic Javascript Math (Hakuna kubahatisha)
-                    let rawSum = 0;
-                    if (Array.isArray(object.scoresArray)) {
-                        rawSum = object.scoresArray.reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
-                    }
-
-                    let safeScore = Math.max(0, Math.min(rawSum, maxScore));
-
-                    return {
-                        question: originalQId,
-                        thoughtProcess: object.thoughtProcess,
-                        score: safeScore,
-                        max: maxScore,
-                        feedback: object.feedback,
-                        evidenceSnippet: object.evidenceSnippet
-                    };
-                });
+                return { question: originalQId, score: finalScore, thoughtProcess: gradingObject.thoughtProcess, feedback: gradingObject.feedback, max: maxScore, evidenceSnippet: gradingObject.evidenceSnippet };
             });
+        });
 
-            const rawGradedQuestions = await Promise.all(gradingPromises);
-
-            finalBreakdown = rawGradedQuestions;
-            calculatedTotalScore = rawGradedQuestions.reduce((acc, curr) => acc + curr.score, 0);
-
-        } catch (gradingError) {
-            console.error(`[GRADING] Evaluation Workflow failed:`, gradingError);
-            throw gradingError;
-        }
-
-        // Finalize
-        const regNoToSave = extractedStudentIdentity && extractedStudentIdentity !== "UNKNOWN" ? extractedStudentIdentity : submission.studentRegNo;
+        const rawGradedQuestions = await Promise.all(gradingPromises);
+        const calculatedTotalScore = rawGradedQuestions.reduce((acc, curr) => acc + curr.score, 0);
 
         await prisma.score.upsert({
             where: { submissionId: globalSubmissionId },
-            update: {
-                totalMarks: calculatedTotalScore,
-                remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
-                breakdown: JSON.stringify(finalBreakdown),
-                detectedIdentity: regNoToSave
-            },
-            create: {
-                submissionId: globalSubmissionId,
-                totalMarks: calculatedTotalScore,
-                remarks: "Graded via Atomic Map-Reduce (Vercel Native).",
-                breakdown: JSON.stringify(finalBreakdown),
-                detectedIdentity: regNoToSave
-            }
+            update: { totalMarks: calculatedTotalScore, breakdown: JSON.stringify(rawGradedQuestions) },
+            create: { submissionId: globalSubmissionId, totalMarks: calculatedTotalScore, breakdown: JSON.stringify(rawGradedQuestions) }
         });
 
         await prisma.submission.update({
             where: { id: globalSubmissionId },
-            data: {
-                status: 'GRADED',
-                studentRegNo: regNoToSave
-            }
+            data: { status: 'GRADED' }
         });
 
-        console.log(`[GRADING] Successfully graded submission ${globalSubmissionId} with score ${calculatedTotalScore}`);
         return NextResponse.json({ success: true, score: calculatedTotalScore });
 
     } catch (error: any) {
-        console.error("[FATAL-GRADING] Streaming API Failed:", error);
-
-        // Use the globally scoped submission ID to update the database without calling req.json() again
-        try {
-            if (globalSubmissionId) {
-                await prisma.submission.update({
-                    where: { id: globalSubmissionId },
-                    data: { status: 'FAILED', feedback: 'Failed to complete grading process. System encountered an error.' }
-                });
-            }
-        } catch (e) {
-            console.error("[FATAL-GRADING] Failed to update submission status to FAILED:", e);
+        if (globalSubmissionId) {
+             await prisma.submission.update({ where: { id: globalSubmissionId }, data: { status: 'FAILED' }});
         }
-
-        return NextResponse.json({ error: error.message || 'Grading failed.' }, { status: 500 });
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
