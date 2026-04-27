@@ -17,15 +17,23 @@ export async function POST(req: NextRequest) {
     try {
         const cookieStore = await cookies();
         const sessionCookie = cookieStore.get('auth-session');
-        if (!sessionCookie) return NextResponse.json({ error: 'Unauthorized: No session found' }, { status: 401 });
+
+        if (!sessionCookie) {
+             return NextResponse.json({ error: 'Unauthorized: No session found' }, { status: 401 });
+        }
 
         const { filePath, isRubric } = await req.json();
-        if (!filePath) return NextResponse.json({ error: 'No file path provided.' }, { status: 400 });
+
+        if (!filePath) {
+            return NextResponse.json({ error: 'No file path provided.' }, { status: 400 });
+        }
 
         const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
         const { data: fileData, error: downloadError } = await supabase.storage.from('exam_pdfs').download(cleanPath);
 
-        if (downloadError || !fileData) throw new Error(`Supabase Download Failed: ${downloadError?.message}`);
+        if (downloadError || !fileData) {
+             throw new Error(`Supabase Download Failed: ${downloadError?.message}`);
+        }
 
         const arrayBuffer = await fileData.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
@@ -34,34 +42,61 @@ export async function POST(req: NextRequest) {
         const mime = type?.mime || 'application/pdf';
 
         let promptContent: any[] = [];
-        let finalText = "";
 
         if (isRubric) {
-            // RUBRIC INABAKI KAMA ILIVYO (Ni fupi, haina haja ya Batching)
             promptContent.push({
                 type: "text",
-                text: `You are an elite academic data parser with advanced cognitive reasoning. Your task is to extract a Marking Scheme/Rubric from the provided document images and convert it into a STRICT JSON array.
+                text: `You are an elite educational engineer. Rewrite this raw marking scheme into the strict "Playbook Standard Format" represented as a JSON array.
 
-COGNITIVE DIRECTIVES (USE YOUR INTELLIGENCE):
-1. STRUCTURAL AWARENESS: Marking schemes often have complex, nested layouts. Group sub-parts logically into distinct items ONLY if they carry separate marks.
-2. CONTEXTUAL ACCURACY: Read the text meticulously. Differentiate between actual scoring criteria and generic document headers/footers.
-
-STRICT BOUNDARIES (DO NOT INVENT):
-1. ZERO HALLUCINATION: You are strictly forbidden from inventing, guessing, or estimating numbers.
-2. MAX SCORE PRECISION: Extract the \`maxScore\` exactly as written. Pay extreme attention to decimals.
-3. NO MARKDOWN: You MUST output ONLY valid JSON. No markdown wrappers like \`\`\`json.
+CRITICAL MANDATES:
+NO DATA LOSS: Preserve every alternative answer and exact mark allocation.
+STRICT HIERARCHY & SECTIONS: Every single question/sub-question MUST have its own object block. Do not merge sub-questions.
+ATOMIC CRITERIA: Break down paragraph answers into explicit, atomic, true/false grading criteria. Each criterion must represent exactly one independently gradable concept.
+Output ONLY the structured text. No markdown block wrapping (\`\`\`json).
 
 The JSON MUST exactly match this format:
-[ { "questionId": "string", "maxScore": number, "rubricSegment": "string" } ]`
+[
+  {
+    "qId": "string", // Example: "1a", "2_b"
+    "maxScore": number, // Example: 3
+    "criteria": [
+      {
+         "id": "string", // Example: "c1", "c2"
+         "text": "string", // Example: "States 'conversion of light energy to chemical energy'"
+         "marks": number // Example: 1
+      }
+    ]
+  }
+]
+`
             });
+        } else {
+            promptContent.push({
+                type: "text",
+                text: `You are an L9 Intelligent Exam Collator. Your task is to read the provided student exam document and output a highly structured, logical text transcription.
 
-            if (mime === 'application/pdf') {
-                const document = await pdf(buffer, { scale: 1.0 });
-                for await (const imageBuffer of document) {
-                    promptContent.push({ type: "image", image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` });
-                }
-            } else if (mime.startsWith('image/')) {
-                promptContent.push({ type: "image", image: `data:${mime};base64,${buffer.toString('base64')}` });
+CRITICAL INSTRUCTIONS:
+1. Extract ALL handwritten and printed text precisely.
+2. INTELLIGENT SEMANTIC ROUTING (MANDATORY): Do NOT output page by page. Students answer questions out of order. You MUST collate, stitch, and group ALL parts of a single question's answer together under its Question ID.
+3. REGISTRATION NUMBER: Extract the student's Registration Number/ID if present.
+4. Output STRICTLY as a JSON object where keys are the Question IDs (normalized, e.g., "1a", "2b") and values are the full concatenated text of the student's answer for that Question ID.
+
+Example Output format (Strictly JSON, no markdown):
+{
+  "REGISTRATION_NUMBER": "2018-04-12551",
+  "1a": "Student's full answer for 1a...",
+  "1b": "Student's full answer for 1b..."
+}`
+            });
+        }
+
+        let pageImages: string[] = [];
+
+        if (mime === 'application/pdf') {
+            console.log("[OCR] Converting PDF to images...");
+            const document = await pdf(buffer, { scale: 1.0 });
+            for await (const imageBuffer of document) {
+                pageImages.push(`data:image/jpeg;base64,${imageBuffer.toString('base64')}`);
             }
             console.log(`[OCR] PDF converted to ${pageImages.length} images.`);
         } else if (mime.startsWith('image/')) {
@@ -70,46 +105,47 @@ The JSON MUST exactly match this format:
             return NextResponse.json({ error: 'Invalid file type. Only PDF and images are supported.' }, { status: 400 });
         }
 
-            console.log("[OCR] Extracting Rubric (PRO Model)...");
-            const { text } = await generateText({
-                model: google('gemini-2.5-pro'),
-                messages: [{ role: "user", content: promptContent as any }],
-                temperature: 0.0,
-            });
-            try {
-                const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                JSON.parse(cleanJson);
-                finalText = cleanJson;
-            } catch (e) {
-                return NextResponse.json({ error: 'Failed to structure rubric into JSON.' }, { status: 500 });
+        console.log("[OCR] Sending to Gemini...");
+
+        // Batch processing logic (5 pages per batch) to prevent Vercel/Gemini timeouts for large exams
+        let textOutputs: string[] = [];
+        const BATCH_SIZE = 5;
+
+        for (let i = 0; i < pageImages.length; i += BATCH_SIZE) {
+            const batchImages = pageImages.slice(i, i + BATCH_SIZE);
+            console.log(`[OCR] Processing batch ${i / BATCH_SIZE + 1} (${batchImages.length} images)...`);
+
+            const batchPromptContent = [...promptContent]; // Clone the base text prompt
+            for (const img of batchImages) {
+                batchPromptContent.push({ type: "image", image: img });
             }
 
-        } else {
-            // 🚨 MTIHANI WA MWANAFUNZI: BATCH PROCESSING ILI KUZUIA TRUNCATION 🚨
-            const systemText = `You are a highly intelligent Exam Transcription Engine with advanced cognitive collation abilities. Your task is to extract handwritten and printed text from the provided student exam document pages and construct a perfectly organized, highly readable raw text transcription.
+            const { text } = await generateText({
+                model: google('gemini-2.5-pro'), // Use PRO model for deep logic & large context
+                messages: [{ role: "user", content: batchPromptContent as any }],
+                temperature: 0.0,
+            });
+            textOutputs.push(text);
+        }
 
-COGNITIVE COLLATION DIRECTIVES (USE YOUR INTELLIGENCE):
-1. VISUAL DEMARCATION (CRITICAL): You MUST insert strong visual boundaries between questions to prevent bleeding. Use exact formatting like:
-=== QUESTION 1 ===
-[Text for Q1]
-2. CONTEXTUAL DECIPHERING: Human handwriting can be messy. Use contextual semantic reasoning to decipher sloppy words correctly without altering the student's intended scientific meaning.
-3. VISUAL TRANSLATION: Explicitly describe diagrams in text (e.g., "[Student drew a diagram of a plant cell with labels]").
+        console.log("[OCR] Extraction complete.");
 
-STRICT BOUNDARIES (DO NOT INVENT):
-1. ZERO HALLUCINATION: Extract only what the student wrote. Do not correct their factual scientific errors.
-2. NO JSON: Output ONLY clean, structured raw text with markdown boundaries.
-3. REGISTRATION NUMBER: Find the student's ID/Registration Number and place it prominently at the top.`;
+        let finalText = "";
 
-            let allImages: any[] = [];
-            if (mime === 'application/pdf') {
-                console.log("[OCR] Converting PDF to images...");
-                const document = await pdf(buffer, { scale: 1.0 });
-                for await (const imageBuffer of document) {
-                    allImages.push({ type: "image", image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}` });
+        if (isRubric) {
+            // Rubrics expect an Array. Stitch multiple arrays together.
+            try {
+                let mergedRubric: any[] = [];
+                for (const text of textOutputs) {
+                    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(cleanJson);
+                    if (Array.isArray(parsed)) mergedRubric.push(...parsed);
                 }
-                console.log(`[OCR] PDF converted to ${allImages.length} images.`);
-            } else if (mime.startsWith('image/')) {
-                allImages.push({ type: "image", image: `data:${mime};base64,${buffer.toString('base64')}` });
+                if (mergedRubric.length === 0) throw new Error("No array found");
+                finalText = JSON.stringify(mergedRubric);
+            } catch (e) {
+                console.warn("[OCR] Rubric array stitching failed. Falling back to plain text.");
+                finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
             }
         } else {
             // Student exams expect an Object. Stitch multiple objects together (Semantic Router).
@@ -136,22 +172,15 @@ STRICT BOUNDARIES (DO NOT INVENT):
                     }
                 }
 
-            // Tunakata picha 5 kwa 5 na kuita API
-            const BATCH_SIZE = 5;
-            for (let i = 0; i < allImages.length; i += BATCH_SIZE) {
-                const batchImages = allImages.slice(i, i + BATCH_SIZE);
-                console.log(`[OCR] Processing Student Exam Batch ${Math.floor(i/BATCH_SIZE) + 1} of ${Math.ceil(allImages.length/BATCH_SIZE)}...`);
-
-                const { text } = await generateText({
-                    model: google('gemini-2.5-pro'), // PRO ONLY
-                    messages: [{ role: "user", content: [{ type: "text", text: systemText }, ...batchImages] }],
-                    temperature: 0.0,
-                });
-                finalText += text + "\n\n";
+                if (Object.keys(mergedStudentAnswers).length === 0) throw new Error("No object found");
+                finalText = JSON.stringify(mergedStudentAnswers);
+                console.log(`[OCR] Successfully stitched student JSON into Semantic Map.`);
+            } catch (e) {
+                console.warn("[OCR] Student object stitching failed. Falling back to plain text.");
+                finalText = textOutputs.join('\n\n').replace(/```json/gi, '').replace(/```/g, '').trim();
             }
         }
 
-        console.log("[OCR] Extraction complete.");
         return NextResponse.json({ success: true, text: finalText });
 
     } catch (error: any) {
