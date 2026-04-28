@@ -10,11 +10,23 @@ import { Button } from "@/components/ui/button";
 import { NotificationsPopover } from "@/components/dashboard/NotificationsPopover";
 import { BackButton } from "@/components/ui/back-button";
 
+// Helper to detect standard UUIDs to hide them from breadcrumbs
+const isUUID = (str: string) => {
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  return uuidRegex.test(str);
+};
+
 function getBreadcrumbs(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
-  return segments.map((segment) => {
-    return segment.charAt(0).toUpperCase() + segment.slice(1);
-  });
+
+  // Filter out the first 'dashboard' as we hardcode it, and remove any UUID segments
+  return segments
+    .filter(segment => segment.toLowerCase() !== 'dashboard' && !isUUID(segment))
+    .map((segment) => {
+      // Replace dashes with spaces for better readability
+      const readable = segment.replace(/-/g, ' ');
+      return readable.charAt(0).toUpperCase() + readable.slice(1);
+    });
 }
 
 export function TopNav({ className, toggleSidebar }: { className?: string, toggleSidebar: () => void }) {
