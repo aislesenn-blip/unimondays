@@ -118,29 +118,27 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
 
+    // FREE-THINKING PROMPT: AI inasoma kama binadamu, inatumia Array kuzuia errors.
     const extractionPrompt = `
-You are an Elite Forensics Data Extractor. Your task is to extract student answers from the provided exam images and map them EXACTLY to the specific Question IDs requested.
+You are an expert human examiner digitizing a handwritten student exam.
+Your task is to find and extract the student's answers for these specific Target Question IDs:
+[ ${normalizedTargets.join(", ")} ]
 
-[ TARGET QUESTION IDs TO FIND ]: 
-${normalizedTargets.map(id => `"${id}"`).join(", ")}
+CRITICAL INSTRUCTIONS:
+1. STUDENTS WRITE CHAOTICALLY: Do not rely on fixed headers, margins, or perfect numbering. A student might write "Q3" on the last page, mix up sections, or continue answers on random pages.
+2. USE HUMAN-LIKE REASONING: Read the entire document holistically. Follow the student's logical flow. If you see an answer labeled "A(i)", look around the surrounding text to deduce which main question it belongs to, just like a human teacher would.
+3. EXACT TRANSCRIBING: Copy the student's exact text, math, and formulas. Do not summarize.
+4. MISSING ANSWERS: If a target question is genuinely completely missing from the exam paper, DO NOT include it in the output array.
 
-*** CORE DIRECTIVES FOR HANDLING MESSY EXAMS (THE SMART ENGINE) ***
-1. SCATTERED ANSWERS & PAGE TRACING: Students rarely write in perfect order. A sub-question (e.g., "A(iii)") might be on page 8, while the main question "2" was on page 1. You MUST explicitly read the TOP margin of each page to know which main question you are extracting (e.g. "02 Question") before matching it with the sub-questions below. DO NOT swap answers between questions.
-2. ANSWER STITCHING: If an answer starts on one page and continues on another, seamlessly combine the text into a single response for that Question ID.
-3. ID NORMALIZATION: Match the student's numbering (e.g., "Qn 1 a", "1(a)", "1.A") to the exact Target Question IDs provided above.
-
-*** METADATA EXTRACTION (STUDENT DETAILS) ***
-Scan the headers, footers, or cover page of the document to extract the student's Registration Number ONLY.
-
-*** OUTPUT FORMAT (STRICT JSON ONLY) ***
-Output a single, flat JSON object. Use the EXACT Target Question IDs as keys. Add ONE special key for the registration number. If an answer or metadata is completely missing, output "Not found.".
-
+The JSON MUST exactly match this format:
 {
-  "registrationNumber": "Extract Reg No here (or 'Not found.')",
-  "${normalizedTargets[0] || "q1a"}": "Exact transcribed text of the student's answer...",
-  "${normalizedTargets[1] || "q1b"}": "Exact transcribed text of the student's answer..."
+  "registrationNumber": "string (Find the Registration Number on the exam, or return 'Not found')",
+  "answers": [
+    { "qId": "string (must exactly match one of the Target IDs)", "text": "string (student's exact transcribed answer)" }
+  ]
 }
 `;
+
     const userParts: any[] = [{ text: extractionPrompt }];
     base64Images.forEach(img => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
@@ -155,13 +153,34 @@ Output a single, flat JSON object. Use the EXACT Target Question IDs as keys. Ad
             generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
         })
     });
+
     if (!response.ok) throw new Error(`Google API error: ${response.status}`);
     const data = await response.json();
 
-    return parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+    const parsedData = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+
+    // Tunabadilisha ile Array kurudi kwenye mfumo wa Object (Key-Value pair) 
+    // ambao Server yetu (grade/stream) inautegemea.
+    const resultMap: Record<string, string> = {};
+    
+    if (parsedData.registrationNumber) {
+        resultMap.registrationNumber = parsedData.registrationNumber;
+    }
+
+    if (Array.isArray(parsedData.answers)) {
+        parsedData.answers.forEach((item: any) => {
+            if (item.qId && item.text) {
+                // Tunahakikisha ID ina-match mfumo wetu
+                resultMap[normalizeQuestionId(item.qId)] = item.text;
+            }
+        });
+    }
+
+    return resultMap;
 }
 
 if (typeof window !== 'undefined' && 'Worker' in window) {
+  // HAPA HAKUNA MIKWAJU TENA (\), Turbopack itapita salama.
   pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 }
 
