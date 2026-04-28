@@ -119,19 +119,26 @@ export async function extractStudentExamsClient(base64Images: string[], question
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
 
     const extractionPrompt = `
-You are a High-Precision Data Extractor. Locate and transcribe the exact answer for the following specific Question IDs from the provided student document images:
-[ ${normalizedTargets.map(id => `"${id}"`).join(", ")} ]
+You are an Elite Forensics Data Extractor. Your task is to extract student answers from the provided exam images and map them EXACTLY to the specific Question IDs requested.
 
-*** STRICT INSTRUCTIONS ***
-1. Use EXACTLY the Question IDs provided in the array above as your JSON keys. Do not invent, capitalize, or alter them.
-2. Transcribe the student's exact text, math, or formulas for that specific question.
-3. If the student left the question completely blank, output EXACTLY "No text extracted."
-4. Output ONLY valid, raw JSON. No conversational text. No markdown formatting.
+[ TARGET QUESTION IDs TO FIND ]: 
+${normalizedTargets.map(id => `"${id}"`).join(", ")}
 
-*** REQUIRED JSON SCHEMA EXAMPLE ***
+*** CORE DIRECTIVES FOR HANDLING MESSY EXAMS (THE SMART ENGINE) ***
+1. SCATTERED ANSWERS & PAGE TRACING: Students rarely write in perfect order. A sub-question (e.g., "A(iii)") might be on page 8, while the main question "2" was on page 1. You MUST explicitly read the TOP margin of each page to know which main question you are extracting (e.g. "02 Question") before matching it with the sub-questions below. DO NOT swap answers between questions.
+2. ANSWER STITCHING: If an answer starts on one page and continues on another, seamlessly combine the text into a single response for that Question ID.
+3. ID NORMALIZATION: Match the student's numbering (e.g., "Qn 1 a", "1(a)", "1.A") to the exact Target Question IDs provided above.
+
+*** METADATA EXTRACTION (STUDENT DETAILS) ***
+Scan the headers, footers, or cover page of the document to extract the student's Registration Number ONLY.
+
+*** OUTPUT FORMAT (STRICT JSON ONLY) ***
+Output a single, flat JSON object. Use the EXACT Target Question IDs as keys. Add ONE special key for the registration number. If an answer or metadata is completely missing, output "Not found.".
+
 {
-  "${normalizedTargets[0] || "q1a"}": "The mitochondria is the powerhouse...",
-  "${normalizedTargets[1] || "q1b"}": "No text extracted."
+  "registrationNumber": "Extract Reg No here (or 'Not found.')",
+  "${normalizedTargets[0] || "q1a"}": "Exact transcribed text of the student's answer...",
+  "${normalizedTargets[1] || "q1b"}": "Exact transcribed text of the student's answer..."
 }
 `;
     const userParts: any[] = [{ text: extractionPrompt }];
@@ -155,7 +162,7 @@ You are a High-Precision Data Extractor. Locate and transcribe the exact answer 
 }
 
 if (typeof window !== 'undefined' && 'Worker' in window) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = \`//cdnjs.cloudflare.com/ajax/libs/pdf.js/\${pdfjsLib.version}/pdf.worker.min.js\`;
 }
 
 export async function convertPdfToImagesClient(file: File): Promise<string[]> {
