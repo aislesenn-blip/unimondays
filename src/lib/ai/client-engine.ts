@@ -162,7 +162,7 @@ Output a single, flat JSON object. Use the EXACT Target Question IDs as keys. Ad
 }
 
 if (typeof window !== 'undefined' && 'Worker' in window) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = \`//cdnjs.cloudflare.com/ajax/libs/pdf.js/\${pdfjsLib.version}/pdf.worker.min.js\`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 }
 
 export async function convertPdfToImagesClient(file: File): Promise<string[]> {
