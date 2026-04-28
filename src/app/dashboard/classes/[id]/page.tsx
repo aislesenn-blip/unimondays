@@ -73,13 +73,13 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
   }));
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between border-b pb-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b pb-4 gap-4">
         <div>
             <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold tracking-tight">{classItem.code}</h1>
+                <h1 className="text-3xl font-bold tracking-tight">{classItem.name}</h1>
             </div>
-            <p className="text-muted-foreground mt-1">{classItem.name}</p>
+            <p className="text-muted-foreground font-mono mt-1">{classItem.code}</p>
         </div>
         <div className="flex gap-2">
             <Link href={`/dashboard/classes/${id}/analytics`} prefetch={true}>
