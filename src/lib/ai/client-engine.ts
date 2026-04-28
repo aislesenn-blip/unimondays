@@ -108,24 +108,29 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 }
 
 // ============================================================================
-// THE ARCHITECTURE: PASS 1 + PASS 1B (Sniper Batching)
+// THE ARCHITECTURE: PASS 1 + PASS 1B (With Anti-Blindness Tricks)
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
     console.log("[CLIENT ENGINE] Initiating PASS 1 + PASS 1B Extraction...");
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
     const finalResultMap: Record<string, string> = {};
 
-    const imageParts = base64Images.map(img => {
+    // TRICK #1: PAGE LABELING (Tunaiambia AI hii ni page ya ngapi)
+    const examParts: any[] = [];
+    base64Images.forEach((img, index) => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
-        return matches ? { inlineData: { mimeType: matches[1], data: matches[2] } } : null;
-    }).filter(Boolean);
+        if (matches) {
+            examParts.push({ text: `\n--- START OF EXAM PAGE ${index + 1} ---\n` });
+            examParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+        }
+    });
 
     // ------------------------------------------------------------------------
     // A. PASS 1 (The Segmentation Map)
     // ------------------------------------------------------------------------
     console.log("PASS 1: Mapping Attempted Questions...");
     const mapperPrompt = `
-You are the Master Mapper. Look at EVERY page of this handwritten exam.
+You are the Master Mapper. Look at ALL ${base64Images.length} pages of this handwritten exam.
 TARGET IDs: [ ${normalizedTargets.join(", ")} ]
 
 MANDATE:
@@ -136,7 +141,7 @@ Also, find the student's Registration Number.
 Output strictly in JSON:
 {
   "registrationNumber": "string (or 'Not found')",
-  "attemptedIds": ["id1", "id2"] // Only the IDs actually found.
+  "attemptedIds": ["id1", "id2"] // Only the IDs actually found anywhere in the exam.
 }
 `;
 
@@ -146,7 +151,7 @@ Output strictly in JSON:
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: mapperPrompt }, ...imageParts] }],
+                contents: [{ role: "user", parts: [{ text: mapperPrompt }, ...examParts] }],
                 generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
             })
         });
@@ -176,29 +181,31 @@ Output strictly in JSON:
     // ------------------------------------------------------------------------
     console.log(`PASS 1B: Sniper Extraction for ${attemptedIds.length} questions (3 at a time)...`);
     
-    // TUNAWEKA BATCH YA MASWALI MATATU (3) TU KAMA ULIVYOSEMA.
     const BATCH_SIZE = 3; 
 
-    // Tunasoma batch moja baada ya nyingine (Sequential) badala ya Promise.all
-    // Ili kuepuka Google API kukata requests (Rate Limits 429) kwa kutuma nyingi sana kwa mpigo.
     for (let i = 0; i < attemptedIds.length; i += BATCH_SIZE) {
         const batchIds = attemptedIds.slice(i, i + BATCH_SIZE);
         console.log(`Extracting Batch: ${batchIds.join(", ")}`);
 
+        // TRICK #2: JSON CHAIN OF THOUGHT (Inalazimisha itafute kabla ya kujibu)
         const sniperPrompt = `
-You MUST act as a literal transcriber. 
-Scan ALL the provided images but ONLY look for these specific Question IDs:
+You MUST act as a literal forensic transcriber. 
+You have been given ALL ${base64Images.length} labeled pages of an exam.
+You MUST search EVERY SINGLE PAGE for these specific Question IDs:
 [ ${batchIds.map(id => `"${id}"`).join(", ")} ]
 
 CRITICAL MANDATES:
-1. HYPER-FOCUS: Ignore every other question on the exam. Only find the ${batchIds.length} IDs listed above.
-2. CONTEXT: Read the top of the page (e.g., "03 Question") so you don't confuse "1(iii)" with "6(iii)".
-3. TRANSCRIBE: Quote their exact phrases, math, and steps exactly as written. DO NOT invent or assume.
-4. STITCH: If their answer starts on one page and finishes on another, combine the text.
+1. DO NOT STOP EARLY: You must explicitly check all pages up to Page ${base64Images.length}. 
+2. CHAIN OF THOUGHT: Use the "analysis" field to explain exactly which page you found the answer on.
+3. CONTEXT: Read the top of the page (e.g., "03 Question") so you don't confuse "1(iii)" with "6(iii)".
+4. TRANSCRIBE: Quote their exact phrases, math, and steps.
+5. STITCH: If their answer starts on one page and finishes on another, combine the text.
 
-Output strictly in JSON format where the keys are the requested IDs:
+Output strictly in JSON format:
 {
-  "${batchIds[0]}": "Exact student text..."
+  "analysis": "I searched all ${base64Images.length} pages. I found ID 1 on Page 4 and ID 2 on Page 6...",
+  "${batchIds[0]}": "Exact student text (or 'No text extracted.')",
+  "another_id": "Exact student text..."
 }
 `;
 
@@ -207,7 +214,7 @@ Output strictly in JSON format where the keys are the requested IDs:
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...imageParts] }],
+                    contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...examParts] }],
                     generationConfig: { 
                         temperature: 0.0, 
                         maxOutputTokens: 8192, 
@@ -220,7 +227,6 @@ Output strictly in JSON format where the keys are the requested IDs:
                 const extData = await extRes.json();
                 const extJson = parseLLMJSON(extData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
                 
-                // Hifadhi majibu kwenye Result Map
                 batchIds.forEach(id => {
                     if (extJson[id] && extJson[id] !== "No text extracted.") {
                         finalResultMap[id] = extJson[id];
