@@ -54,13 +54,6 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between border-b pb-6">
         <div>
-            <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm text-muted-foreground">Dashboard</span>
-                <span className="text-sm text-muted-foreground">/</span>
-                <span className="text-sm text-muted-foreground">Work-Sessions</span>
-                <span className="text-sm text-muted-foreground">/</span>
-                <span className="text-sm font-medium text-foreground">{session.title}</span>
-            </div>
             <h1 className="text-3xl font-bold tracking-tight mb-2 flex items-center gap-3">
                 {session.title}
                 <Badge variant="secondary" className="font-normal text-xs">{session.class?.code}</Badge>
