@@ -367,32 +367,14 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                     ref={fileInputRef}
                     onChange={handleRubricUpload}
                 />
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-dashed w-full sm:w-auto justify-center"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={!!loading}
-                >
-                    {loading === 'rubricUpload' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                    Change Marking Scheme
-                </Button>
-
-                <Button
-                    variant="default"
-                    size="sm"
-                    className="bg-primary text-primary-foreground shadow-sm transition-all w-full sm:w-auto justify-center"
-                    onClick={handleBatchRegrade}
-                    disabled={!!loading || areGradesReleased}
-                >
-                    {loading === 'batchRegrade' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCw className="w-4 h-4 mr-2" />}
-                    Repeat Grading
-                </Button>
+                {/* Removed redundant buttons from the top bar */}
             </div>
         </div>
 
-        {/* Existing Settings Controls */}
-        <div className="flex flex-wrap items-center gap-6 pt-1">
+        {/* Action Bar */}
+        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-6 pt-2">
+
+        <div className="flex flex-wrap items-center gap-6">
         {/* Strict Deadline */}
         <div className="flex items-center space-x-2">
             <Switch
@@ -445,27 +427,32 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
             )}
         </div>
 
-        {/* Manual Release Toggle */}
-        {session.releaseMode === 'MANUAL' && (
-             <div className="ml-auto flex items-center gap-4">
-                 <div className="flex items-center gap-2">
-                     <Badge variant={areGradesReleased ? "default" : "outline"} className={areGradesReleased ? "bg-green-600" : ""}>
-                         {areGradesReleased ? "Grades Live" : "Grades Hidden"}
-                     </Badge>
+        </div>
+
+        {/* Actions grouped on the right */}
+        <div className="flex items-center gap-4 ml-auto">
+            {session.releaseMode === 'MANUAL' && (
+                 <div className="flex items-center gap-4">
+                     <div className="flex items-center gap-2">
+                         <Badge variant={areGradesReleased ? "default" : "outline"} className={areGradesReleased ? "bg-green-600" : ""}>
+                             {areGradesReleased ? "Grades Live" : "Grades Hidden"}
+                         </Badge>
+                     </div>
+                     <Button
+                        variant={areGradesReleased ? "outline" : "default"}
+                        size="sm"
+                        onClick={() => updateSetting('areGradesReleased', !areGradesReleased)}
+                        disabled={!!loading}
+                        className={!areGradesReleased ? "bg-primary animate-pulse" : ""}
+                     >
+                        {loading === 'areGradesReleased' ? <Loader2 className="h-4 w-4 animate-spin" /> :
+                         areGradesReleased ? <Lock className="h-4 w-4 mr-2" /> : <Unlock className="h-4 w-4 mr-2" />}
+                        {areGradesReleased ? "Unpublish" : "Publish Grades Now"}
+                     </Button>
                  </div>
-                 <Button
-                    variant={areGradesReleased ? "outline" : "default"}
-                    size="sm"
-                    onClick={() => updateSetting('areGradesReleased', !areGradesReleased)}
-                    disabled={!!loading}
-                    className={!areGradesReleased ? "bg-primary animate-pulse" : ""}
-                 >
-                    {loading === 'areGradesReleased' ? <Loader2 className="h-4 w-4 animate-spin" /> :
-                     areGradesReleased ? <Lock className="h-4 w-4 mr-2" /> : <Unlock className="h-4 w-4 mr-2" />}
-                    {areGradesReleased ? "Unpublish Grades" : "Publish Grades Now"}
-                 </Button>
-             </div>
-        )}
+            )}
+        </div>
+
         </div>
       </CardContent>
     </Card>
