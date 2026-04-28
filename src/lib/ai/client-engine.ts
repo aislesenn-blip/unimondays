@@ -25,7 +25,6 @@ export const normalizeQuestionId = (id: string): string => {
 export function parseLLMJSON(content: string): any {
     if (!content || content.trim() === '') return {};
     content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
-
     let firstBrace = content.indexOf('{');
     let firstBracket = content.indexOf('[');
     let startIndex = -1;
@@ -67,12 +66,7 @@ export function parseLLMJSON(content: string): any {
     content = content.replace(/,\s*([}\]])/g, '$1');
     content = content.replace(/\\(?!["\\/bfnrt])/g, '\\\\');
 
-    try {
-        return JSON.parse(content);
-    } catch (e) {
-        console.warn("JSON parse failed, returning fallback:", e);
-        return isArray ? [] : {};
-    }
+    try { return JSON.parse(content); } catch (e) { return isArray ? [] : {}; }
 }
 
 const OPTIMIZE_PROMPT = `
@@ -92,7 +86,7 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
         if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
     });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -101,164 +95,111 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
         })
     });
 
-    if (!response.ok) throw new Error(`Google API error: ${response.status}`);
-    const data = await response.json();
+    if (!res.ok) throw new Error(`Google API error: ${res.status}`);
+    const data = await res.json();
     const parsedData = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 // ============================================================================
-// THE HYBRID V2: Map, Crop, and Extract (Anti-403 Architecture)
+// WAZO LAKO: THE SEQUENTIAL TRANSCRIPTION ENGINE (Single Request)
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Initiating Advanced Map & Crop Extraction...");
-    const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
+    console.log("[CLIENT ENGINE] Running Sequential Transcription (Single Request)...");
+    
     const finalResultMap: Record<string, string> = {};
+    const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
 
     const examParts: any[] = [];
     base64Images.forEach((img, index) => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
-            examParts.push({ text: `\n--- IMAGE INDEX ${index} ---\n` }); // Index ni muhimu hapa
+            // Tunaiambia inasoma ukurasa gani ili ihusishe majibu yanayoungana
+            examParts.push({ text: `\n--- PAGE ${index + 1} ---\n` });
             examParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
         }
     });
 
-    // ------------------------------------------------------------------------
-    // STAGE 1: THE LOCATOR MAP (Find WHERE each question is)
-    // ------------------------------------------------------------------------
-    console.log("PASS 1: Locating Questions across images...");
-    const mapperPrompt = `
-You are an Exam Indexer. Scan ALL provided images of this handwritten exam.
-TARGET IDs: [ ${normalizedTargets.join(", ")} ]
+    // PROMPT YAKO: Inamwambia asome tu kama kitabu, bila kujali mpangilio
+    const extractionPrompt = `
+You are a highly accurate literal transcriber reading a student's exam.
+Read ALL pages sequentially from start to finish. 
+The student may have written their answers out of order, messily, or randomly. 
 
-MANDATE:
-Identify which IMAGE INDEX (0 to ${base64Images.length - 1}) contains the answer for each Target ID.
-If an answer spans multiple images, list all relevant indices.
-Also find the Registration Number. DO NOT transcribe answers yet.
+YOUR JOB:
+1. Find the student's Registration Number on the first few pages.
+2. EVERY TIME you see a question number (e.g., "1.", "a)", "iii", "Question 6"), extract the text/math/steps that follow it exactly as written.
+3. If an answer starts on one page and finishes on another, combine the text.
+4. Do not try to match any specific IDs. Just document EVERYTHING the student wrote next to its corresponding number.
 
-Output strictly in JSON:
+Output strictly as a JSON object:
 {
-  "registrationNumber": "string",
-  "locations": [
-    { "qId": "id1", "imageIndices": [0, 1] },
-    { "qId": "id2", "imageIndices": [4] }
+  "registrationNumber": "found reg number (or 'Not found')",
+  "extractedAnswers": [
+    { 
+      "writtenNumber": "The question number exactly as the student wrote it (e.g., '1 a i' or 'Q6(iii)')", 
+      "text": "The exact transcribed answer text" 
+    }
   ]
 }
 `;
 
-    let questionLocations: { qId: string, imageIndices: number[] }[] = [];
-    
     try {
-        const mapperRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+        const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: mapperPrompt }, ...examParts] }],
-                generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
+                contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...examParts] }],
+                generationConfig: { 
+                    temperature: 0.0, 
+                    maxOutputTokens: 8192, // Tumeipa Token zote 8K ihakikishe haikati maneno 
+                    responseMimeType: "application/json" 
+                }
             })
         });
 
-        if (mapperRes.ok) {
-            const mapperData = await mapperRes.json();
-            const mapperJson = parseLLMJSON(mapperData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-
-            if (mapperJson.registrationNumber) {
-                finalResultMap.registrationNumber = mapperJson.registrationNumber;
-            }
-
-            if (Array.isArray(mapperJson.locations)) {
-                // Filter only valid targets and normalize IDs
-                questionLocations = mapperJson.locations.map((loc: any) => ({
-                    qId: normalizeQuestionId(loc.qId),
-                    imageIndices: Array.isArray(loc.imageIndices) ? loc.imageIndices : []
-                })).filter((loc: any) => normalizedTargets.includes(loc.qId) && loc.imageIndices.length > 0);
-            }
+        if (!res.ok) {
+            throw new Error(`Google API error: ${res.status} - ${res.statusText}`);
         }
-    } catch (e) {
-        console.warn("Mapper failed. Cannot proceed without location map to avoid 403s.", e);
-        return finalResultMap; // Tunakataa kutuma request za kipofu.
-    }
 
-    if (questionLocations.length === 0) return finalResultMap;
+        const data = await res.json();
+        const json = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
 
-    // ------------------------------------------------------------------------
-    // STAGE 2: TARGETED EXTRACTION (Send ONLY the required images per batch)
-    // ------------------------------------------------------------------------
-    console.log(`PASS 1B: Targeted Extraction for ${questionLocations.length} located questions...`);
-    
-    const BATCH_SIZE = 3; 
+        if (json.registrationNumber) {
+            finalResultMap.registrationNumber = json.registrationNumber;
+        }
 
-    for (let i = 0; i < questionLocations.length; i += BATCH_SIZE) {
-        const batch = questionLocations.slice(i, i + BATCH_SIZE);
-        const batchIds = batch.map(b => b.qId);
-        
-        // Kusanya Picha zinazohitajika tu kwa hii batch (Zilizotajwa kwenye imageIndices)
-        const requiredIndices = new Set<number>();
-        batch.forEach(b => b.imageIndices.forEach(idx => requiredIndices.add(idx)));
-        
-        const targetedImageParts: any[] = [];
-        requiredIndices.forEach(index => {
-            if (base64Images[index]) {
-                const matches = base64Images[index].match(/^data:([^;]+);base64,(.+)$/);
-                if (matches) {
-                    targetedImageParts.push({ text: `\n--- PAGE IMAGE ---\n` });
-                    targetedImageParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+        // HAPA NDIO CODE YETU INAFANYA KAZI YA KUPANGA ID (Matching Engine)
+        if (Array.isArray(json.extractedAnswers)) {
+            json.extractedAnswers.forEach((item: any) => {
+                if (item.writtenNumber && item.text) {
+                    // Tunasafisha namba aliyoandika mwanafunzi (Mfano: "1 a i" inakuwa "1ai")
+                    const cleanWrittenId = normalizeQuestionId(item.writtenNumber);
+                    
+                    // Tunatafuta kama hii ID inafanana na zile tunazotaka
+                    const matchedTargetId = normalizedTargets.find(target => {
+                        // Kuzuia "1ai" kuchanganyikana na "11ai" au "6ai"
+                        return cleanWrittenId === target || cleanWrittenId.endsWith(target) || target.endsWith(cleanWrittenId);
+                    });
+
+                    if (matchedTargetId) {
+                        // Kama swali lipo, linaingia kwenye mtambo
+                        // Tunajumlisha kama mwanafunzi aliandika swali hilihili mara mbili
+                        if (finalResultMap[matchedTargetId]) {
+                            finalResultMap[matchedTargetId] += `\n[Continued]: ${item.text}`;
+                        } else {
+                            finalResultMap[matchedTargetId] = item.text;
+                        }
+                    }
                 }
-            }
-        });
-
-        console.log(`Extracting Batch: ${batchIds.join(", ")} (Sending ${targetedImageParts.length / 2} specific images)`);
-
-        const sniperPrompt = `
-You are a literal forensic transcriber. 
-I have provided ONLY the relevant pages where the following Question IDs are located:
-[ ${batchIds.map(id => `"${id}"`).join(", ")} ]
-
-CRITICAL MANDATE:
-Extract the exact student answers for these IDs from the provided images. 
-Quote their phrases, math, and steps exactly.
-
-Output strictly in JSON:
-{
-  "${batchIds[0]}": "Exact student text (or 'No text extracted.')"
-}
-`;
-
-        try {
-            const extRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...targetedImageParts] }],
-                    generationConfig: { 
-                        temperature: 0.0, 
-                        maxOutputTokens: 8192, 
-                        responseMimeType: "application/json" 
-                    }
-                })
             });
-
-            if (extRes.ok) {
-                const extData = await extRes.json();
-                const extJson = parseLLMJSON(extData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-                
-                batchIds.forEach(id => {
-                    if (extJson[id] && extJson[id] !== "No text extracted.") {
-                        finalResultMap[id] = extJson[id];
-                    }
-                });
-            } else {
-                console.error(`Batch failed with status: ${extRes.status}`);
-            }
-        } catch (err) {
-            console.error(`Extraction failed for batch ${batchIds.join(", ")}`, err);
         }
 
-        console.log("Cooling down API to prevent rate limits...");
-        await delay(2000); 
+        console.log("[CLIENT ENGINE] Successfully matched IDs:", Object.keys(finalResultMap));
+
+    } catch (err) {
+        console.error("Single-Pass Sequential Extraction failed.", err);
     }
 
     return finalResultMap;
@@ -275,13 +216,13 @@ export async function convertPdfToImagesClient(file: File): Promise<string[]> {
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         if (pageNum > 20) break;
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: 1.2 }); // Size nzuri ya kuzuia 403 lakini inasomeka vizuri
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) continue;
         canvas.height = viewport.height; canvas.width = viewport.width;
         await page.render({ canvasContext: context, viewport }).promise;
-        images.push(canvas.toDataURL('image/jpeg', 0.6)); // Tunashusha tena ubora kidogo kuwa salama zaidi
+        images.push(canvas.toDataURL('image/jpeg', 0.6)); // Quality nzuri kwa Single-Pass
     }
     return images;
 }
