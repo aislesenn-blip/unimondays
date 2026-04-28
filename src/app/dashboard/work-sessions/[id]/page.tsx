@@ -16,6 +16,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { LiveSubmissionTable } from "@/components/dashboard/LiveSubmissionTable";
 import { WorkSessionControls } from "@/components/dashboard/WorkSessionControls";
+import { CopySessionCode } from "@/components/dashboard/CopySessionCode";
 
 export default async function WorkSessionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
@@ -43,12 +44,6 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
       redirect("/dashboard");
   }
 
-  // Determine if marking scheme is a downloadable file
-  const markingSchemeUrl = session.markingScheme &&
-    (session.markingScheme.startsWith('http') || session.markingScheme.endsWith('.pdf') || session.markingScheme.includes('/'))
-    ? session.markingScheme
-    : null;
-
   // FIX: Serialize Date objects to strings for Client Components
   const serializedSession = {
     ...session,
@@ -60,34 +55,29 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
       <div className="flex items-center justify-between border-b pb-6">
         <div>
             <div className="flex items-center gap-2 mb-1">
-                <Link href={`/dashboard/classes/${session.classId}`} prefetch={true} className="text-sm text-muted-foreground hover:underline">
-                    {session.class?.code}
-                </Link>
-                <span className="text-muted-foreground">/</span>
-                <span className="text-sm font-medium">{session.title}</span>
+                <span className="text-sm text-muted-foreground">Dashboard</span>
+                <span className="text-sm text-muted-foreground">/</span>
+                <span className="text-sm text-muted-foreground">Work-Sessions</span>
+                <span className="text-sm text-muted-foreground">/</span>
+                <span className="text-sm font-medium text-foreground">{session.title}</span>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">{session.title}</h1>
-            <div className="flex items-center gap-4 mt-2">
-                <Badge variant="outline" className="font-mono">{session.workCode}</Badge>
-                <span className="text-sm text-muted-foreground">
-                    {session.submissions.length} Submissions
-                </span>
+            <h1 className="text-3xl font-bold tracking-tight mb-2 flex items-center gap-3">
+                {session.title}
+                <Badge variant="secondary" className="font-normal text-xs">{session.class?.code}</Badge>
+            </h1>
+            <div className="flex items-center gap-4 mt-4">
+                <CopySessionCode code={session.workCode} />
+            </div>
+            <div className="mt-4 text-sm text-muted-foreground">
+                {session.submissions.length} Submissions
             </div>
         </div>
-        <div className="flex gap-2">
-             {markingSchemeUrl && (
-                 <a href={`/api/download?url=${encodeURIComponent(markingSchemeUrl)}`} download>
-                     <Button variant="outline">
-                         <Download className="mr-2 h-4 w-4" />
-                         Marking Scheme
-                     </Button>
-                 </a>
-             )}
+        <div className="flex gap-2 items-start pt-6">
              {session.rubricUrl && (
                 <a href={`/api/download?url=${encodeURIComponent(session.rubricUrl)}&inline=true`} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline">
-                        <FileText className="mr-2 h-4 w-4" />
-                        View Rubric
+                    <Button variant="outline" className="bg-primary/5 hover:bg-primary/10 border-primary/20">
+                        <FileText className="mr-2 h-4 w-4 text-primary" />
+                        View Marking Scheme
                     </Button>
                 </a>
              )}
