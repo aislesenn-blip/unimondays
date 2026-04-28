@@ -101,9 +101,8 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
-
 // ============================================================================
-// WAZO LAKO: THE SEQUENTIAL TRANSCRIPTION ENGINE (Single Request)
+// THE PRODUCTION SEQUENTIAL ENGINE (With World-Class Prompting)
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
     console.log("[CLIENT ENGINE] Running Sequential Transcription (Single Request)...");
@@ -115,31 +114,60 @@ export async function extractStudentExamsClient(base64Images: string[], question
     base64Images.forEach((img, index) => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
-            // Tunaiambia inasoma ukurasa gani ili ihusishe majibu yanayoungana
             examParts.push({ text: `\n--- PAGE ${index + 1} ---\n` });
             examParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
         }
     });
 
-    // PROMPT YAKO: Inamwambia asome tu kama kitabu, bila kujali mpangilio
+    // THE UPGRADED PRODUCTION PROMPT
     const extractionPrompt = `
-You are a highly accurate literal transcriber reading a student's exam.
-Read ALL pages sequentially from start to finish. 
-The student may have written their answers out of order, messily, or randomly. 
+You are a highly accurate literal transcription engine reading a student's handwritten exam script.
+
+Read ALL pages sequentially from start to finish using the inserted page separators (--- PAGE X ---) to preserve continuity.
+
+The student may write answers:
+- out of order
+- across multiple pages
+- messily
+- with corrections
+- with repeated attempts
+- using mixed numbering styles
 
 YOUR JOB:
-1. Find the student's Registration Number on the first few pages.
-2. EVERY TIME you see a question number (e.g., "1.", "a)", "iii", "Question 6"), extract the text/math/steps that follow it exactly as written.
-3. If an answer starts on one page and finishes on another, combine the text.
-4. Do not try to match any specific IDs. Just document EVERYTHING the student wrote next to its corresponding number.
 
-Output strictly as a JSON object:
+1. Find the student's Registration Number only if it is clearly labeled as:
+   Registration Number, Reg No, Candidate Number, Index Number, or Exam Number.
+Do not guess.
+If uncertain, return "Not found".
+
+2. Every time you see a question number
+   (example: 1., a), iii, Q6, Question 4(b), 1 a i),
+   extract the exact text, mathematics, steps, symbols, and working that follow it.
+
+3. Preserve equations, fractions, powers, units, mathematical notation, and symbols exactly as written.
+Do not simplify, rewrite, summarize, or interpret.
+
+4. If an answer continues on another page, combine it only if the numbering clearly shows continuation.
+Never merge unrelated answers.
+
+5. If the same question is answered multiple times, keep all versions in reading order.
+Do not remove duplicates.
+
+6. Never infer missing words.
+   Never guess unclear handwriting.
+If text is unreadable, write exactly:
+[unclear]
+
+7. Do not try to match any specific target IDs.
+Simply document EVERYTHING the student wrote next to its corresponding written number.
+
+OUTPUT STRICTLY as valid JSON only:
 {
-  "registrationNumber": "found reg number (or 'Not found')",
+  "registrationNumber": "found registration number or Not found",
   "extractedAnswers": [
-    { 
-      "writtenNumber": "The question number exactly as the student wrote it (e.g., '1 a i' or 'Q6(iii)')", 
-      "text": "The exact transcribed answer text" 
+    {
+      "writtenNumber": "exact numbering exactly as written by student",
+      "text": "exact literal transcription"
     }
   ]
 }
@@ -153,7 +181,7 @@ Output strictly as a JSON object:
                 contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...examParts] }],
                 generationConfig: { 
                     temperature: 0.0, 
-                    maxOutputTokens: 8192, // Tumeipa Token zote 8K ihakikishe haikati maneno 
+                    maxOutputTokens: 8192, 
                     responseMimeType: "application/json" 
                 }
             })
@@ -166,28 +194,23 @@ Output strictly as a JSON object:
         const data = await res.json();
         const json = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
 
-        if (json.registrationNumber) {
+        if (json.registrationNumber && json.registrationNumber !== "Not found") {
             finalResultMap.registrationNumber = json.registrationNumber;
         }
 
-        // HAPA NDIO CODE YETU INAFANYA KAZI YA KUPANGA ID (Matching Engine)
+        // DETERMINISTIC JS MAPPING (No Hallucination)
         if (Array.isArray(json.extractedAnswers)) {
             json.extractedAnswers.forEach((item: any) => {
                 if (item.writtenNumber && item.text) {
-                    // Tunasafisha namba aliyoandika mwanafunzi (Mfano: "1 a i" inakuwa "1ai")
                     const cleanWrittenId = normalizeQuestionId(item.writtenNumber);
                     
-                    // Tunatafuta kama hii ID inafanana na zile tunazotaka
                     const matchedTargetId = normalizedTargets.find(target => {
-                        // Kuzuia "1ai" kuchanganyikana na "11ai" au "6ai"
                         return cleanWrittenId === target || cleanWrittenId.endsWith(target) || target.endsWith(cleanWrittenId);
                     });
 
                     if (matchedTargetId) {
-                        // Kama swali lipo, linaingia kwenye mtambo
-                        // Tunajumlisha kama mwanafunzi aliandika swali hilihili mara mbili
                         if (finalResultMap[matchedTargetId]) {
-                            finalResultMap[matchedTargetId] += `\n[Continued]: ${item.text}`;
+                            finalResultMap[matchedTargetId] += `\n\n[Continued / Additional Attempt]:\n${item.text}`;
                         } else {
                             finalResultMap[matchedTargetId] = item.text;
                         }
@@ -216,13 +239,13 @@ export async function convertPdfToImagesClient(file: File): Promise<string[]> {
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         if (pageNum > 20) break;
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.2 }); // Size nzuri ya kuzuia 403 lakini inasomeka vizuri
+        const viewport = page.getViewport({ scale: 1.5 }); // High res for literal transcription
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) continue;
         canvas.height = viewport.height; canvas.width = viewport.width;
         await page.render({ canvasContext: context, viewport }).promise;
-        images.push(canvas.toDataURL('image/jpeg', 0.6)); // Quality nzuri kwa Single-Pass
+        images.push(canvas.toDataURL('image/jpeg', 0.8)); // Standard quality
     }
     return images;
 }
