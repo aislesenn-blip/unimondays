@@ -108,72 +108,134 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 }
 
 // ============================================================================
-// SINGLE-PASS MULTIMODAL EXTRACTION
+// THE ULTIMATE HYBRID ARCHITECTURE (L11 Masterpiece)
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Advanced Single-Pass Multimodal Extraction running...");
-    const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
+    console.log("[CLIENT ENGINE] Initiating Ultimate Batched Sniper Extraction...");
     
-    const extractionPrompt = `
-You are the Master Data Extractor for a University Examination Board.
-Scan the entire provided handwritten student exam and extract the EXACT answers for the following list of Question IDs:
-[ ${normalizedTargets.map(id => `"${id}"`).join(", ")} ]
+    const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
+    const finalResultMap: Record<string, string> = {};
 
-*** CRITICAL RULES FOR CHAOTIC EXAMS ***
-1. TRACE CAREFULLY: Do not just grab the first "iii)" you see. Look at the page headers (e.g., "06 Question" vs "01 Question") to know exactly which section you are in before extracting the sub-question.
-2. STITCH MULTI-PAGE ANSWERS: If an answer starts on one page and clearly continues on the next, combine them into one string.
-3. EXACT TRANSCRIPTION: Transcribe their exact phrases, math, and steps. Do not summarize.
-4. SKIPPED QUESTIONS: If the student completely skipped a question from the target list, output exactly "No text extracted."
+    const imageParts = base64Images.map(img => {
+        const matches = img.match(/^data:([^;]+);base64,(.+)$/);
+        return matches ? { inlineData: { mimeType: matches[1], data: matches[2] } } : null;
+    }).filter(Boolean);
 
-*** METADATA ***
-Extract the student's Registration Number from the top of the first few pages.
+    // ------------------------------------------------------------------------
+    // STAGE 1: THE GLOBAL MAPPER (Fast context scan)
+    // ------------------------------------------------------------------------
+    console.log("Stage 1: Mapping Attempted Questions...");
+    const mapperPrompt = `
+You are the Master Exam Mapper. Look at all pages of this handwritten exam.
+TARGET IDs TO FIND: [ ${normalizedTargets.join(", ")} ]
 
-*** OUTPUT FORMAT (STRICT JSON ONLY) ***
-Output a single JSON object. Use EXACTLY the target IDs provided above as keys.
+JOB:
+1. Find the student's Registration Number.
+2. Identify which of the Target IDs the student actually attempted/wrote down. 
+DO NOT TRANSCRIBE ANSWERS.
+
+Output strictly in JSON:
 {
-  "registrationNumber": "Extract Reg No here (or 'Not found')",
-  "${normalizedTargets[0] || "q1a"}": "Exact text...",
-  "${normalizedTargets[1] || "q1b"}": "No text extracted."
+  "registrationNumber": "string (or 'Not found')",
+  "attemptedIds": ["id1", "id2"] // Only the IDs actually found.
 }
 `;
 
-    const userParts: any[] = [{ text: extractionPrompt }];
-    
-    base64Images.forEach(img => {
-        const matches = img.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
-    });
+    let attemptedIds: string[] = [];
+    try {
+        const mapperRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: mapperPrompt }, ...imageParts] }],
+                generationConfig: { temperature: 0.0, responseMimeType: "application/json" } // JSON Imelazimishwa
+            })
+        });
 
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ role: "user", parts: userParts }],
-            generationConfig: { 
-                temperature: 0.0, 
-                maxOutputTokens: 8192, 
-                responseMimeType: "application/json" 
+        if (mapperRes.ok) {
+            const mapperData = await mapperRes.json();
+            const mapperJson = parseLLMJSON(mapperData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+
+            if (mapperJson.registrationNumber) {
+                finalResultMap.registrationNumber = mapperJson.registrationNumber;
             }
-        })
-    });
 
-    if (!response.ok) throw new Error(`Google API error: ${response.status}`);
-    const data = await response.json();
-    
-    const rawData = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    const extractedJson = parseLLMJSON(rawData);
-
-    const finalResultMap: Record<string, string> = {};
-    
-    if (extractedJson.registrationNumber) {
-        finalResultMap.registrationNumber = extractedJson.registrationNumber;
+            attemptedIds = Array.isArray(mapperJson.attemptedIds) ? mapperJson.attemptedIds : normalizedTargets;
+            attemptedIds = attemptedIds.map((id: string) => normalizeQuestionId(id)).filter((id: string) => normalizedTargets.includes(id));
+        } else {
+            attemptedIds = normalizedTargets; // Fallback: Kama ikifeli, tafuta yote.
+        }
+    } catch (e) {
+        console.warn("Mapper failed, falling back to all targets.", e);
+        attemptedIds = normalizedTargets;
     }
 
-    normalizedTargets.forEach(id => {
-        const answer = extractedJson[id];
-        if (answer && answer !== "No text extracted.") {
-            finalResultMap[id] = answer;
-        }
+    if (attemptedIds.length === 0) return finalResultMap;
+
+    // ------------------------------------------------------------------------
+    // STAGE 2: BATCHED SNIPER EXTRACTION (Deep focus, No JSON Cut-offs)
+    // ------------------------------------------------------------------------
+    console.log(`Stage 2: Batched Sniper Extraction for ${attemptedIds.length} questions...`);
+    const BATCH_SIZE = 5; // Tunatafuta maswali 5 tu kwa wakati mmoja (Umakini 100%)
+    
+    // Tunatumia mbinu ya kutuma requests kwa makundi (Concurrency) kuokoa muda
+    const batchPromises = [];
+
+    for (let i = 0; i < attemptedIds.length; i += BATCH_SIZE) {
+        const batchIds = attemptedIds.slice(i, i + BATCH_SIZE);
+
+        const sniperPrompt = `
+You are an Elite Forensic Transcriber.
+Scan the entire document but HYPER-FOCUS ONLY on extracting answers for these specific Question IDs:
+[ ${batchIds.map(id => `"${id}"`).join(", ")} ]
+
+CRITICAL RULES:
+1. CONTEXT: Do not confuse sub-questions. Check the page header (e.g., "Question 06") before assuming "iii)" belongs to Question 1.
+2. STITCHING: If an answer starts on one page and continues on the next, combine the text seamlessly.
+3. EXACT TRANSCRIPTION: Write exactly what the student wrote. Do not summarize.
+
+Output strictly in JSON where keys are the specific Question IDs listed above:
+{
+  "${batchIds[0]}": "Exact text...",
+  "another_id_if_found": "Exact text..."
+}
+`;
+
+        const promise = fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...imageParts] }],
+                generationConfig: { 
+                    temperature: 0.0, 
+                    maxOutputTokens: 8192, // Kinga ya mwisho: Haiwezi kukata JSON
+                    responseMimeType: "application/json" // Kinga ya mwisho: Lazima iwe JSON valid
+                }
+            })
+        }).then(async (res) => {
+            if (res.ok) {
+                const data = await res.json();
+                const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+                return parseLLMJSON(rawJson);
+            }
+            return {};
+        }).catch(err => {
+            console.error(`Sniper batch failed for IDs: ${batchIds.join(", ")}`, err);
+            return {};
+        });
+
+        batchPromises.push(promise);
+    }
+
+    // Subiri batches zote zimalize kisha changanya majibu pamoja
+    const batchResults = await Promise.all(batchPromises);
+    batchResults.forEach(batchJson => {
+        Object.keys(batchJson).forEach(key => {
+            const cleanKey = normalizeQuestionId(key);
+            if (attemptedIds.includes(cleanKey) && batchJson[key] && batchJson[key] !== "No text extracted.") {
+                finalResultMap[cleanKey] = batchJson[key];
+            }
+        });
     });
 
     return finalResultMap;
