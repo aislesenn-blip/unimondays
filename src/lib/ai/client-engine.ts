@@ -107,48 +107,50 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
-// Function ya kupunguza spidi ili Google isitupige block (403)
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 // ============================================================================
-// THE ARCHITECTURE: PASS 1 + PASS 1B (With Anti-Blindness & Anti-403 Tricks)
+// THE HYBRID V2: Map, Crop, and Extract (Anti-403 Architecture)
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Initiating PASS 1 + PASS 1B Extraction...");
+    console.log("[CLIENT ENGINE] Initiating Advanced Map & Crop Extraction...");
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
     const finalResultMap: Record<string, string> = {};
 
-    // TRICK #1: PAGE LABELING (Tunaiambia AI hii ni page ya ngapi)
     const examParts: any[] = [];
     base64Images.forEach((img, index) => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
-            examParts.push({ text: `\n--- START OF EXAM PAGE ${index + 1} ---\n` });
+            examParts.push({ text: `\n--- IMAGE INDEX ${index} ---\n` }); // Index ni muhimu hapa
             examParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
         }
     });
 
     // ------------------------------------------------------------------------
-    // A. PASS 1 (The Segmentation Map)
+    // STAGE 1: THE LOCATOR MAP (Find WHERE each question is)
     // ------------------------------------------------------------------------
-    console.log("PASS 1: Mapping Attempted Questions...");
+    console.log("PASS 1: Locating Questions across images...");
     const mapperPrompt = `
-You are the Master Mapper. Look at ALL ${base64Images.length} pages of this handwritten exam.
+You are an Exam Indexer. Scan ALL provided images of this handwritten exam.
 TARGET IDs: [ ${normalizedTargets.join(", ")} ]
 
 MANDATE:
-Identify EVERY question from the Target IDs that the student actually attempted. 
-DO NOT TRANSCRIBE THE ANSWERS YET. Just state if they attempted the question.
-Also, find the student's Registration Number.
+Identify which IMAGE INDEX (0 to ${base64Images.length - 1}) contains the answer for each Target ID.
+If an answer spans multiple images, list all relevant indices.
+Also find the Registration Number. DO NOT transcribe answers yet.
 
 Output strictly in JSON:
 {
-  "registrationNumber": "string (or 'Not found')",
-  "attemptedIds": ["id1", "id2"] // Only the IDs actually found anywhere in the exam.
+  "registrationNumber": "string",
+  "locations": [
+    { "qId": "id1", "imageIndices": [0, 1] },
+    { "qId": "id2", "imageIndices": [4] }
+  ]
 }
 `;
 
-    let attemptedIds: string[] = [];
+    let questionLocations: { qId: string, imageIndices: number[] }[] = [];
+    
     try {
         const mapperRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -167,49 +169,61 @@ Output strictly in JSON:
                 finalResultMap.registrationNumber = mapperJson.registrationNumber;
             }
 
-            attemptedIds = Array.isArray(mapperJson.attemptedIds) ? mapperJson.attemptedIds : normalizedTargets;
-            attemptedIds = attemptedIds.map((id: string) => normalizeQuestionId(id)).filter((id: string) => normalizedTargets.includes(id));
-        } else {
-            attemptedIds = normalizedTargets;
+            if (Array.isArray(mapperJson.locations)) {
+                // Filter only valid targets and normalize IDs
+                questionLocations = mapperJson.locations.map((loc: any) => ({
+                    qId: normalizeQuestionId(loc.qId),
+                    imageIndices: Array.isArray(loc.imageIndices) ? loc.imageIndices : []
+                })).filter((loc: any) => normalizedTargets.includes(loc.qId) && loc.imageIndices.length > 0);
+            }
         }
     } catch (e) {
-        console.warn("Mapper failed, falling back to all targets.", e);
-        attemptedIds = normalizedTargets;
+        console.warn("Mapper failed. Cannot proceed without location map to avoid 403s.", e);
+        return finalResultMap; // Tunakataa kutuma request za kipofu.
     }
 
-    if (attemptedIds.length === 0) return finalResultMap;
+    if (questionLocations.length === 0) return finalResultMap;
 
     // ------------------------------------------------------------------------
-    // B. PASS 1B (Single Question Extraction - Snipping 3 at a time safely)
+    // STAGE 2: TARGETED EXTRACTION (Send ONLY the required images per batch)
     // ------------------------------------------------------------------------
-    console.log(`PASS 1B: Sniper Extraction for ${attemptedIds.length} questions (3 at a time)...`);
+    console.log(`PASS 1B: Targeted Extraction for ${questionLocations.length} located questions...`);
     
     const BATCH_SIZE = 3; 
 
-    // Tunasoma moja baada ya nyingine kuzuia 403 Forbidden ya Google WAF
-    for (let i = 0; i < attemptedIds.length; i += BATCH_SIZE) {
-        const batchIds = attemptedIds.slice(i, i + BATCH_SIZE);
-        console.log(`Extracting Batch: ${batchIds.join(", ")}`);
+    for (let i = 0; i < questionLocations.length; i += BATCH_SIZE) {
+        const batch = questionLocations.slice(i, i + BATCH_SIZE);
+        const batchIds = batch.map(b => b.qId);
+        
+        // Kusanya Picha zinazohitajika tu kwa hii batch (Zilizotajwa kwenye imageIndices)
+        const requiredIndices = new Set<number>();
+        batch.forEach(b => b.imageIndices.forEach(idx => requiredIndices.add(idx)));
+        
+        const targetedImageParts: any[] = [];
+        requiredIndices.forEach(index => {
+            if (base64Images[index]) {
+                const matches = base64Images[index].match(/^data:([^;]+);base64,(.+)$/);
+                if (matches) {
+                    targetedImageParts.push({ text: `\n--- PAGE IMAGE ---\n` });
+                    targetedImageParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+                }
+            }
+        });
 
-        // TRICK #2: JSON CHAIN OF THOUGHT
+        console.log(`Extracting Batch: ${batchIds.join(", ")} (Sending ${targetedImageParts.length / 2} specific images)`);
+
         const sniperPrompt = `
-You MUST act as a literal forensic transcriber. 
-You have been given ALL ${base64Images.length} labeled pages of an exam.
-You MUST search EVERY SINGLE PAGE for these specific Question IDs:
+You are a literal forensic transcriber. 
+I have provided ONLY the relevant pages where the following Question IDs are located:
 [ ${batchIds.map(id => `"${id}"`).join(", ")} ]
 
-CRITICAL MANDATES:
-1. DO NOT STOP EARLY: You must explicitly check all pages up to Page ${base64Images.length}. 
-2. CHAIN OF THOUGHT: Use the "analysis" field to explain exactly which page you found the answer on.
-3. CONTEXT: Read the top of the page (e.g., "03 Question") so you don't confuse "1(iii)" with "6(iii)".
-4. TRANSCRIBE: Quote their exact phrases, math, and steps.
-5. STITCH: If their answer starts on one page and finishes on another, combine the text.
+CRITICAL MANDATE:
+Extract the exact student answers for these IDs from the provided images. 
+Quote their phrases, math, and steps exactly.
 
-Output strictly in JSON format:
+Output strictly in JSON:
 {
-  "analysis": "I searched all ${base64Images.length} pages. I found ID 1 on Page 4...",
-  "${batchIds[0]}": "Exact student text (or 'No text extracted.')",
-  "another_id": "Exact student text..."
+  "${batchIds[0]}": "Exact student text (or 'No text extracted.')"
 }
 `;
 
@@ -218,7 +232,7 @@ Output strictly in JSON format:
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...examParts] }],
+                    contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...targetedImageParts] }],
                     generationConfig: { 
                         temperature: 0.0, 
                         maxOutputTokens: 8192, 
@@ -243,9 +257,8 @@ Output strictly in JSON format:
             console.error(`Extraction failed for batch ${batchIds.join(", ")}`, err);
         }
 
-        // TUNAWEKA DELAY YA SEKUNDE 3 HAPA KUZUIA GOOGLE KUTUPIGA BLOCK (403)
-        console.log("Cooling down API for 3 seconds to prevent 403 Forbidden...");
-        await delay(3000); 
+        console.log("Cooling down API to prevent rate limits...");
+        await delay(2000); 
     }
 
     return finalResultMap;
@@ -268,10 +281,7 @@ export async function convertPdfToImagesClient(file: File): Promise<string[]> {
         if (!context) continue;
         canvas.height = viewport.height; canvas.width = viewport.width;
         await page.render({ canvasContext: context, viewport }).promise;
-        
-        // Tumepunguza ubora wa picha kidogo (0.7) ili kupunguza mzigo (MB) unaoenda Google API 
-        // kuzuia kufungiwa kwa Payload Too Large.
-        images.push(canvas.toDataURL('image/jpeg', 0.7));
+        images.push(canvas.toDataURL('image/jpeg', 0.6)); // Tunashusha tena ubora kidogo kuwa salama zaidi
     }
     return images;
 }
