@@ -72,7 +72,8 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
 
             if (uploadError) throw new Error(`Supabase upload failed: ${uploadError.message}`);
 
-            const res = await fetch("/api/student/upload", {
+            // HAPA NDIPO TUMEWEKA ENDPOINT SAHIHI YA "SUBMIT"
+            const res = await fetch("/api/student/submit", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
