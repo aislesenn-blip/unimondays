@@ -108,11 +108,10 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 }
 
 // ============================================================================
-// THE ULTIMATE HYBRID ARCHITECTURE (L11 Masterpiece)
+// THE ARCHITECTURE: PASS 1 + PASS 1B (Sniper Batching)
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Initiating Ultimate Batched Sniper Extraction...");
-    
+    console.log("[CLIENT ENGINE] Initiating PASS 1 + PASS 1B Extraction...");
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
     const finalResultMap: Record<string, string> = {};
 
@@ -122,17 +121,17 @@ export async function extractStudentExamsClient(base64Images: string[], question
     }).filter(Boolean);
 
     // ------------------------------------------------------------------------
-    // STAGE 1: THE GLOBAL MAPPER (Fast context scan)
+    // A. PASS 1 (The Segmentation Map)
     // ------------------------------------------------------------------------
-    console.log("Stage 1: Mapping Attempted Questions...");
+    console.log("PASS 1: Mapping Attempted Questions...");
     const mapperPrompt = `
-You are the Master Exam Mapper. Look at all pages of this handwritten exam.
-TARGET IDs TO FIND: [ ${normalizedTargets.join(", ")} ]
+You are the Master Mapper. Look at EVERY page of this handwritten exam.
+TARGET IDs: [ ${normalizedTargets.join(", ")} ]
 
-JOB:
-1. Find the student's Registration Number.
-2. Identify which of the Target IDs the student actually attempted/wrote down. 
-DO NOT TRANSCRIBE ANSWERS.
+MANDATE:
+Identify EVERY question from the Target IDs that the student actually attempted. 
+DO NOT TRANSCRIBE THE ANSWERS YET. Just state if they attempted the question.
+Also, find the student's Registration Number.
 
 Output strictly in JSON:
 {
@@ -148,7 +147,7 @@ Output strictly in JSON:
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ role: "user", parts: [{ text: mapperPrompt }, ...imageParts] }],
-                generationConfig: { temperature: 0.0, responseMimeType: "application/json" } // JSON Imelazimishwa
+                generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
             })
         });
 
@@ -163,7 +162,7 @@ Output strictly in JSON:
             attemptedIds = Array.isArray(mapperJson.attemptedIds) ? mapperJson.attemptedIds : normalizedTargets;
             attemptedIds = attemptedIds.map((id: string) => normalizeQuestionId(id)).filter((id: string) => normalizedTargets.includes(id));
         } else {
-            attemptedIds = normalizedTargets; // Fallback: Kama ikifeli, tafuta yote.
+            attemptedIds = normalizedTargets;
         }
     } catch (e) {
         console.warn("Mapper failed, falling back to all targets.", e);
@@ -173,70 +172,67 @@ Output strictly in JSON:
     if (attemptedIds.length === 0) return finalResultMap;
 
     // ------------------------------------------------------------------------
-    // STAGE 2: BATCHED SNIPER EXTRACTION (Deep focus, No JSON Cut-offs)
+    // B. PASS 1B (Single Question Extraction - Snipping 3 at a time)
     // ------------------------------------------------------------------------
-    console.log(`Stage 2: Batched Sniper Extraction for ${attemptedIds.length} questions...`);
-    const BATCH_SIZE = 5; // Tunatafuta maswali 5 tu kwa wakati mmoja (Umakini 100%)
+    console.log(`PASS 1B: Sniper Extraction for ${attemptedIds.length} questions (3 at a time)...`);
     
-    // Tunatumia mbinu ya kutuma requests kwa makundi (Concurrency) kuokoa muda
-    const batchPromises = [];
+    // TUNAWEKA BATCH YA MASWALI MATATU (3) TU KAMA ULIVYOSEMA.
+    const BATCH_SIZE = 3; 
 
+    // Tunasoma batch moja baada ya nyingine (Sequential) badala ya Promise.all
+    // Ili kuepuka Google API kukata requests (Rate Limits 429) kwa kutuma nyingi sana kwa mpigo.
     for (let i = 0; i < attemptedIds.length; i += BATCH_SIZE) {
         const batchIds = attemptedIds.slice(i, i + BATCH_SIZE);
+        console.log(`Extracting Batch: ${batchIds.join(", ")}`);
 
         const sniperPrompt = `
-You are an Elite Forensic Transcriber.
-Scan the entire document but HYPER-FOCUS ONLY on extracting answers for these specific Question IDs:
+You MUST act as a literal transcriber. 
+Scan ALL the provided images but ONLY look for these specific Question IDs:
 [ ${batchIds.map(id => `"${id}"`).join(", ")} ]
 
-CRITICAL RULES:
-1. CONTEXT: Do not confuse sub-questions. Check the page header (e.g., "Question 06") before assuming "iii)" belongs to Question 1.
-2. STITCHING: If an answer starts on one page and continues on the next, combine the text seamlessly.
-3. EXACT TRANSCRIPTION: Write exactly what the student wrote. Do not summarize.
+CRITICAL MANDATES:
+1. HYPER-FOCUS: Ignore every other question on the exam. Only find the ${batchIds.length} IDs listed above.
+2. CONTEXT: Read the top of the page (e.g., "03 Question") so you don't confuse "1(iii)" with "6(iii)".
+3. TRANSCRIBE: Quote their exact phrases, math, and steps exactly as written. DO NOT invent or assume.
+4. STITCH: If their answer starts on one page and finishes on another, combine the text.
 
-Output strictly in JSON where keys are the specific Question IDs listed above:
+Output strictly in JSON format where the keys are the requested IDs:
 {
-  "${batchIds[0]}": "Exact text...",
-  "another_id_if_found": "Exact text..."
+  "${batchIds[0]}": "Exact student text..."
 }
 `;
 
-        const promise = fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...imageParts] }],
-                generationConfig: { 
-                    temperature: 0.0, 
-                    maxOutputTokens: 8192, // Kinga ya mwisho: Haiwezi kukata JSON
-                    responseMimeType: "application/json" // Kinga ya mwisho: Lazima iwe JSON valid
-                }
-            })
-        }).then(async (res) => {
-            if (res.ok) {
-                const data = await res.json();
-                const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-                return parseLLMJSON(rawJson);
-            }
-            return {};
-        }).catch(err => {
-            console.error(`Sniper batch failed for IDs: ${batchIds.join(", ")}`, err);
-            return {};
-        });
+        try {
+            const extRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: "user", parts: [{ text: sniperPrompt }, ...imageParts] }],
+                    generationConfig: { 
+                        temperature: 0.0, 
+                        maxOutputTokens: 8192, 
+                        responseMimeType: "application/json" 
+                    }
+                })
+            });
 
-        batchPromises.push(promise);
+            if (extRes.ok) {
+                const extData = await extRes.json();
+                const extJson = parseLLMJSON(extData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+                
+                // Hifadhi majibu kwenye Result Map
+                batchIds.forEach(id => {
+                    if (extJson[id] && extJson[id] !== "No text extracted.") {
+                        finalResultMap[id] = extJson[id];
+                    }
+                });
+            } else {
+                console.error(`Batch failed with status: ${extRes.status}`);
+            }
+        } catch (err) {
+            console.error(`Extraction failed for batch ${batchIds.join(", ")}`, err);
+        }
     }
-
-    // Subiri batches zote zimalize kisha changanya majibu pamoja
-    const batchResults = await Promise.all(batchPromises);
-    batchResults.forEach(batchJson => {
-        Object.keys(batchJson).forEach(key => {
-            const cleanKey = normalizeQuestionId(key);
-            if (attemptedIds.includes(cleanKey) && batchJson[key] && batchJson[key] !== "No text extracted.") {
-                finalResultMap[cleanKey] = batchJson[key];
-            }
-        });
-    });
 
     return finalResultMap;
 }
