@@ -1,9 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Removed the direct Google API endpoint and key fetching logic
-// since exposing the API key to the browser is a major security risk.
-// All traffic is now securely routed through our backend proxy.
-
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
 export async function getClientGeminiKey() {
@@ -111,113 +107,74 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
-
-// WAZO LAKO LA "PASS 1 + PASS 1B" LIMETEKELEZWA HAPA
+// ============================================================================
+// SINGLE-PASS MULTIMODAL EXTRACTION
+// ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
+    console.log("[CLIENT ENGINE] Advanced Single-Pass Multimodal Extraction running...");
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
-    const finalResultMap: Record<string, string> = {};
+    
+    const extractionPrompt = `
+You are the Master Data Extractor for a University Examination Board.
+Scan the entire provided handwritten student exam and extract the EXACT answers for the following list of Question IDs:
+[ ${normalizedTargets.map(id => `"${id}"`).join(", ")} ]
 
-    const imageParts = base64Images.map(img => {
+*** CRITICAL RULES FOR CHAOTIC EXAMS ***
+1. TRACE CAREFULLY: Do not just grab the first "iii)" you see. Look at the page headers (e.g., "06 Question" vs "01 Question") to know exactly which section you are in before extracting the sub-question.
+2. STITCH MULTI-PAGE ANSWERS: If an answer starts on one page and clearly continues on the next, combine them into one string.
+3. EXACT TRANSCRIPTION: Transcribe their exact phrases, math, and steps. Do not summarize.
+4. SKIPPED QUESTIONS: If the student completely skipped a question from the target list, output exactly "No text extracted."
+
+*** METADATA ***
+Extract the student's Registration Number from the top of the first few pages.
+
+*** OUTPUT FORMAT (STRICT JSON ONLY) ***
+Output a single JSON object. Use EXACTLY the target IDs provided above as keys.
+{
+  "registrationNumber": "Extract Reg No here (or 'Not found')",
+  "${normalizedTargets[0] || "q1a"}": "Exact text...",
+  "${normalizedTargets[1] || "q1b"}": "No text extracted."
+}
+`;
+
+    const userParts: any[] = [{ text: extractionPrompt }];
+    
+    base64Images.forEach(img => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
-        return matches ? { inlineData: { mimeType: matches[1], data: matches[2] } } : null;
-    }).filter(Boolean);
+        if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+    });
 
-    // ============================================================================
-    // A. PASS 1 (The Segmentation Map)
-    // ============================================================================
-    const mapperPrompt = `
-You are the Master Mapper. Scan the entirety of this handwritten exam.
-Your ONLY job is to identify EVERY question from the TARGET LIST that the student attempted. 
-DO NOT TRANSCRIBE THE ANSWERS YET. Just draw the map.
+    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ role: "user", parts: userParts }],
+            generationConfig: { 
+                temperature: 0.0, 
+                maxOutputTokens: 8192, 
+                responseMimeType: "application/json" 
+            }
+        })
+    });
 
-TARGET LIST: [ ${normalizedTargets.join(", ")} ]
+    if (!response.ok) throw new Error(`Google API error: ${response.status}`);
+    const data = await response.json();
+    
+    const rawData = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const extractedJson = parseLLMJSON(rawData);
 
-Output strictly in JSON:
-{
-  "registrationNumber": "string (extract from the cover/top, or 'Not found')",
-  "attemptedIds": ["id1", "id2"] // Only include IDs from the target list that the student actually wrote down/attempted.
-}
-`;
-
-    try {
-        const mapperRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: mapperPrompt }, ...imageParts] }],
-                generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
-            })
-        });
-
-        if (!mapperRes.ok) throw new Error(`Pass 1 Failed: ${mapperRes.status}`);
-        
-        const mapperData = await mapperRes.json();
-        const mapperJson = parseLLMJSON(mapperData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-
-        if (mapperJson.registrationNumber) {
-            finalResultMap.registrationNumber = mapperJson.registrationNumber;
-        }
-
-        let attemptedIds: string[] = Array.isArray(mapperJson.attemptedIds) ? mapperJson.attemptedIds : normalizedTargets;
-        attemptedIds = attemptedIds.map((id: string) => normalizeQuestionId(id)).filter((id: string) => normalizedTargets.includes(id));
-
-        if (attemptedIds.length === 0) return finalResultMap;
-
-        // ============================================================================
-        // B. PASS 1B (Single Question Extraction - Burning Tokens for Accuracy)
-        // ============================================================================
-        // Tunafanya requests 4 kwa wakati mmoja ili Vercel isikate na kazi iende haraka.
-        const CONCURRENCY_LIMIT = 4; 
-        
-        for (let i = 0; i < attemptedIds.length; i += CONCURRENCY_LIMIT) {
-            const batchIds = attemptedIds.slice(i, i + CONCURRENCY_LIMIT);
-
-            const extractionPromises = batchIds.map(async (targetId) => {
-                const extractionPrompt = `
-You MUST act as a literal transcriber. 
-Find where the student answered the specific question ID: "${targetId}".
-Quote their exact phrases, math, and steps exactly as written for this question ONLY.
-If the answer spans across pages, stitch it together. 
-DO NOT invent, assume, or inject terms from the marking scheme.
-
-Output JSON:
-{
-  "text": "The exact student's answer..."
-}
-`;
-                try {
-                    const extRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...imageParts] }],
-                            generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
-                        })
-                    });
-
-                    if (extRes.ok) {
-                        const extData = await extRes.json();
-                        const extJson = parseLLMJSON(extData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-                        if (extJson.text) return { id: targetId, text: extJson.text };
-                    }
-                } catch (err) {
-                    console.error(`Failed to extract single question ${targetId}:`, err);
-                }
-                return { id: targetId, text: "Not found." }; // Fallback
-            });
-
-            // Subiri maswali 4 yachambuliwe, kisha ingiza kwenye Map yetu
-            const batchResults = await Promise.all(extractionPromises);
-            batchResults.forEach(result => {
-                if (result.text && result.text !== "Not found.") {
-                    finalResultMap[result.id] = result.text;
-                }
-            });
-        }
-
-    } catch (error) {
-        console.error("Pipeline Error:", error);
+    const finalResultMap: Record<string, string> = {};
+    
+    if (extractedJson.registrationNumber) {
+        finalResultMap.registrationNumber = extractedJson.registrationNumber;
     }
+
+    normalizedTargets.forEach(id => {
+        const answer = extractedJson[id];
+        if (answer && answer !== "No text extracted.") {
+            finalResultMap[id] = answer;
+        }
+    });
 
     return finalResultMap;
 }
