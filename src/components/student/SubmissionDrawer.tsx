@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useLoadingMessages } from "@/lib/hooks/use-loading-messages";
 
 interface SubmissionDrawerProps {
     session: any;
@@ -34,6 +35,14 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
     const workSessionId = session.id;
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "uploading" | "success" | "error">("idle");
+
+    const loadingMessage = useLoadingMessages([
+        "Scanning document...",
+        "Analyzing student handwriting...",
+        "Cross-referencing answers...",
+        "This might take up to 4 mins depending on your network...",
+        "Almost there, please hold on..."
+    ], 3500);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -197,12 +206,14 @@ export function SubmissionDrawer({ session, open, onOpenChange, onSuccess }: Sub
                         <Button
                             onClick={handleUploadClick}
                             disabled={!selectedFile || loadingState === "extracting" || loadingState === "uploading" || loadingState === "success"}
-                            className="w-full sm:w-auto relative"
+                            className="w-full sm:w-auto relative min-w-[200px]"
                         >
                             {(loadingState === "extracting" || loadingState === "uploading") ? (
-                                <span className="flex items-center gap-2">
-                                    <Loader2 className="animate-spin h-4 w-4" />
-                                    {loadingState === "extracting" ? "Analyzing Document..." : "Uploading..."}
+                                <span className="flex items-center gap-2 max-w-[250px] overflow-hidden">
+                                    <Loader2 className="animate-spin h-4 w-4 shrink-0" />
+                                    <span className="truncate text-xs animate-in fade-in duration-500" key={loadingState === "extracting" ? loadingMessage : "Uploading..."}>
+                                        {loadingState === "extracting" ? loadingMessage : "Uploading..."}
+                                    </span>
                                 </span>
                             ) : loadingState === "success" ? (
                                 "Submission Complete!"

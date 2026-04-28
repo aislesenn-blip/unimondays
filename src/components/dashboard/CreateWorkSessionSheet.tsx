@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { useRouter } from "next/navigation";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +14,7 @@ import { Plus, UploadCloud, Loader2, Edit3, CheckCircle2, Trash2 } from "lucide-
 import { supabaseClient } from "@/lib/supabase-client";
 import { v4 as uuidv4 } from "uuid";
 import { getClientGeminiKey, convertPdfToImagesClient, fileToBase64, optimizeMarkingSchemeClient } from "@/lib/ai/client-engine";
+import { useLoadingMessages } from "@/lib/hooks/use-loading-messages";
 
 interface CreateWorkSessionSheetProps {
   classId: string;
@@ -29,11 +31,19 @@ interface RubricItem {
 export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { register, getValues, reset, setValue, formState: { errors } } = useForm();
+  const { register, getValues, reset, setValue, formState: { errors }, control } = useForm();
 
   const [uploading, setUploading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+
+  const loadingMessage = useLoadingMessages([
+      "Analyzing document structure...",
+      "Extracting rubric points...",
+      "Assigning marks...",
+      "This might take up to 4 mins depending on your network...",
+      "Almost done, please hold on..."
+  ], 3500);
 
   const [rubricItems, setRubricItems] = useState<RubricItem[]>([]);
   const [isRubricParsed, setIsRubricParsed] = useState(false);
@@ -170,7 +180,16 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
 
           <div className="space-y-2">
             <Label htmlFor="deadline" className="flex items-center gap-1">Deadline (Optional)</Label>
-            <Input id="deadline" type="datetime-local" {...register("deadline")} />
+            <Controller
+              control={control}
+              name="deadline"
+              render={({ field }) => (
+                <DateTimePicker
+                  date={field.value ? new Date(field.value) : undefined}
+                  setDate={(date) => field.onChange(date ? date.toISOString() : undefined)}
+                />
+              )}
+            />
           </div>
 
            <div className="space-y-4">
@@ -184,7 +203,7 @@ export function CreateWorkSessionSheet({ classId }: CreateWorkSessionSheetProps)
                       {uploading ? (
                           <div className="flex flex-col items-center justify-center space-y-3">
                               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                              <p className="text-sm font-medium">Please be patient as we extract the marking scheme...</p>
+                              <p key={loadingMessage} className="text-sm font-medium transition-all duration-500 animate-in fade-in slide-in-from-bottom-1 text-center max-w-xs">{loadingMessage}</p>
                           </div>
                       ) : (
                           <div className="flex flex-col items-center justify-center space-y-3 cursor-pointer">

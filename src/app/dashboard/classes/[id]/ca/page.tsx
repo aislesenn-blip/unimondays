@@ -95,7 +95,7 @@ export default async function CAPage({ params }: { params: Promise<{ id: string 
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between pb-6 border-b">
          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Master CA Matrix</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Continuous Assessment Matrix</h1>
             <p className="text-muted-foreground">{classData.code}: {classData.name}</p>
          </div>
       </div>

@@ -72,7 +72,13 @@ export function NotificationsPopover() {
   };
 
   const handleNotificationClick = (notif: Notification) => {
+      // 1. Instantly remove from local UI for snappy UX
+      setNotifications(prev => prev.filter(n => n.id !== notif.id));
+
+      // 2. Close popover
       setOpen(false);
+
+      // 3. Route to target
       if (notif.link) {
           router.push(notif.link);
       }

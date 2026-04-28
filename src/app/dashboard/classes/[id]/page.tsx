@@ -91,16 +91,16 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
             <Link href={`/dashboard/classes/${id}/ca`} prefetch={true}>
                 <Button variant="outline">
                     <Table2 className="mr-2 h-4 w-4" />
-                    Master CA
+                    Continuous Assessment
                 </Button>
             </Link>
             <CreateWorkSessionSheet classId={id} />
         </div>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-3">
+      <div className="grid gap-8 grid-cols-1 md:grid-cols-3">
         {/* Main Content: Work Sessions */}
-        <div className="md:col-span-2 space-y-6">
+        <div className="md:col-span-3 space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold tracking-tight">Work Sessions</h2>
             </div>
@@ -152,10 +152,6 @@ export default async function ClassDetailsPage({ params }: { params: Promise<{ i
             )}
         </div>
 
-        {/* Sidebar: CA Overview */}
-        <div className="md:col-span-1">
-            <CAOverview data={caData} />
-        </div>
       </div>
     </div>
   );
