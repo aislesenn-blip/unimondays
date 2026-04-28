@@ -117,70 +117,117 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
+    
+    // Convert base64 images into Gemini API format
+    const imageParts = base64Images.map(img => {
+        const matches = img.match(/^data:([^;]+);base64,(.+)$/);
+        return matches ? { inlineData: { mimeType: matches[1], data: matches[2] } } : null;
+    }).filter(Boolean);
 
-    // FREE-THINKING PROMPT: AI inasoma kama binadamu, inatumia Array kuzuia errors.
-    const extractionPrompt = `
-You are an expert human examiner digitizing a handwritten student exam.
-Your task is to find and extract the student's answers for these specific Target Question IDs:
-[ ${normalizedTargets.join(", ")} ]
+    const finalResultMap: Record<string, string> = {};
 
-CRITICAL INSTRUCTIONS:
-1. STUDENTS WRITE CHAOTICALLY: Do not rely on fixed headers, margins, or perfect numbering. A student might write "Q3" on the last page, mix up sections, or continue answers on random pages.
-2. USE HUMAN-LIKE REASONING: Read the entire document holistically. Follow the student's logical flow. If you see an answer labeled "A(i)", look around the surrounding text to deduce which main question it belongs to, just like a human teacher would.
-3. EXACT TRANSCRIBING: Copy the student's exact text, math, and formulas. Do not summarize.
-4. MISSING ANSWERS: If a target question is genuinely completely missing from the exam paper, DO NOT include it in the output array.
+    // ============================================================================
+    // STAGE 1: THE MAPPER (Find Registration Number & Attempted Questions)
+    // ============================================================================
+    const mapperPrompt = `
+You are an Elite Exam Mapper. Scan all provided pages of this handwritten student exam holistically.
+TARGET QUESTION IDs TO LOOK FOR: [ ${normalizedTargets.join(", ")} ]
 
-The JSON MUST exactly match this format:
+YOUR JOB:
+1. Find the student's Registration Number (usually on the first page or header).
+2. Trace the student's chaotic numbering and identify EXACTLY which of the Target Question IDs the student actually attempted.
+
+DO NOT extract the answers. Just map what exists.
+Output strictly in this JSON format:
 {
-  "registrationNumber": "string (Find the Registration Number on the exam, or return 'Not found')",
-  "answers": [
-    { "qId": "string (must exactly match one of the Target IDs)", "text": "string (student's exact transcribed answer)" }
-  ]
+  "registrationNumber": "string (or 'Not found')",
+  "attemptedIds": ["list", "of", "target", "ids", "actually", "found"]
 }
 `;
 
-    const userParts: any[] = [{ text: extractionPrompt }];
-    base64Images.forEach(img => {
-        const matches = img.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
-    });
-
-    const response = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ role: "user", parts: userParts }],
-            generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
-        })
-    });
-
-    if (!response.ok) throw new Error(`Google API error: ${response.status}`);
-    const data = await response.json();
-
-    const parsedData = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-
-    // Tunabadilisha ile Array kurudi kwenye mfumo wa Object (Key-Value pair) 
-    // ambao Server yetu (grade/stream) inautegemea.
-    const resultMap: Record<string, string> = {};
-    
-    if (parsedData.registrationNumber) {
-        resultMap.registrationNumber = parsedData.registrationNumber;
-    }
-
-    if (Array.isArray(parsedData.answers)) {
-        parsedData.answers.forEach((item: any) => {
-            if (item.qId && item.text) {
-                // Tunahakikisha ID ina-match mfumo wetu
-                resultMap[normalizeQuestionId(item.qId)] = item.text;
-            }
+    try {
+        const mapperRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: mapperPrompt }, ...imageParts] }],
+                generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
+            })
         });
+
+        if (!mapperRes.ok) throw new Error(`Mapping failed: ${mapperRes.status}`);
+        
+        const mapperData = await mapperRes.json();
+        const mapperJson = parseLLMJSON(mapperData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+
+        if (mapperJson.registrationNumber) {
+            finalResultMap.registrationNumber = mapperJson.registrationNumber;
+        }
+
+        // Determine which questions to actually extract
+        let attemptedIds: string[] = Array.isArray(mapperJson.attemptedIds) ? mapperJson.attemptedIds : normalizedTargets;
+        attemptedIds = attemptedIds.map((id: string) => normalizeQuestionId(id)).filter((id: string) => normalizedTargets.includes(id));
+
+        if (attemptedIds.length === 0) return finalResultMap;
+
+        // ============================================================================
+        // STAGE 2: BATCHED DEEP EXTRACTION (To prevent Context Confusion)
+        // ============================================================================
+        // Tunagawa maswali kwenye makundi (batches) ya 6. Hii inaifanya AI isipoteze memory.
+        const BATCH_SIZE = 6;
+        for (let i = 0; i < attemptedIds.length; i += BATCH_SIZE) {
+            const batchIds = attemptedIds.slice(i, i + BATCH_SIZE);
+
+            const extractionPrompt = `
+You are a Strict Transcriber. Read the entire document holistically to extract answers for these SPECIFIC questions ONLY:
+[ ${batchIds.join(", ")} ]
+
+CRITICAL RULES:
+1. HYPER-FOCUS: Only look for the specific IDs listed above. Ignore all other questions.
+2. TRACE THE FLOW: A main question (e.g., "03 Question") might be on page 4, and its sub-question "A(i)" on page 5. Use human reasoning to link them.
+3. STITCH MULTI-PAGE ANSWERS: If an answer starts on one page and continues to another, combine it into one single response string.
+4. EXACT TRANSCRIBING: Copy the exact words, math, and formulas exactly as written.
+
+Output strictly in this JSON format:
+{
+  "answers": [
+    { "qId": "string (must exactly match one of the requested IDs)", "text": "string (exact transcribed answer)" }
+  ]
+}
+`;
+            
+            const extRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...imageParts] }],
+                    generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
+                })
+            });
+
+            if (extRes.ok) {
+                const extData = await extRes.json();
+                const extJson = parseLLMJSON(extData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+
+                if (Array.isArray(extJson.answers)) {
+                    extJson.answers.forEach((item: any) => {
+                        if (item.qId && item.text) {
+                            finalResultMap[normalizeQuestionId(item.qId)] = item.text;
+                        }
+                    });
+                }
+            }
+        }
+
+    } catch (error) {
+        console.error("Extraction Pipeline Error:", error);
     }
 
-    return resultMap;
+    return finalResultMap;
 }
 
 if (typeof window !== 'undefined' && 'Worker' in window) {
-  // HAPA HAKUNA MIKWAJU TENA (\), Turbopack itapita salama.
+  // SAFELY DEFINED: No escaping slashes (\) inside the backticks.
   pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 }
 
