@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { createClient } from "@supabase/supabase-js";
 
 // Client-side Supabase instance for direct browser uploads
@@ -416,13 +417,12 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
             {allowAppeals && (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 w-full sm:w-auto">
                      <Label htmlFor="appeal-deadline" className="text-xs text-muted-foreground whitespace-nowrap">Until:</Label>
-                     <input
-                        type="datetime-local"
-                        id="appeal-deadline"
-                        value={appealDeadline}
-                        onChange={(e) => updateSetting('appealDeadline', e.target.value)}
-                        className="h-8 text-sm border rounded px-2 bg-background w-full sm:w-auto"
-                     />
+                     <div className="w-[200px]">
+                        <DateTimePicker
+                            date={appealDeadline ? new Date(appealDeadline) : undefined}
+                            setDate={(date) => updateSetting('appealDeadline', date ? date.toISOString() : '')}
+                        />
+                     </div>
                 </div>
             )}
         </div>

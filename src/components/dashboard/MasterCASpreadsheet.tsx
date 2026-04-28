@@ -112,7 +112,7 @@ export function MasterCASpreadsheet({ workSessions: initialSessions, students, c
       <Card className="h-full border-none shadow-none">
         <CardHeader className="flex flex-row items-center justify-between pb-4">
           <div className="space-y-1">
-             <CardTitle>Master CA Spreadsheet</CardTitle>
+             <CardTitle>Continuous Assessment Spreadsheet</CardTitle>
              <p className="text-sm text-muted-foreground">
                 {processedStudents.length} Students • {sessions.length} Assessments
              </p>
