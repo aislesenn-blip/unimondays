@@ -35,7 +35,6 @@ export function parseLLMJSON(content: string): any {
     let startIndex = -1;
     let isArray = false;
 
-    // Tafuta kipi kinaanza kwanza kati ya '[' na '{'
     if (firstBrace !== -1 && firstBracket !== -1) {
         startIndex = Math.min(firstBrace, firstBracket);
         isArray = startIndex === firstBracket;
@@ -108,40 +107,35 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 
     if (!response.ok) throw new Error(`Google API error: ${response.status}`);
     const data = await response.json();
-
     const parsedData = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
-
-    // GUARANTEE ARRAY: Hii inazuia "atomicCriteriaJson.map is not a function"
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
+
+// WAZO LAKO LA "PASS 1 + PASS 1B" LIMETEKELEZWA HAPA
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
-    
-    // Convert base64 images into Gemini API format
+    const finalResultMap: Record<string, string> = {};
+
     const imageParts = base64Images.map(img => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
         return matches ? { inlineData: { mimeType: matches[1], data: matches[2] } } : null;
     }).filter(Boolean);
 
-    const finalResultMap: Record<string, string> = {};
-
     // ============================================================================
-    // STAGE 1: THE MAPPER (Find Registration Number & Attempted Questions)
+    // A. PASS 1 (The Segmentation Map)
     // ============================================================================
     const mapperPrompt = `
-You are an Elite Exam Mapper. Scan all provided pages of this handwritten student exam holistically.
-TARGET QUESTION IDs TO LOOK FOR: [ ${normalizedTargets.join(", ")} ]
+You are the Master Mapper. Scan the entirety of this handwritten exam.
+Your ONLY job is to identify EVERY question from the TARGET LIST that the student attempted. 
+DO NOT TRANSCRIBE THE ANSWERS YET. Just draw the map.
 
-YOUR JOB:
-1. Find the student's Registration Number (usually on the first page or header).
-2. Trace the student's chaotic numbering and identify EXACTLY which of the Target Question IDs the student actually attempted.
+TARGET LIST: [ ${normalizedTargets.join(", ")} ]
 
-DO NOT extract the answers. Just map what exists.
-Output strictly in this JSON format:
+Output strictly in JSON:
 {
-  "registrationNumber": "string (or 'Not found')",
-  "attemptedIds": ["list", "of", "target", "ids", "actually", "found"]
+  "registrationNumber": "string (extract from the cover/top, or 'Not found')",
+  "attemptedIds": ["id1", "id2"] // Only include IDs from the target list that the student actually wrote down/attempted.
 }
 `;
 
@@ -155,7 +149,7 @@ Output strictly in this JSON format:
             })
         });
 
-        if (!mapperRes.ok) throw new Error(`Mapping failed: ${mapperRes.status}`);
+        if (!mapperRes.ok) throw new Error(`Pass 1 Failed: ${mapperRes.status}`);
         
         const mapperData = await mapperRes.json();
         const mapperJson = parseLLMJSON(mapperData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
@@ -164,70 +158,71 @@ Output strictly in this JSON format:
             finalResultMap.registrationNumber = mapperJson.registrationNumber;
         }
 
-        // Determine which questions to actually extract
         let attemptedIds: string[] = Array.isArray(mapperJson.attemptedIds) ? mapperJson.attemptedIds : normalizedTargets;
         attemptedIds = attemptedIds.map((id: string) => normalizeQuestionId(id)).filter((id: string) => normalizedTargets.includes(id));
 
         if (attemptedIds.length === 0) return finalResultMap;
 
         // ============================================================================
-        // STAGE 2: BATCHED DEEP EXTRACTION (To prevent Context Confusion)
+        // B. PASS 1B (Single Question Extraction - Burning Tokens for Accuracy)
         // ============================================================================
-        // Tunagawa maswali kwenye makundi (batches) ya 6. Hii inaifanya AI isipoteze memory.
-        const BATCH_SIZE = 6;
-        for (let i = 0; i < attemptedIds.length; i += BATCH_SIZE) {
-            const batchIds = attemptedIds.slice(i, i + BATCH_SIZE);
+        // Tunafanya requests 4 kwa wakati mmoja ili Vercel isikate na kazi iende haraka.
+        const CONCURRENCY_LIMIT = 4; 
+        
+        for (let i = 0; i < attemptedIds.length; i += CONCURRENCY_LIMIT) {
+            const batchIds = attemptedIds.slice(i, i + CONCURRENCY_LIMIT);
 
-            const extractionPrompt = `
-You are a Strict Transcriber. Read the entire document holistically to extract answers for these SPECIFIC questions ONLY:
-[ ${batchIds.join(", ")} ]
+            const extractionPromises = batchIds.map(async (targetId) => {
+                const extractionPrompt = `
+You MUST act as a literal transcriber. 
+Find where the student answered the specific question ID: "${targetId}".
+Quote their exact phrases, math, and steps exactly as written for this question ONLY.
+If the answer spans across pages, stitch it together. 
+DO NOT invent, assume, or inject terms from the marking scheme.
 
-CRITICAL RULES:
-1. HYPER-FOCUS: Only look for the specific IDs listed above. Ignore all other questions.
-2. TRACE THE FLOW: A main question (e.g., "03 Question") might be on page 4, and its sub-question "A(i)" on page 5. Use human reasoning to link them.
-3. STITCH MULTI-PAGE ANSWERS: If an answer starts on one page and continues to another, combine it into one single response string.
-4. EXACT TRANSCRIBING: Copy the exact words, math, and formulas exactly as written.
-
-Output strictly in this JSON format:
+Output JSON:
 {
-  "answers": [
-    { "qId": "string (must exactly match one of the requested IDs)", "text": "string (exact transcribed answer)" }
-  ]
+  "text": "The exact student's answer..."
 }
 `;
-            
-            const extRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...imageParts] }],
-                    generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
-                })
+                try {
+                    const extRes = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...imageParts] }],
+                            generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
+                        })
+                    });
+
+                    if (extRes.ok) {
+                        const extData = await extRes.json();
+                        const extJson = parseLLMJSON(extData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+                        if (extJson.text) return { id: targetId, text: extJson.text };
+                    }
+                } catch (err) {
+                    console.error(`Failed to extract single question ${targetId}:`, err);
+                }
+                return { id: targetId, text: "Not found." }; // Fallback
             });
 
-            if (extRes.ok) {
-                const extData = await extRes.json();
-                const extJson = parseLLMJSON(extData.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-
-                if (Array.isArray(extJson.answers)) {
-                    extJson.answers.forEach((item: any) => {
-                        if (item.qId && item.text) {
-                            finalResultMap[normalizeQuestionId(item.qId)] = item.text;
-                        }
-                    });
+            // Subiri maswali 4 yachambuliwe, kisha ingiza kwenye Map yetu
+            const batchResults = await Promise.all(extractionPromises);
+            batchResults.forEach(result => {
+                if (result.text && result.text !== "Not found.") {
+                    finalResultMap[result.id] = result.text;
                 }
-            }
+            });
         }
 
     } catch (error) {
-        console.error("Extraction Pipeline Error:", error);
+        console.error("Pipeline Error:", error);
     }
 
     return finalResultMap;
 }
 
 if (typeof window !== 'undefined' && 'Worker' in window) {
-  // SAFELY DEFINED: No escaping slashes (\) inside the backticks.
   pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 }
 
