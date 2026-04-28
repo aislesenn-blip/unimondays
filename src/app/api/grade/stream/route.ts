@@ -21,14 +21,12 @@ const atomicGradingSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-    // THE FIX: Tumebadilisha kutoka 'string | null' kuwa 'string' tu kuzuia TypeScript Error
     let globalSubmissionId: string = "";
 
     try {
         const body = await req.json();
         globalSubmissionId = body.submissionId;
 
-        // THE FIX: Guard clause kuhakikisha ID ipo kabla ya kwenda Prisma
         if (!globalSubmissionId) {
             return NextResponse.json({ error: "Submission ID is required" }, { status: 400 });
         }
@@ -47,6 +45,7 @@ export async function POST(req: NextRequest) {
         let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
         let parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
 
+        // UMEBAKIZA SPIDI YA KIFO HAPA (10 Requests at once) - Iko poa sana!
         const limit = pLimit(10);
 
         const normalizedStudentAnswers: Record<string, string> = {};
@@ -89,6 +88,7 @@ STUDENT ANSWER: ${studentAnswerForQ}
                             prompt: boxPrompt,
                             schema: atomicGradingSchema,
                             temperature: 0.0,
+                            maxTokens: 8192, // <--- NIMEWEKA HII NGUVU YA 8K KWA UHAKIKA
                         });
 
                         let rawSum = object.scoresArray.reduce((sum, val) => sum + val, 0);
