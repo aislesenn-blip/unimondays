@@ -107,8 +107,11 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
+// Function ya kupunguza spidi ili Google isitupige block (403)
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 // ============================================================================
-// THE ARCHITECTURE: PASS 1 + PASS 1B (With Anti-Blindness Tricks)
+// THE ARCHITECTURE: PASS 1 + PASS 1B (With Anti-Blindness & Anti-403 Tricks)
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
     console.log("[CLIENT ENGINE] Initiating PASS 1 + PASS 1B Extraction...");
@@ -177,17 +180,18 @@ Output strictly in JSON:
     if (attemptedIds.length === 0) return finalResultMap;
 
     // ------------------------------------------------------------------------
-    // B. PASS 1B (Single Question Extraction - Snipping 3 at a time)
+    // B. PASS 1B (Single Question Extraction - Snipping 3 at a time safely)
     // ------------------------------------------------------------------------
     console.log(`PASS 1B: Sniper Extraction for ${attemptedIds.length} questions (3 at a time)...`);
     
     const BATCH_SIZE = 3; 
 
+    // Tunasoma moja baada ya nyingine kuzuia 403 Forbidden ya Google WAF
     for (let i = 0; i < attemptedIds.length; i += BATCH_SIZE) {
         const batchIds = attemptedIds.slice(i, i + BATCH_SIZE);
         console.log(`Extracting Batch: ${batchIds.join(", ")}`);
 
-        // TRICK #2: JSON CHAIN OF THOUGHT (Inalazimisha itafute kabla ya kujibu)
+        // TRICK #2: JSON CHAIN OF THOUGHT
         const sniperPrompt = `
 You MUST act as a literal forensic transcriber. 
 You have been given ALL ${base64Images.length} labeled pages of an exam.
@@ -203,7 +207,7 @@ CRITICAL MANDATES:
 
 Output strictly in JSON format:
 {
-  "analysis": "I searched all ${base64Images.length} pages. I found ID 1 on Page 4 and ID 2 on Page 6...",
+  "analysis": "I searched all ${base64Images.length} pages. I found ID 1 on Page 4...",
   "${batchIds[0]}": "Exact student text (or 'No text extracted.')",
   "another_id": "Exact student text..."
 }
@@ -238,6 +242,10 @@ Output strictly in JSON format:
         } catch (err) {
             console.error(`Extraction failed for batch ${batchIds.join(", ")}`, err);
         }
+
+        // TUNAWEKA DELAY YA SEKUNDE 3 HAPA KUZUIA GOOGLE KUTUPIGA BLOCK (403)
+        console.log("Cooling down API for 3 seconds to prevent 403 Forbidden...");
+        await delay(3000); 
     }
 
     return finalResultMap;
@@ -260,7 +268,10 @@ export async function convertPdfToImagesClient(file: File): Promise<string[]> {
         if (!context) continue;
         canvas.height = viewport.height; canvas.width = viewport.width;
         await page.render({ canvasContext: context, viewport }).promise;
-        images.push(canvas.toDataURL('image/jpeg', 0.8));
+        
+        // Tumepunguza ubora wa picha kidogo (0.7) ili kupunguza mzigo (MB) unaoenda Google API 
+        // kuzuia kufungiwa kwa Payload Too Large.
+        images.push(canvas.toDataURL('image/jpeg', 0.7));
     }
     return images;
 }
