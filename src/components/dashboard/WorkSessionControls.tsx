@@ -120,6 +120,23 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
 
   const updateSetting = async (key: string, value: boolean | number | string | null) => {
     setLoading(key);
+
+    // Save previous state for rollback
+    const previousState = {
+      strictDeadline,
+      allowAppeals,
+      appealDeadline,
+      areGradesReleased,
+      confidenceThreshold
+    };
+
+    // Optimistic UI update
+    if (key === 'strictDeadline') setStrictDeadline(value as boolean);
+    if (key === 'allowAppeals') setAllowAppeals(value as boolean);
+    if (key === 'appealDeadline') setAppealDeadline(value as string);
+    if (key === 'areGradesReleased') setAreGradesReleased(value as boolean);
+    if (key === 'confidenceThreshold') setConfidenceThreshold(value as number);
+
     try {
       let payloadValue = value;
       // Convert date to ISO string (UTC) to handle timezones correctly
@@ -134,15 +151,18 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
       });
       if (!res.ok) throw new Error("Update failed");
 
-      if (key === 'strictDeadline') setStrictDeadline(value as boolean);
-      if (key === 'allowAppeals') setAllowAppeals(value as boolean);
-      if (key === 'appealDeadline') setAppealDeadline(value as string);
-      if (key === 'areGradesReleased') setAreGradesReleased(value as boolean);
-      if (key === 'confidenceThreshold') setConfidenceThreshold(value as number);
-
-      toast.success(`${key} updated`);
+      // Format display name for toast
+      const displayKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+      toast.success(`${displayKey} updated successfully`);
     } catch (error) {
-      toast.error("Failed to update setting");
+      // Rollback on failure
+      if (key === 'strictDeadline') setStrictDeadline(previousState.strictDeadline);
+      if (key === 'allowAppeals') setAllowAppeals(previousState.allowAppeals);
+      if (key === 'appealDeadline') setAppealDeadline(previousState.appealDeadline);
+      if (key === 'areGradesReleased') setAreGradesReleased(previousState.areGradesReleased);
+      if (key === 'confidenceThreshold') setConfidenceThreshold(previousState.confidenceThreshold);
+
+      toast.error(`Failed to update ${key}. Reverted to previous state.`);
     } finally {
       setLoading(null);
     }
@@ -382,7 +402,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                 id="strict-deadline"
                 checked={strictDeadline}
                 onCheckedChange={(v) => updateSetting('strictDeadline', v)}
-                disabled={!!loading}
+                disabled={loading === 'strictDeadline'}
             />
             <Label htmlFor="strict-deadline" className="flex items-center gap-1 cursor-pointer">
                 Strict Deadline
@@ -407,7 +427,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                     id="allow-appeals"
                     checked={allowAppeals}
                     onCheckedChange={(v) => updateSetting('allowAppeals', v)}
-                    disabled={!!loading}
+                    disabled={loading === 'allowAppeals'}
                 />
                 <Label htmlFor="allow-appeals" className="flex items-center gap-1 cursor-pointer">
                     Allow Appeals
@@ -442,7 +462,7 @@ export function WorkSessionControls({ session }: WorkSessionControlsProps) {
                         variant={areGradesReleased ? "outline" : "default"}
                         size="sm"
                         onClick={() => updateSetting('areGradesReleased', !areGradesReleased)}
-                        disabled={!!loading}
+                        disabled={loading === 'areGradesReleased'}
                         className={!areGradesReleased ? "bg-primary animate-pulse" : ""}
                      >
                         {loading === 'areGradesReleased' ? <Loader2 className="h-4 w-4 animate-spin" /> :
