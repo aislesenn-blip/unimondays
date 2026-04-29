@@ -18,8 +18,16 @@ export async function getClientGeminiKey() {
     return key || "dummy";
 }
 
+// ----------------------------------------------------------------------------
+// THE SMART ID NORMALIZER (From your Box Engine Architecture)
+// ----------------------------------------------------------------------------
 export const normalizeQuestionId = (id: string): string => {
-    return (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+    let clean = (id || "").toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+    // Kama inaanza na 'q' na inafuatiwa na namba (mfano: 'q1a' au 'q6iii'), tunakata hiyo 'q'
+    if (clean.startsWith('q') && /\d/.test(clean)) {
+        clean = clean.substring(1);
+    }
+    return clean;
 };
 
 export function parseLLMJSON(content: string): any {
@@ -102,14 +110,15 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 }
 
 // ============================================================================
-// THE PRODUCTION SEQUENTIAL ENGINE (With World-Class Prompting)
+// THE HYBRID MASTERPIECE: Sequential Read + Deterministic JS Mapping
 // ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Running Sequential Transcription (Single Request)...");
+    console.log("[CLIENT ENGINE] Running Sequential Transcription with Deterministic JS Mapping...");
     
     const finalResultMap: Record<string, string> = {};
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
 
+    // Kuandaa Picha na Lebo zake (Page Awareness)
     const examParts: any[] = [];
     base64Images.forEach((img, index) => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
@@ -119,7 +128,7 @@ export async function extractStudentExamsClient(base64Images: string[], question
         }
     });
 
-    // THE UPGRADED PRODUCTION PROMPT
+    // PROMPT BORA KABISA (Inayo-solve Hallucination, Unclear text, na Math)
     const extractionPrompt = `
 You are a highly accurate literal transcription engine reading a student's handwritten exam script.
 
@@ -174,6 +183,7 @@ OUTPUT STRICTLY as valid JSON only:
 `;
 
     try {
+        // Tuma Request MOJA tu (Inaondoa hatari ya 429 Too Many Requests)
         const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -198,19 +208,25 @@ OUTPUT STRICTLY as valid JSON only:
             finalResultMap.registrationNumber = json.registrationNumber;
         }
 
-        // DETERMINISTIC JS MAPPING (No Hallucination)
+        // --------------------------------------------------------------------
+        // THE SMART MAPPER: Code yako inatafsiri majibu na kuziweka kwenye 'Box'
+        // --------------------------------------------------------------------
         if (Array.isArray(json.extractedAnswers)) {
             json.extractedAnswers.forEach((item: any) => {
                 if (item.writtenNumber && item.text) {
+                    // 1. Safisha ID ya mwanafunzi (Mfano: "Q1(a)" inakuwa "1a")
                     const cleanWrittenId = normalizeQuestionId(item.writtenNumber);
                     
+                    // 2. Tafuta kama inafanana na ID ulizozitaka kutoka kwenye Marking Scheme
                     const matchedTargetId = normalizedTargets.find(target => {
                         return cleanWrittenId === target || cleanWrittenId.endsWith(target) || target.endsWith(cleanWrittenId);
                     });
 
+                    // 3. Kama ipo, ihifadhi kwenye Object itakayoenda Backend
                     if (matchedTargetId) {
                         if (finalResultMap[matchedTargetId]) {
-                            finalResultMap[matchedTargetId] += `\n\n[Continued / Additional Attempt]:\n${item.text}`;
+                            // Utunzaji wa marudio (Duplicate Handling) endapo alijibu mara 2
+                            finalResultMap[matchedTargetId] += `\n\n[Additional/Continued Attempt]:\n${item.text}`;
                         } else {
                             finalResultMap[matchedTargetId] = item.text;
                         }
@@ -239,13 +255,13 @@ export async function convertPdfToImagesClient(file: File): Promise<string[]> {
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         if (pageNum > 20) break;
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 }); // High res for literal transcription
+        const viewport = page.getViewport({ scale: 1.5 }); // High Res for literal transcription accuracy
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) continue;
         canvas.height = viewport.height; canvas.width = viewport.width;
         await page.render({ canvasContext: context, viewport }).promise;
-        images.push(canvas.toDataURL('image/jpeg', 0.8)); // Standard quality
+        images.push(canvas.toDataURL('image/jpeg', 0.8)); 
     }
     return images;
 }
