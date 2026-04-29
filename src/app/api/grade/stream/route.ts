@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
         let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
         let parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
 
-        const limit = pLimit(10);
+        // Inazuia 429 Too Many Requests kwenye Gemini API ikiwa wanafunzi 1000 watatumwa kwa mpigo.
+        // Kila swali dogo ("box") linalotoka, linachakatwa na API. Limit=3 ni sweet spot ya Serverless environments kulinda bandwidth.
+        const limit = pLimit(3);
 
         const normalizedStudentAnswers: Record<string, string> = {};
         for (const [key, val] of Object.entries(parsedStudentAnswers)) {

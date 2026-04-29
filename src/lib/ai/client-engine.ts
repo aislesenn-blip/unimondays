@@ -253,7 +253,8 @@ export async function convertPdfToImagesClient(file: File): Promise<string[]> {
     const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const images: string[] = [];
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-        if (pageNum > 20) break;
+        // Imeondolewa limit ya page 20 kuruhusu mitihani mirefu (Worst-case scenario)
+        if (pageNum > 60) break; // Limit imewekwa 60 kulinda memory ya browser (Out of Memory)
         const page = await pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale: 1.5 }); // High Res for literal transcription accuracy
         const canvas = document.createElement('canvas');
