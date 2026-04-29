@@ -65,14 +65,22 @@ export default async function WorkSessionDetailsPage({ params }: { params: Promi
                 {session.submissions.length} Submissions
             </div>
         </div>
-        <div className="flex gap-2 items-start pt-6">
+        <div className="flex flex-col gap-2 items-end pt-2">
              {session.rubricUrl && (
                 <a href={`/api/download?url=${encodeURIComponent(session.rubricUrl)}&inline=true`} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" className="bg-primary/5 hover:bg-primary/10 border-primary/20">
-                        <FileText className="mr-2 h-4 w-4 text-primary" />
+                    <Button variant="outline" size="sm" className="bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary">
+                        <FileText className="mr-2 h-4 w-4" />
                         View Marking Scheme
                     </Button>
                 </a>
+             )}
+             {session.rubricUrl && (
+                 <a href={`/api/download?url=${encodeURIComponent(session.rubricUrl)}`} download>
+                     <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
+                        <Download className="mr-2 h-3 w-3" />
+                        Download Scheme
+                     </Button>
+                 </a>
              )}
         </div>
       </div>
