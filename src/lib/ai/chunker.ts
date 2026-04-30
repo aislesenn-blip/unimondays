@@ -10,12 +10,16 @@ export interface RubricQuestion {
     question: string;
 }
 
-// Ensure the OpenAI client is robustly initialized
-const deepSeekClient = new OpenAI({
-    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
-    apiKey: process.env.DEEPSEEK_API_KEY || 'dummy',
+// Ensure the OpenAI client is robustly initialized for OpenRouter
+const openRouterClient = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: process.env.OPENROUTER_API_KEY || 'dummy',
     timeout: 300000,
     maxRetries: 4,
+    defaultHeaders: {
+        'HTTP-Referer': 'https://playbook.app',
+        'X-Title': 'Playbook Grading Engine'
+    }
 });
 
 /**
@@ -25,7 +29,8 @@ const deepSeekClient = new OpenAI({
  */
 export async function extractPageParallelMap(
     pages: OcrPage[],
-    rubricQuestions: RubricQuestion[]
+    rubricQuestions: RubricQuestion[],
+    userApiKey?: string // Passed from the calling function if available
 ): Promise<Record<string, string>> {
 
     const rubricOutline = rubricQuestions.map(r => r.question).join(', ');
@@ -68,8 +73,20 @@ Return ONLY JSON in this format:
 If a question is not present on this page, do not include it in the JSON.`;
 
             try {
-                const response = await deepSeekClient.chat.completions.create({
-                    model: "deepseek-chat", // Fast, cheap model for Map phase
+                // If a user API key is provided, we create a temporary client for this request
+                const client = userApiKey ? new OpenAI({
+                    baseURL: 'https://openrouter.ai/api/v1',
+                    apiKey: userApiKey,
+                    timeout: 300000,
+                    maxRetries: 4,
+                    defaultHeaders: {
+                        'HTTP-Referer': 'https://playbook.app',
+                        'X-Title': 'Playbook Grading Engine'
+                    }
+                }) : openRouterClient;
+
+                const response = await client.chat.completions.create({
+                    model: "deepseek/deepseek-chat", // Fast, cheap model for Map phase via OpenRouter
                     messages: [
                         { role: "system", content: extractionSystemPrompt },
                         { role: "user", content: `RUBRIC QUESTIONS TO MATCH:\n${rubricOutline}\n\n--- PAGE ${pageObj.page} ---\n${pageObj.text}` }

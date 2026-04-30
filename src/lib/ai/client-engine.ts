@@ -1,11 +1,13 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export async function getClientGeminiKey() {
-    let key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    // Dynamic Key resolution: Check for lecturer specific key if needed, fallback to env
+    let key = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (!key) {
         try {
+            // We fetch from proxy to hide the key from client if it isn't public
             const res = await fetch('/api/ai/get-key');
             if (res.ok) {
                 const data = await res.json();
@@ -16,6 +18,23 @@ export async function getClientGeminiKey() {
         }
     }
     return key || "dummy";
+}
+
+// Convert Gemini API parts to OpenRouter (OpenAI format) multimodal messages
+function formatOpenRouterVisionMessage(parts: any[]) {
+    const contentArray = [];
+    for (const part of parts) {
+        if (part.text) {
+            contentArray.push({ type: "text", text: part.text });
+        } else if (part.inlineData) {
+            // OpenRouter expects base64 image URL
+            contentArray.push({
+                type: "image_url",
+                image_url: { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` }
+            });
+        }
+    }
+    return contentArray;
 }
 
 // ----------------------------------------------------------------------------
@@ -94,18 +113,27 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
         if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
     });
 
-    const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    const contentArray = formatOpenRouterVisionMessage(userParts);
+
+    const res = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': typeof window !== 'undefined' ? window.location.href : 'https://playbook.app',
+            'X-Title': 'Playbook Grading Engine'
+        },
         body: JSON.stringify({
-            contents: [{ role: "user", parts: userParts }],
-            generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
+            model: 'google/gemini-2.5-pro',
+            messages: [{ role: "user", content: contentArray }],
+            temperature: 0.0,
+            response_format: { type: "json_object" }
         })
     });
 
-    if (!res.ok) throw new Error(`Google API error: ${res.status}`);
+    if (!res.ok) throw new Error(`OpenRouter API error: ${res.status}`);
     const data = await res.json();
-    const parsedData = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
+    const parsedData = parseLLMJSON(data.choices?.[0]?.message?.content || "[]");
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
@@ -198,16 +226,22 @@ OUTPUT STRICTLY as valid JSON only:
 
         while (attempt < maxAttempts && !success) {
             try {
-                const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+                const contentArray = formatOpenRouterVisionMessage([{ text: extractionPrompt }, ...batchParts]);
+
+                const res = await fetch(OPENROUTER_API_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                        'HTTP-Referer': typeof window !== 'undefined' ? window.location.href : 'https://playbook.app',
+                        'X-Title': 'Playbook Grading Engine'
+                    },
                     body: JSON.stringify({
-                        contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...batchParts] }],
-                        generationConfig: {
-                            temperature: 0.0,
-                            maxOutputTokens: 8192,
-                            responseMimeType: "application/json"
-                        }
+                        model: 'google/gemini-2.5-pro',
+                        messages: [{ role: "user", content: contentArray }],
+                        temperature: 0.0,
+                        max_tokens: 8192,
+                        response_format: { type: "json_object" }
                     })
                 });
 
@@ -215,11 +249,11 @@ OUTPUT STRICTLY as valid JSON only:
                     if (res.status === 429) {
                         throw new Error(`Rate Limit Exceeded (429)`);
                     }
-                    throw new Error(`Google API error: ${res.status} - ${res.statusText}`);
+                    throw new Error(`OpenRouter API error: ${res.status} - ${res.statusText}`);
                 }
 
                 const data = await res.json();
-                const json = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+                const json = parseLLMJSON(data.choices?.[0]?.message?.content || "{}");
 
                 if (json.registrationNumber && json.registrationNumber !== "Not found" && !finalResultMap.registrationNumber) {
                     finalResultMap.registrationNumber = json.registrationNumber;

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.64",
+    "@ai-sdk/openai": "^3.0.54",
     "@google/generative-ai": "^0.24.1",
     "@napi-rs/canvas": "^0.1.99",
     "@playwright/test": "^1.58.2",
