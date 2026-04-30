@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
         const extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
         const parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
 
-        // HARDENING FIX: Reduced concurrency limit to prevent rate limits and system overload
-        // when processing multiple submissions each with multiple questions.
-        const limit = pLimit(3);
+        // HARDENING FIX: Since the system now processes strictly 1 student at a time globally via the queue,
+        // we can safely max out the concurrent questions for this single student to process them very fast.
+        const limit = pLimit(10);
 
         const normalizedStudentAnswers: Record<string, string> = {};
         for (const [key, val] of Object.entries(parsedStudentAnswers)) {

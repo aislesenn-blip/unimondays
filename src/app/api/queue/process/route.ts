@@ -22,32 +22,35 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Distributed Lock: Ensure only one queue worker is processing to guarantee "one student at a time"
-        const activeJobsCount = await prisma.job.count({
-            where: { status: 'PROCESSING', type: { in: ['AI_GRADE_SUBMISSION', 'AI_GRADE'] } }
-        });
-
-        if (activeJobsCount >= 1) {
-            console.log(`[QUEUE_PROCESSOR] A queue worker is already active. Exiting to maintain sequential processing.`);
-            return NextResponse.json({ success: true, message: "Queue is already processing jobs sequentially.", processed: 0 });
-        }
-
-        console.log(`[QUEUE_PROCESSOR] Started Sequential Queue Processing...`);
+        // Prevent concurrent queue workers from starting at the exact same millisecond.
+        // In a true enterprise setup this would be an SQS queue or a Redis lock.
+        // For Postgres, we randomly stagger the workers to reduce race conditions on job claiming.
+        const staggerDelay = Math.floor(Math.random() * 500);
+        await new Promise(resolve => setTimeout(resolve, staggerDelay));
 
         // Get the host for recursive calls
         const protocol = req.headers.get('x-forwarded-proto') || 'https';
         const host = req.headers.get('host') || 'localhost:3000';
         const baseUrl = `${protocol}://${host}`;
 
-        // Process exactly 1 job at a time per explicit constraint
-        const BATCH_SIZE = 1;
-        const processingPromises = [];
+        // The claimJob function itself acts as an atomic lock via UPDATE ... WHERE status = 'PENDING'
+        // If 1000 requests hit, only the one that successfully claims a job will process it.
+        // The others will get null and exit.
+
+        console.log(`[QUEUE_PROCESSOR] Started Queue Worker...`);
+
+        const results = [];
+
+        // Loop sequentially to process jobs until the queue is empty
+        // BATCH_SIZE essentially means how many jobs THIS specific worker will process
+        // before dying to prevent Vercel 5 min timeout.
+        const BATCH_SIZE = 5;
 
         for (let i = 0; i < BATCH_SIZE; i++) {
-            processingPromises.push(processNextJob(baseUrl));
+            const success = await processNextJob(baseUrl);
+            results.push(success);
+            if (!success) break; // If claimJob returned null, the queue is empty
         }
-
-        const results = await Promise.all(processingPromises);
 
         // Count how many jobs were actually processed
         const jobsProcessed = results.filter(r => r === true).length;

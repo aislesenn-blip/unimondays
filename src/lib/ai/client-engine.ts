@@ -259,7 +259,8 @@ OUTPUT STRICTLY as valid JSON only:
                 console.warn(`[CLIENT ENGINE] Batch extraction failed (Attempt ${attempt}/${maxAttempts}): ${err.message}`);
 
                 if (attempt >= maxAttempts) {
-                    console.error("[CLIENT ENGINE] Max retries reached for batch. Skipping.");
+                    console.error("[CLIENT ENGINE] Max retries reached for batch. Throwing to prevent data loss.");
+                    throw new Error(`Data Loss Prevention: Failed to extract exam pages after ${maxAttempts} attempts. Please check your internet connection and try again.`);
                 } else {
                     // Exponential backoff
                     const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
@@ -283,7 +284,7 @@ export async function convertPdfToImagesClient(file: File): Promise<string[]> {
     const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const images: string[] = [];
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-        if (pageNum > 20) break;
+        if (pageNum > 100) break; // Extended limit to 100 pages per user's request
         const page = await pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale: 1.5 }); // High Res for literal transcription accuracy
         const canvas = document.createElement('canvas');
