@@ -86,7 +86,7 @@ If a question is not present on this page, do not include it in the JSON.`;
                 }) : openRouterClient;
 
                 const response = await client.chat.completions.create({
-                    model: "deepseek/deepseek-chat", // Fast, cheap model for Map phase via OpenRouter
+                    model: "google/gemini-2.5-pro", // Fast, intelligent model for Map phase via OpenRouter
                     messages: [
                         { role: "system", content: extractionSystemPrompt },
                         { role: "user", content: `RUBRIC QUESTIONS TO MATCH:\n${rubricOutline}\n\n--- PAGE ${pageObj.page} ---\n${pageObj.text}` }
