@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateObject } from 'ai';
-import { google } from '@ai-sdk/google';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+
+const openrouter = createOpenRouter({
+  apiKey: process.env.GEMINI_API_KEY || ''
+});
 import { z } from 'zod';
 import pLimit from 'p-limit';
 
@@ -87,7 +91,7 @@ STUDENT ANSWER: ${studentAnswerForQ}
                 while (attempt < maxAttempts) {
                     try {
                         const { object } = await generateObject({
-                            model: google('gemini-2.5-pro'),
+                            model: openrouter('google/gemini-2.5-pro'),
                             system: "You are an elite Examination Engine. Evaluate the student's answer against the ATOMIC CRITERIA.",
                             prompt: boxPrompt,
                             schema: atomicGradingSchema,

@@ -1,6 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const API_URL = "https://openrouter.ai/api/v1";
 
 export async function getClientGeminiKey() {
     let key = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
@@ -30,7 +30,7 @@ export const normalizeQuestionId = (id: string): string => {
     return clean;
 };
 
-export function parseLLMJSON(content: string): any {
+export function parseLLMJSON(content: string): any   {
     if (!content || content.trim() === '') return {};
     content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
     const firstBrace = content.indexOf('{');
@@ -88,24 +88,38 @@ The JSON MUST exactly match this format:
 `;
 
 export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey: string): Promise<any[]> {
-    const userParts: any[] = [{ text: OPTIMIZE_PROMPT }];
+    const userParts: any  [] = [{ text: OPTIMIZE_PROMPT }];
     base64Images.forEach(img => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) userParts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
     });
 
-    const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    const res = await fetch(`${API_URL}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000',
+            'X-Title': 'Automated Grading System'
+        },
         body: JSON.stringify({
-            contents: [{ role: "user", parts: userParts }],
-            generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
+            model: "google/gemini-2.5-pro",
+            messages: [{
+                role: "user",
+                content: userParts.map((p: any  ) => {
+                    if (p.text) return { type: "text", text: p.text };
+                    if (p.inlineData) return { type: "image_url", image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } };
+                    return p;
+                })
+            }],
+            temperature: 0.0,
+            response_format: { type: "json_object" }
         })
     });
 
     if (!res.ok) throw new Error(`Google API error: ${res.status}`);
     const data = await res.json();
-    const parsedData = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
+    const parsedData = parseLLMJSON(data.choices?.[0]?.message?.content || "[]");
     return Array.isArray(parsedData) ? parsedData : [parsedData];
 }
 
@@ -119,7 +133,7 @@ export async function extractStudentExamsClient(base64Images: string[], question
     const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
 
     // Kuandaa Picha na Lebo zake (Page Awareness)
-    const examParts: any[] = [];
+    const examParts: any  [] = [];
     base64Images.forEach((img, index) => {
         const matches = img.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
@@ -198,16 +212,27 @@ OUTPUT STRICTLY as valid JSON only:
 
         while (attempt < maxAttempts && !success) {
             try {
-                const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+                const res = await fetch(`${API_URL}/chat/completions`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000',
+                        'X-Title': 'Automated Grading System'
+                    },
                     body: JSON.stringify({
-                        contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...batchParts] }],
-                        generationConfig: {
-                            temperature: 0.0,
-                            maxOutputTokens: 8192,
-                            responseMimeType: "application/json"
-                        }
+                        model: "google/gemini-2.5-pro",
+                        messages: [{
+                            role: "user",
+                            content: [{ text: extractionPrompt }, ...batchParts].map((p: any  ) => {
+                                if (p.text) return { type: "text", text: p.text };
+                                if (p.inlineData) return { type: "image_url", image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } };
+                                return p;
+                            })
+                        }],
+                        temperature: 0.0,
+                        max_tokens: 8192,
+                        response_format: { type: "json_object" }
                     })
                 });
 
@@ -219,7 +244,7 @@ OUTPUT STRICTLY as valid JSON only:
                 }
 
                 const data = await res.json();
-                const json = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+                const json = parseLLMJSON(data.choices?.[0]?.message?.content || "{}");
 
                 if (json.registrationNumber && json.registrationNumber !== "Not found" && !finalResultMap.registrationNumber) {
                     finalResultMap.registrationNumber = json.registrationNumber;
@@ -229,7 +254,7 @@ OUTPUT STRICTLY as valid JSON only:
                 // THE SMART MAPPER: Code yako inatafsiri majibu na kuziweka kwenye 'Box'
                 // --------------------------------------------------------------------
                 if (Array.isArray(json.extractedAnswers)) {
-                    json.extractedAnswers.forEach((item: any) => {
+                    json.extractedAnswers.forEach((item: any  ) => {
                         if (item.writtenNumber && item.text) {
                             // 1. Safisha ID ya mwanafunzi (Mfano: "Q1(a)" inakuwa "1a")
                             const cleanWrittenId = normalizeQuestionId(item.writtenNumber);
@@ -254,7 +279,7 @@ OUTPUT STRICTLY as valid JSON only:
 
                 success = true;
 
-            } catch (err: any) {
+            } catch (err: any  ) {
                 attempt++;
                 console.warn(`[CLIENT ENGINE] Batch extraction failed (Attempt ${attempt}/${maxAttempts}): ${err.message}`);
 

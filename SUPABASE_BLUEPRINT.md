@@ -244,7 +244,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="[your-anon-key]"
 SUPABASE_SERVICE_ROLE_KEY="[your-service-role-key]" # CRITICAL: Keep secret! Used by Workers.
 
 # --- AI SERVICES ---
-GEMINI_API_KEY="[your-gemini-key]"
+GEMINI_API_KEY="[your-openrouter-key]"
 DEEPSEEK_API_KEY="[your-deepseek-key]"
 
 # --- APP CONFIG ---
