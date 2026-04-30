@@ -65,13 +65,19 @@ export async function POST(req: NextRequest) {
         const extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
         const parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
 
+        // Use the FULL TRANSCRIPT if available from the new extraction engine,
+        // otherwise fallback to the legacy mapped structure for older submissions.
+        const fullTranscriptText = parsedStudentAnswers["FULL_TRANSCRIPT"];
+
         // HARDENING FIX: Since the system now processes strictly 1 student at a time globally via the queue,
         // we can safely max out the concurrent questions for this single student to process them very fast.
         const limit = pLimit(10);
 
         const normalizedStudentAnswers: Record<string, string> = {};
-        for (const [key, val] of Object.entries(parsedStudentAnswers)) {
-            normalizedStudentAnswers[normalizeQuestionId(key)] = val;
+        if (!fullTranscriptText) {
+            for (const [key, val] of Object.entries(parsedStudentAnswers)) {
+                normalizedStudentAnswers[normalizeQuestionId(key)] = val;
+            }
         }
 
         // CACHING FIX: Pre-compute the deterministic System Prompt for the entire assignment
@@ -83,6 +89,15 @@ Evaluate the student's answer against the ATOMIC CRITERIA exactly as written.
 
 FULL MARKING SCHEME CONTEXT (CACHED):
 ${JSON.stringify(parsedRubricItems)}
+
+${fullTranscriptText ? `
+STUDENT EXAM TRANSCRIPT (CACHED FOR THIS SUBMISSION):
+The student wrote their entire exam out below. Some answers may be out of order, mislabeled, or span across multiple pages.
+It is your job to find the relevant answer for the specific question being evaluated.
+--- START OF TRANSCRIPT ---
+${fullTranscriptText}
+--- END OF TRANSCRIPT ---
+` : ''}
 `;
 
         const gradingPromises = parsedRubricItems.map((rubricItem: any) => {
@@ -91,18 +106,32 @@ ${JSON.stringify(parsedRubricItems)}
                 const maxScore = rubricItem.maxScore;
                 const normalizedTargetId = normalizeQuestionId(originalQId);
 
-                let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
+                let boxPrompt = "";
 
-                if (studentAnswerForQ === undefined) {
-                    const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
-                    studentAnswerForQ = fallbackKey ? normalizedStudentAnswers[fallbackKey] : "";
-                }
+                if (fullTranscriptText) {
+                    boxPrompt = `
+EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
+MAXIMUM MARKS: ${maxScore}
+ATOMIC MARKING CRITERIA FOR THIS QUESTION: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment)}
 
-                if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
-                    return { question: originalQId, score: 0, thoughtProcess: "Answer completely missing or skipped.", feedback: "No answer provided.", max: maxScore, evidenceSnippet: "None" };
-                }
+INSTRUCTIONS:
+1. Search the "STUDENT EXAM TRANSCRIPT" provided in the System Prompt for the answer to question "${originalQId}".
+2. Pay close attention to the numbering used by the student (e.g. 1.a.i, Q1A, etc) and look for context clues if the numbering is messy.
+3. If the student completely skipped or did not write an answer for this specific question, set score to 0 and explicitly state "Answer completely missing or skipped" in the thoughtProcess.
+`;
+                } else {
+                    let studentAnswerForQ = normalizedStudentAnswers[normalizedTargetId];
 
-                const boxPrompt = `
+                    if (studentAnswerForQ === undefined) {
+                        const fallbackKey = Object.keys(normalizedStudentAnswers).find(k => k.includes(normalizedTargetId) || normalizedTargetId.includes(k));
+                        studentAnswerForQ = fallbackKey ? normalizedStudentAnswers[fallbackKey] : "";
+                    }
+
+                    if (!studentAnswerForQ.trim() || studentAnswerForQ === "No text extracted.") {
+                        return { question: originalQId, score: 0, thoughtProcess: "Answer completely missing or skipped.", feedback: "No answer provided.", max: maxScore, evidenceSnippet: "None" };
+                    }
+
+                    boxPrompt = `
 EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
 MAXIMUM MARKS: ${maxScore}
 ATOMIC MARKING CRITERIA FOR THIS QUESTION: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment)}
@@ -110,6 +139,7 @@ ATOMIC MARKING CRITERIA FOR THIS QUESTION: ${JSON.stringify(rubricItem.criteria 
 STUDENT ANSWER:
 ${studentAnswerForQ}
 `;
+                }
                 let attempt = 0;
                 let finalScore = 0;
                 let gradingObject = { thoughtProcess: "Failed to grade.", feedback: "System error.", evidenceSnippet: "None" };

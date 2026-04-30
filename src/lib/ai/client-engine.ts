@@ -139,11 +139,14 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 // ============================================================================
 // THE HYBRID MASTERPIECE: Sequential Read + Deterministic JS Mapping
 // ============================================================================
+// THE HYBRID MASTERPIECE: Full Transcript Extraction (No Mismatch)
+// ============================================================================
 export async function extractStudentExamsClient(base64Images: string[], questionsToExtract: string[], apiKey: string): Promise<Record<string, string>> {
-    console.log("[CLIENT ENGINE] Running Sequential Transcription with Deterministic JS Mapping...");
+    console.log("[CLIENT ENGINE] Running Full Literal Transcription...");
     
-    const finalResultMap: Record<string, string> = {};
-    const normalizedTargets = questionsToExtract.map(id => normalizeQuestionId(id));
+    // We now just return a massive string (The Transcript) and the RegNo
+    let fullTranscript = "";
+    let extractedRegNo = "";
 
     // Kuandaa Picha na Lebo zake (Page Awareness)
     const examParts: any[] = [];
@@ -155,64 +158,23 @@ export async function extractStudentExamsClient(base64Images: string[], question
         }
     });
 
-    // PROMPT BORA KABISA (Inayo-solve Hallucination, Unclear text, na Math)
+    // PROMPT MPYA: "God Mode" Transcription. Tunasoma kitabu kama kilivyo. Hakuna JSON mappings zinazochanganya.
     const extractionPrompt = `
 You are a highly accurate literal transcription engine reading a student's handwritten exam script.
 
 Read ALL pages sequentially from start to finish using the inserted page separators (--- PAGE X ---) to preserve continuity.
 
-The student may write answers:
-- out of order
-- across multiple pages
-- messily
-- with corrections
-- with repeated attempts
-- using mixed numbering styles
-
 YOUR JOB:
-
-1. Find the student's Registration Number only if it is clearly labeled as:
-   Registration Number, Reg No, Candidate Number, Index Number, or Exam Number.
-Do not guess.
-If uncertain, return "Not found".
-
-2. Every time you see a question number
-   (example: 1., a), iii, Q6, Question 4(b), 1 a i),
-   extract the exact text, mathematics, steps, symbols, and working that follow it.
-
-3. Preserve equations, fractions, powers, units, mathematical notation, and symbols exactly as written.
-Do not simplify, rewrite, summarize, or interpret.
-
-4. If an answer continues on another page, combine it only if the numbering clearly shows continuation.
-Never merge unrelated answers.
-
-5. If the same question is answered multiple times, keep all versions in reading order.
-Do not remove duplicates.
-
-6. Never infer missing words.
-   Never guess unclear handwriting.
-If text is unreadable, write exactly:
-[unclear]
-
-7. Do not try to match any specific target IDs.
-Simply document EVERYTHING the student wrote next to its corresponding written number.
-
-OUTPUT STRICTLY as valid JSON only:
-{
-  "registrationNumber": "found registration number or Not found",
-  "extractedAnswers": [
-    {
-      "writtenNumber": "exact numbering exactly as written by student",
-      "text": "exact literal transcription"
-    }
-  ]
-}
+1. Find the student's Registration Number ONLY if clearly labeled. If found, include it at the very top of your output like this: "REG_NO: [number]".
+2. Transcribe EVERYTHING EXACTLY as written by the student. Do not summarize. Do not correct their grammar.
+3. Preserve all equations, fractions, powers, mathematical notation, and symbols exactly as written.
+4. Keep the numbering system exactly as the student wrote it (e.g., "06 Question.", "A i)", "1. a.").
+5. If text is completely unreadable, write exactly: [unclear]
+6. Output raw Markdown text only. NO JSON formatting.
 `;
 
     // FIX: Chunk pages to avoid 8192 token output limit & add Exponential Backoff for 429
-    const BATCH_SIZE = 4; // Process 4 pages at a time (each page is roughly 1-2 parts including text separators)
-
-    // Each page in examParts uses 2 elements (text and inlineData)
+    const BATCH_SIZE = 4;
     const elementsPerPage = 2;
     const batchElementsSize = BATCH_SIZE * elementsPerPage;
 
@@ -229,59 +191,31 @@ OUTPUT STRICTLY as valid JSON only:
 
                 const res = await fetch(INTERNAL_PROXY_URL, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: 'google/gemini-2.5-pro',
                         messages: [{ role: "user", content: contentArray }],
                         temperature: 0.0,
                         max_tokens: 8192,
-                        response_format: { type: "json_object" }
                     })
                 });
 
                 if (!res.ok) {
-                    if (res.status === 429) {
-                        throw new Error(`Rate Limit Exceeded (429)`);
-                    }
+                    if (res.status === 429) throw new Error(`Rate Limit Exceeded (429)`);
                     throw new Error(`Proxy API error: ${res.status} - ${res.statusText}`);
                 }
 
                 const data = await res.json();
-                const json = parseLLMJSON(data.choices?.[0]?.message?.content || "{}");
+                let rawText = data.choices?.[0]?.message?.content || "";
 
-                if (json.registrationNumber && json.registrationNumber !== "Not found" && !finalResultMap.registrationNumber) {
-                    finalResultMap.registrationNumber = json.registrationNumber;
+                // Extract Reg No if found in this batch
+                const regNoMatch = rawText.match(/REG_NO:\s*([A-Za-z0-9\-]+)/);
+                if (regNoMatch && !extractedRegNo) {
+                    extractedRegNo = regNoMatch[1];
                 }
 
-                // --------------------------------------------------------------------
-                // THE SMART MAPPER: Code yako inatafsiri majibu na kuziweka kwenye 'Box'
-                // --------------------------------------------------------------------
-                if (Array.isArray(json.extractedAnswers)) {
-                    json.extractedAnswers.forEach((item: any) => {
-                        if (item.writtenNumber && item.text) {
-                            // 1. Safisha ID ya mwanafunzi (Mfano: "Q1(a)" inakuwa "1a")
-                            const cleanWrittenId = normalizeQuestionId(item.writtenNumber);
-
-                            // 2. Tafuta kama inafanana na ID ulizozitaka kutoka kwenye Marking Scheme
-                            const matchedTargetId = normalizedTargets.find(target => {
-                                return cleanWrittenId === target || cleanWrittenId.endsWith(target) || target.endsWith(cleanWrittenId);
-                            });
-
-                            // 3. Kama ipo, ihifadhi kwenye Object itakayoenda Backend
-                            if (matchedTargetId) {
-                                if (finalResultMap[matchedTargetId]) {
-                                    // Utunzaji wa marudio (Duplicate Handling) endapo alijibu mara 2
-                                    finalResultMap[matchedTargetId] += `\n\n[Additional/Continued Attempt]:\n${item.text}`;
-                                } else {
-                                    finalResultMap[matchedTargetId] = item.text;
-                                }
-                            }
-                        }
-                    });
-                }
-
+                // Append the batch transcript to the main transcript
+                fullTranscript += `\n${rawText}\n`;
                 success = true;
 
             } catch (err: any) {
@@ -292,7 +226,6 @@ OUTPUT STRICTLY as valid JSON only:
                     console.error("[CLIENT ENGINE] Max retries reached for batch. Throwing to prevent data loss.");
                     throw new Error(`Data Loss Prevention: Failed to extract exam pages after ${maxAttempts} attempts. Please check your internet connection and try again.`);
                 } else {
-                    // Exponential backoff
                     const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
@@ -300,9 +233,14 @@ OUTPUT STRICTLY as valid JSON only:
         }
     }
 
-    console.log("[CLIENT ENGINE] Successfully matched IDs:", Object.keys(finalResultMap));
+    console.log("[CLIENT ENGINE] Full Transcript Extraction Complete.");
 
-    return finalResultMap;
+    // Return a dummy mapped object where the single "FULL_TRANSCRIPT" key holds the entire string.
+    // The backend grading stream will handle searching through it.
+    return {
+        "FULL_TRANSCRIPT": fullTranscript,
+        "registrationNumber": extractedRegNo || "Not found"
+    };
 }
 
 if (typeof window !== 'undefined' && 'Worker' in window) {
