@@ -11,17 +11,18 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, cloudLink, totalMarks, markingScheme, strictness, calibration } = body;
+    const { title, cloudLink, bulkFilePath, totalMarks, markingScheme, strictness, calibration } = body;
 
-    if (!title || !cloudLink) {
-        return NextResponse.json({ error: "Title and Cloud Link are required" }, { status: 400 });
+    const finalLink = bulkFilePath || cloudLink;
+    if (!title || !finalLink) {
+        return NextResponse.json({ error: "Title and Cloud Link / File are required" }, { status: 400 });
     }
 
     // 1. Create Bulk Session
     const bulkSession = await prisma.bulkSession.create({
       data: {
         title,
-        cloudLink,
+        cloudLink: finalLink,
         lecturerId: user.id,
         status: "PENDING",
         totalMarks: totalMarks || 100,
