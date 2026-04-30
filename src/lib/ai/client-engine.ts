@@ -33,8 +33,8 @@ export const normalizeQuestionId = (id: string): string => {
 export function parseLLMJSON(content: string): any {
     if (!content || content.trim() === '') return {};
     content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    let firstBrace = content.indexOf('{');
-    let firstBracket = content.indexOf('[');
+    const firstBrace = content.indexOf('{');
+    const firstBracket = content.indexOf('[');
     let startIndex = -1;
     let isArray = false;
 
@@ -48,8 +48,8 @@ export function parseLLMJSON(content: string): any {
 
     if (startIndex !== -1) {
         let depth = 0, inString = false, escapeNext = false, endIndex = -1;
-        let openChar = isArray ? '[' : '{';
-        let closeChar = isArray ? ']' : '}';
+        const openChar = isArray ? '[' : '{';
+        const closeChar = isArray ? ']' : '}';
 
         for (let i = startIndex; i < content.length; i++) {
             const char = content[i];
@@ -182,64 +182,94 @@ OUTPUT STRICTLY as valid JSON only:
 }
 `;
 
-    try {
-        // Tuma Request MOJA tu (Inaondoa hatari ya 429 Too Many Requests)
-        const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...examParts] }],
-                generationConfig: { 
-                    temperature: 0.0, 
-                    maxOutputTokens: 8192, 
-                    responseMimeType: "application/json" 
-                }
-            })
-        });
+    // FIX: Chunk pages to avoid 8192 token output limit & add Exponential Backoff for 429
+    const BATCH_SIZE = 4; // Process 4 pages at a time (each page is roughly 1-2 parts including text separators)
 
-        if (!res.ok) {
-            throw new Error(`Google API error: ${res.status} - ${res.statusText}`);
-        }
+    // Each page in examParts uses 2 elements (text and inlineData)
+    const elementsPerPage = 2;
+    const batchElementsSize = BATCH_SIZE * elementsPerPage;
 
-        const data = await res.json();
-        const json = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+    for (let i = 0; i < examParts.length; i += batchElementsSize) {
+        const batchParts = examParts.slice(i, i + batchElementsSize);
 
-        if (json.registrationNumber && json.registrationNumber !== "Not found") {
-            finalResultMap.registrationNumber = json.registrationNumber;
-        }
+        let attempt = 0;
+        const maxAttempts = 5;
+        let success = false;
 
-        // --------------------------------------------------------------------
-        // THE SMART MAPPER: Code yako inatafsiri majibu na kuziweka kwenye 'Box'
-        // --------------------------------------------------------------------
-        if (Array.isArray(json.extractedAnswers)) {
-            json.extractedAnswers.forEach((item: any) => {
-                if (item.writtenNumber && item.text) {
-                    // 1. Safisha ID ya mwanafunzi (Mfano: "Q1(a)" inakuwa "1a")
-                    const cleanWrittenId = normalizeQuestionId(item.writtenNumber);
-                    
-                    // 2. Tafuta kama inafanana na ID ulizozitaka kutoka kwenye Marking Scheme
-                    const matchedTargetId = normalizedTargets.find(target => {
-                        return cleanWrittenId === target || cleanWrittenId.endsWith(target) || target.endsWith(cleanWrittenId);
-                    });
-
-                    // 3. Kama ipo, ihifadhi kwenye Object itakayoenda Backend
-                    if (matchedTargetId) {
-                        if (finalResultMap[matchedTargetId]) {
-                            // Utunzaji wa marudio (Duplicate Handling) endapo alijibu mara 2
-                            finalResultMap[matchedTargetId] += `\n\n[Additional/Continued Attempt]:\n${item.text}`;
-                        } else {
-                            finalResultMap[matchedTargetId] = item.text;
+        while (attempt < maxAttempts && !success) {
+            try {
+                const res = await fetch(`${API_URL}/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: "user", parts: [{ text: extractionPrompt }, ...batchParts] }],
+                        generationConfig: {
+                            temperature: 0.0,
+                            maxOutputTokens: 8192,
+                            responseMimeType: "application/json"
                         }
+                    })
+                });
+
+                if (!res.ok) {
+                    if (res.status === 429) {
+                        throw new Error(`Rate Limit Exceeded (429)`);
                     }
+                    throw new Error(`Google API error: ${res.status} - ${res.statusText}`);
                 }
-            });
+
+                const data = await res.json();
+                const json = parseLLMJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+
+                if (json.registrationNumber && json.registrationNumber !== "Not found" && !finalResultMap.registrationNumber) {
+                    finalResultMap.registrationNumber = json.registrationNumber;
+                }
+
+                // --------------------------------------------------------------------
+                // THE SMART MAPPER: Code yako inatafsiri majibu na kuziweka kwenye 'Box'
+                // --------------------------------------------------------------------
+                if (Array.isArray(json.extractedAnswers)) {
+                    json.extractedAnswers.forEach((item: any) => {
+                        if (item.writtenNumber && item.text) {
+                            // 1. Safisha ID ya mwanafunzi (Mfano: "Q1(a)" inakuwa "1a")
+                            const cleanWrittenId = normalizeQuestionId(item.writtenNumber);
+
+                            // 2. Tafuta kama inafanana na ID ulizozitaka kutoka kwenye Marking Scheme
+                            const matchedTargetId = normalizedTargets.find(target => {
+                                return cleanWrittenId === target || cleanWrittenId.endsWith(target) || target.endsWith(cleanWrittenId);
+                            });
+
+                            // 3. Kama ipo, ihifadhi kwenye Object itakayoenda Backend
+                            if (matchedTargetId) {
+                                if (finalResultMap[matchedTargetId]) {
+                                    // Utunzaji wa marudio (Duplicate Handling) endapo alijibu mara 2
+                                    finalResultMap[matchedTargetId] += `\n\n[Additional/Continued Attempt]:\n${item.text}`;
+                                } else {
+                                    finalResultMap[matchedTargetId] = item.text;
+                                }
+                            }
+                        }
+                    });
+                }
+
+                success = true;
+
+            } catch (err: any) {
+                attempt++;
+                console.warn(`[CLIENT ENGINE] Batch extraction failed (Attempt ${attempt}/${maxAttempts}): ${err.message}`);
+
+                if (attempt >= maxAttempts) {
+                    console.error("[CLIENT ENGINE] Max retries reached for batch. Skipping.");
+                } else {
+                    // Exponential backoff
+                    const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
         }
-
-        console.log("[CLIENT ENGINE] Successfully matched IDs:", Object.keys(finalResultMap));
-
-    } catch (err) {
-        console.error("Single-Pass Sequential Extraction failed.", err);
     }
+
+    console.log("[CLIENT ENGINE] Successfully matched IDs:", Object.keys(finalResultMap));
 
     return finalResultMap;
 }

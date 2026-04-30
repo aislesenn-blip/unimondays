@@ -42,10 +42,12 @@ export async function POST(req: NextRequest) {
 
         const parsedRubricItems = JSON.parse(submission.workSession.rubric as string || "[]");
 
-        let extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
-        let parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
+        const extractedMap: any[] = JSON.parse(submission.ocrText || "[]");
+        const parsedStudentAnswers: Record<string, string> = extractedMap[0] || {};
 
-        const limit = pLimit(10);
+        // HARDENING FIX: Reduced concurrency limit to prevent rate limits and system overload
+        // when processing multiple submissions each with multiple questions.
+        const limit = pLimit(3);
 
         const normalizedStudentAnswers: Record<string, string> = {};
         for (const [key, val] of Object.entries(parsedStudentAnswers)) {
@@ -79,7 +81,10 @@ STUDENT ANSWER: ${studentAnswerForQ}
                 let finalScore = 0;
                 let gradingObject = { thoughtProcess: "Failed to grade.", feedback: "System error.", evidenceSnippet: "None" };
 
-                while (attempt < 3) {
+                // HARDENING FIX: Increased attempts to 5 and added exponential backoff
+                const maxAttempts = 5;
+
+                while (attempt < maxAttempts) {
                     try {
                         const { object } = await generateObject({
                             model: google('gemini-2.5-pro'),
@@ -89,16 +94,22 @@ STUDENT ANSWER: ${studentAnswerForQ}
                             temperature: 0.0,
                         });
 
-                        let rawSum = object.scoresArray.reduce((sum, val) => sum + val, 0);
+                        const rawSum = object.scoresArray.reduce((sum, val) => sum + val, 0);
                         finalScore = Math.max(0, Math.min(rawSum, maxScore));
                         gradingObject = { thoughtProcess: object.thoughtProcess, feedback: object.feedback, evidenceSnippet: object.evidenceSnippet };
                         break;
                     } catch (err: any) {
                         attempt++;
-                        if (attempt >= 3) {
-                            console.error(`Box ${originalQId} completely failed grading after 3 attempts. Error: ${err.message}`);
+                        if (attempt >= maxAttempts) {
+                            console.error(`Box ${originalQId} completely failed grading after ${maxAttempts} attempts. Error: ${err.message}`);
+                            // Mark thoughtProcess so the UI and Lecturer know it failed due to AI API issues, rather than just returning 0 silently
+                            gradingObject.thoughtProcess = `AI API grading failed after ${maxAttempts} retries. Please review manually.`;
+                            gradingObject.feedback = "System API Error. Manual grading required.";
                         } else {
-                            await delay(attempt * 2000);
+                            // Exponential backoff: 2s, 4s, 8s, 16s delay + jitter
+                            const backoffDelay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                            console.warn(`[GRADE STREAM] Attempt ${attempt} failed for Q${originalQId}. Retrying in ${backoffDelay}ms. Error: ${err.message}`);
+                            await delay(backoffDelay);
                         }
                     }
                 }
