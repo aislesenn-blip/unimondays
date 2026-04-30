@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
     // Hii inasoma siri moja kwa moja kutoka kwenye Vercel Server Environment.
-    // Muhimu: Ufunguo lazima uitwe GEMINI_API_KEY kule Vercel (bila NEXT_PUBLIC_)
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    // Tumeongeza OPENROUTER_API_KEY ili kuruhusu mfumo mpya kufanya kazi vizuri
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
     if (!apiKey) {
         return NextResponse.json(
-            { error: "API Key haijasetiwa kwenye Vercel Server Environment Variables." },
+            { error: "API Key haijasetiwa kwenye Vercel Server Environment Variables. Hakikisha umeweka OPENROUTER_API_KEY." },
             { status: 500 }
         );
     }

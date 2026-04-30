@@ -1,6 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+// Route everything through the internal proxy to prevent OpenRouter from blocking browser requests (CORS/401)
+// and to avoid leaking the paid API key to the client.
+const INTERNAL_PROXY_URL = "/api/ai/proxy";
 
 export async function getClientGeminiKey() {
     // Dynamic Key resolution: Check for lecturer specific key if needed, fallback to env
@@ -115,13 +117,10 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
 
     const contentArray = formatOpenRouterVisionMessage(userParts);
 
-    const res = await fetch(OPENROUTER_API_URL, {
+    const res = await fetch(INTERNAL_PROXY_URL, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': typeof window !== 'undefined' ? window.location.href : 'https://playbook.app',
-            'X-Title': 'Playbook Grading Engine'
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
             model: 'google/gemini-2.5-pro',
@@ -228,13 +227,10 @@ OUTPUT STRICTLY as valid JSON only:
             try {
                 const contentArray = formatOpenRouterVisionMessage([{ text: extractionPrompt }, ...batchParts]);
 
-                const res = await fetch(OPENROUTER_API_URL, {
+                const res = await fetch(INTERNAL_PROXY_URL, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`,
-                        'HTTP-Referer': typeof window !== 'undefined' ? window.location.href : 'https://playbook.app',
-                        'X-Title': 'Playbook Grading Engine'
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         model: 'google/gemini-2.5-pro',
@@ -249,7 +245,7 @@ OUTPUT STRICTLY as valid JSON only:
                     if (res.status === 429) {
                         throw new Error(`Rate Limit Exceeded (429)`);
                     }
-                    throw new Error(`OpenRouter API error: ${res.status} - ${res.statusText}`);
+                    throw new Error(`Proxy API error: ${res.status} - ${res.statusText}`);
                 }
 
                 const data = await res.json();

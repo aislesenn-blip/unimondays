@@ -119,6 +119,7 @@ ${studentAnswerForQ}
 
                 while (attempt < maxAttempts) {
                     try {
+                        // User explicitly requested to use Gemini globally for best performance
                         const { object } = await generateObject({
                             model: openrouter('google/gemini-2.5-pro'),
                             system: cachedSystemPrompt,
