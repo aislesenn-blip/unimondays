@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateObject } from 'ai';
-import { google } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import pLimit from 'p-limit';
 
@@ -33,12 +33,32 @@ export async function POST(req: NextRequest) {
 
         const submission = await prisma.submission.findUnique({
             where: { id: globalSubmissionId },
-            include: { workSession: true }
+            include: {
+                workSession: {
+                    include: { lecturer: true }
+                }
+            }
         });
 
         if (!submission || !submission.workSession) {
             throw new Error("Submission or WorkSession not found");
         }
+
+        // Setup OpenRouter provider with BYOK fallback
+        const lecturerKey = submission.workSession.lecturer?.calibrationSettings; // Future: openRouterKey from DB. Reusing calibrationSettings temporarily or assuming it's available.
+        // Actually, we should query DB or use process.env if not available yet.
+        // To be perfectly safe, we'll map this to `openRouterKey` once we update Prisma.
+        // For now, if the model has `openRouterKey` it will use it, otherwise fallback.
+        const apiKey = (submission.workSession.lecturer as any)?.openRouterKey || process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+
+        const openrouter = createOpenAI({
+            baseURL: 'https://openrouter.ai/api/v1',
+            apiKey: apiKey,
+            headers: {
+                'HTTP-Referer': 'https://playbook.app',
+                'X-Title': 'Playbook Grading Engine'
+            }
+        });
 
         const parsedRubricItems = JSON.parse(submission.workSession.rubric as string || "[]");
 
@@ -53,6 +73,17 @@ export async function POST(req: NextRequest) {
         for (const [key, val] of Object.entries(parsedStudentAnswers)) {
             normalizedStudentAnswers[normalizeQuestionId(key)] = val;
         }
+
+        // CACHING FIX: Pre-compute the deterministic System Prompt for the entire assignment
+        // OpenRouter (and Google underneath) will automatically cache this system prompt for all
+        // 1000 students taking this specific WorkSession, saving massive token costs and time.
+        const cachedSystemPrompt = `You are an elite Examination Engine.
+You are grading an exam for WorkSession: ${submission.workSessionId}.
+Evaluate the student's answer against the ATOMIC CRITERIA exactly as written.
+
+FULL MARKING SCHEME CONTEXT (CACHED):
+${JSON.stringify(parsedRubricItems)}
+`;
 
         const gradingPromises = parsedRubricItems.map((rubricItem: any) => {
             return limit(async () => {
@@ -74,8 +105,10 @@ export async function POST(req: NextRequest) {
                 const boxPrompt = `
 EVALUATE THIS SPECIFIC QUESTION ONLY: ${originalQId}
 MAXIMUM MARKS: ${maxScore}
-ATOMIC MARKING CRITERIA: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment)}
-STUDENT ANSWER: ${studentAnswerForQ}
+ATOMIC MARKING CRITERIA FOR THIS QUESTION: ${JSON.stringify(rubricItem.criteria || rubricItem.rubricSegment)}
+
+STUDENT ANSWER:
+${studentAnswerForQ}
 `;
                 let attempt = 0;
                 let finalScore = 0;
@@ -87,8 +120,8 @@ STUDENT ANSWER: ${studentAnswerForQ}
                 while (attempt < maxAttempts) {
                     try {
                         const { object } = await generateObject({
-                            model: google('gemini-2.5-pro'),
-                            system: "You are an elite Examination Engine. Evaluate the student's answer against the ATOMIC CRITERIA.",
+                            model: openrouter('google/gemini-2.5-pro'),
+                            system: cachedSystemPrompt,
                             prompt: boxPrompt,
                             schema: atomicGradingSchema,
                             temperature: 0.0,
