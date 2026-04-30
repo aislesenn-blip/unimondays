@@ -26,6 +26,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { extractedText, filePath, workSessionId, workCode } = body;
 
+    let studentRegNo = "Unidentified";
+    try {
+        const parsed = JSON.parse(extractedText);
+        if (Array.isArray(parsed) && parsed[0]?.registrationNumber) {
+            studentRegNo = parsed[0].registrationNumber;
+        }
+    } catch(e) {}
+
     if (!extractedText) return NextResponse.json({ error: 'Missing extracted text' }, { status: 400 });
 
     let targetWorkSessionId = workSessionId;
@@ -72,7 +80,7 @@ export async function POST(req: NextRequest) {
     if (existingSubmission) {
         submission = await prisma.submission.update({
             where: { id: existingSubmission.id },
-            data: { ocrText: extractedText, filePath: cleanPath, status: 'GRADING', submittedAt: new Date(), feedback: null }
+            data: { ocrText: extractedText, studentRegNo, filePath: cleanPath, status: 'GRADING', submittedAt: new Date(), feedback: null }
         });
 
         // L8 BULLETPROOF GUARD: Try-catch prevents P2021 Prisma crashes if DB is not synced
@@ -85,7 +93,7 @@ export async function POST(req: NextRequest) {
         }
     } else {
         submission = await prisma.submission.create({
-            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, filePath: cleanPath, ocrText: extractedText, status: 'GRADING' }
+            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, studentRegNo, filePath: cleanPath, ocrText: extractedText, status: 'GRADING' }
         });
     }
 

@@ -209,7 +209,7 @@ YOUR JOB:
                 let rawText = data.choices?.[0]?.message?.content || "";
 
                 // Extract Reg No if found in this batch
-                const regNoMatch = rawText.match(/REG_NO:\s*([A-Za-z0-9\-]+)/);
+                const regNoMatch = rawText.match(/REG_NO(?:\s*|\s*:\s*)([A-Za-z0-9\-]+)/i);
                 if (regNoMatch && !extractedRegNo) {
                     extractedRegNo = regNoMatch[1];
                 }
