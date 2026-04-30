@@ -89,32 +89,38 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // Trigger background grading invisibly on the server using waitUntil
-    // This allows the frontend to just close the drawer without killing the fetch stream
+    // HYDRAULIC PRESS FIX: Instead of calling the heavy API directly, enqueue a job.
+    // This allows the queue processor to handle concurrency and retries without crashing Vercel or Supabase.
+    await prisma.job.create({
+        data: {
+            type: 'AI_GRADE_SUBMISSION',
+            payload: JSON.stringify({ submissionId: submission.id }),
+            status: 'PENDING'
+        }
+    });
+
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;
 
+    // Kickstart the queue processor asynchronously so it starts working on the job immediately.
     waitUntil(
         (async () => {
             try {
-                // Await .text() so the fetch promise waits for the entire stream to finish
-                const res = await fetch(`${baseUrl}/api/grade/stream`, {
+                await fetch(`${baseUrl}/api/queue/process`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": `Bearer ${process.env.INTERNAL_API_KEY || ''}`
-                    },
-                    body: JSON.stringify({ submissionId: submission.id }),
+                    }
                 });
-                await res.text();
             } catch (e) {
-                console.error("Server-side grading stream failed to finish:", e);
+                console.error("Failed to kickstart queue processor:", e);
             }
         })()
     );
 
-    return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission received. Grading started in background." });
+    return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission received. Grading queued." });
   } catch (error: any) {
     console.error("Submit Error:", error);
     return NextResponse.json({ error: 'Internal error.' }, { status: 500 });
