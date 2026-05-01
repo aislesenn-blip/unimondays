@@ -123,7 +123,7 @@ export async function optimizeMarkingSchemeClient(base64Images: string[], apiKey
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model: 'google/gemini-2.5-pro',
+            model: 'deepseek/deepseek-v4-pro',
             messages: [{ role: "user", content: contentArray }],
             temperature: 0.0,
             response_format: { type: "json_object" }
@@ -193,7 +193,7 @@ YOUR JOB:
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: 'google/gemini-2.5-pro',
+                        model: 'deepseek/deepseek-v4-pro',
                         messages: [{ role: "user", content: contentArray }],
                         temperature: 0.0,
                         max_tokens: 8192,
