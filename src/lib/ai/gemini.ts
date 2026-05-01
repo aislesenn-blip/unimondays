@@ -9,13 +9,13 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
 }
 
 import { generateText } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 
-const apiKey = process.env.GEMINI_API_KEY || "dummy-key-for-build";
+const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY || "dummy-key-for-build";
 
-const google = createGoogleGenerativeAI({
+const openrouter = createOpenAI({
   apiKey: apiKey,
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/",
+  baseURL: "https://openrouter.ai/api/v1",
 });
 
 // Helper: Existing Gemini fetch logic
@@ -29,7 +29,7 @@ async function callGeminiVisionAPI(imageBuffer: Buffer, isStructuralOcr: boolean
         : "Extract all handwritten and printed text from this document. Return it as clean markdown.";
 
     const { text } = await generateText({
-      model: google('gemini-2.5-flash'),
+      model: openrouter('deepseek/deepseek-v4-pro'),
       messages: [
         {
           role: "user",
@@ -69,7 +69,7 @@ export async function extractStructuredMapMultimodal(pdfBuffer: Buffer): Promise
         const dataUrl = `data:image/jpeg;base64,${base64Data}`;
 
         const response = await generateText({
-          model: google('gemini-2.5-flash'),
+          model: openrouter('deepseek/deepseek-v4-pro'),
           messages: [
             {
               role: "user",
