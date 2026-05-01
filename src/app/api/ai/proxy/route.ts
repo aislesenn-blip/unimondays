@@ -8,23 +8,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const key = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY;
   if (!key) {
-    return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured on the server" }, { status: 500 });
+    return NextResponse.json({ error: "GEMINI_API_KEY is not configured on the server" }, { status: 500 });
   }
 
   try {
     const body = await request.json();
 
-    // Proxy the request directly to OpenRouter API
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    // Proxy the request directly to the Google Gemini API
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${key}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`,
-        'HTTP-Referer': 'https://playbook.app',
-        'X-Title': 'Playbook Grading Engine'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
 

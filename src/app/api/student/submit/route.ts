@@ -26,14 +26,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { extractedText, filePath, workSessionId, workCode } = body;
 
-    let studentRegNo = "Unidentified";
-    try {
-        const parsed = JSON.parse(extractedText);
-        if (Array.isArray(parsed) && parsed[0]?.registrationNumber) {
-            studentRegNo = parsed[0].registrationNumber;
-        }
-    } catch(e) {}
-
     if (!extractedText) return NextResponse.json({ error: 'Missing extracted text' }, { status: 400 });
 
     let targetWorkSessionId = workSessionId;
@@ -80,7 +72,7 @@ export async function POST(req: NextRequest) {
     if (existingSubmission) {
         submission = await prisma.submission.update({
             where: { id: existingSubmission.id },
-            data: { ocrText: extractedText, studentRegNo, filePath: cleanPath, status: 'GRADING', submittedAt: new Date(), feedback: null }
+            data: { ocrText: extractedText, filePath: cleanPath, status: 'GRADING', submittedAt: new Date(), feedback: null }
         });
 
         // L8 BULLETPROOF GUARD: Try-catch prevents P2021 Prisma crashes if DB is not synced
@@ -93,42 +85,36 @@ export async function POST(req: NextRequest) {
         }
     } else {
         submission = await prisma.submission.create({
-            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, studentRegNo, filePath: cleanPath, ocrText: extractedText, status: 'GRADING' }
+            data: { workSessionId: targetWorkSessionId, userId, studentName: session.email, filePath: cleanPath, ocrText: extractedText, status: 'GRADING' }
         });
     }
 
-    // HYDRAULIC PRESS FIX: Instead of calling the heavy API directly, enqueue a job.
-    // This allows the queue processor to handle concurrency and retries without crashing Vercel or Supabase.
-    await prisma.job.create({
-        data: {
-            type: 'AI_GRADE_SUBMISSION',
-            payload: JSON.stringify({ submissionId: submission.id }),
-            status: 'PENDING'
-        }
-    });
-
+    // Trigger background grading invisibly on the server using waitUntil
+    // This allows the frontend to just close the drawer without killing the fetch stream
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host') || 'localhost:3000';
     const baseUrl = `${protocol}://${host}`;
 
-    // Kickstart the queue processor asynchronously so it starts working on the job immediately.
     waitUntil(
         (async () => {
             try {
-                await fetch(`${baseUrl}/api/queue/process`, {
+                // Await .text() so the fetch promise waits for the entire stream to finish
+                const res = await fetch(`${baseUrl}/api/grade/stream`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": `Bearer ${process.env.INTERNAL_API_KEY || ''}`
-                    }
+                    },
+                    body: JSON.stringify({ submissionId: submission.id }),
                 });
+                await res.text();
             } catch (e) {
-                console.error("Failed to kickstart queue processor:", e);
+                console.error("Server-side grading stream failed to finish:", e);
             }
         })()
     );
 
-    return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission received. Grading queued." });
+    return NextResponse.json({ success: true, submissionId: submission.id, message: "Submission received. Grading started in background." });
   } catch (error: any) {
     console.error("Submit Error:", error);
     return NextResponse.json({ error: 'Internal error.' }, { status: 500 });
