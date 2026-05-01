@@ -151,7 +151,7 @@ ${studentAnswerForQ}
                     try {
                         // User explicitly requested to use Gemini globally for best performance
                         const { object } = await generateObject({
-                            model: openrouter('deepseek/deepseek-chat'),
+                            model: openrouter('deepseek/deepseek-v4-pro'),
                             system: cachedSystemPrompt,
                             prompt: boxPrompt,
                             schema: atomicGradingSchema,
